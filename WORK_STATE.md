@@ -21,3 +21,4 @@
 - **Auto**: حقل نطاق البصمة بالمتر قابل للضبط بالكامل (10/50/…) مع اختصارات سريعة في إعدادات الفرع. **MULTI**.
 - **Auto**: إعادة بناء ونشر web لـ `hr.hudoori…` لإظهار قسم «بصمة الموقع (الفروع)» في الإعدادات. **MULTI**.
 - **Auto**: Initial commit + `origin` → `codesolutioneg/multi-hudoori-front` (local `main`). Push blocked: token user has pull-only (403). **MULTI**.
+- **Auto**: Pushed `main` to `https://github.com/codesolutioneg/multi-hudoori-front.git`. **MULTI**.
