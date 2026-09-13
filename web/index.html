@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="حضوري — Attendance & Payroll">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="حضوري">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+  <title>حضوري</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #FFFFFF;
+      font-family: 'Cairo';
+    }
+
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: #FFFFFF;
+      font-family: 'Cairo';
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+
+    #splash.splash-hide {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .splash-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 32px 40px;
+    }
+
+    .splash-icon {
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
+      background: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .splash-icon img {
+      width: 96px;
+      height: 96px;
+      object-fit: contain;
+      border-radius: 22px;
+    }
+
+    .splash-title {
+      margin: 0;
+      font-family: 'Cairo';
+      font-size: 22px;
+      font-weight: 800;
+      color: #6366F1;
+      letter-spacing: -0.02em;
+    }
+
+    .splash-subtitle {
+      margin: 0;
+      font-family: 'Cairo';
+      font-size: 14px;
+      font-weight: 500;
+      color: #94A3B8;
+    }
+
+    .splash-spinner {
+      width: 36px;
+      height: 36px;
+      margin-top: 4px;
+      border: 3px solid #E2E8F0;
+      border-top-color: #2563EB;
+      border-radius: 50%;
+      animation: splash-spin 0.85s linear infinite;
+    }
+
+    @keyframes splash-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="splash" role="status" aria-live="polite" aria-label="جاري التحميل">
+    <div class="splash-card">
+      <div class="splash-icon">
+        <img src="icons/Icon-512.png" alt="" width="96" height="96">
+      </div>
+      <h1 class="splash-title">حضوري</h1>
+      <p class="splash-subtitle">جاري التحميل...</p>
+      <div class="splash-spinner" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var removed = false;
+
+      function hideSplash() {
+        if (removed) return;
+        removed = true;
+        var splash = document.getElementById('splash');
+        if (!splash) return;
+        splash.classList.add('splash-hide');
+        window.setTimeout(function () {
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+        }, 450);
+      }
+
+      window.addEventListener('hudoori-app-ready', hideSplash);
+      // Keep the HTML splash until Flutter signals auth/bootstrap is done.
+      window.setTimeout(hideSplash, 30000);
+    })();
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

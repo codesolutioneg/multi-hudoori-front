@@ -1,0 +1,61 @@
+{
+  "keys": {
+    "shiftGrid.weekOrdinal": {"ar": "الأسبوع {n}", "en": "Week {n}"},
+    "shiftGrid.state.setup": {"ar": "إعداد", "en": "Setup"},
+    "shiftGrid.state.grid": {"ar": "الجدول", "en": "Grid"},
+    "shiftGrid.state.confirmed": {"ar": "مؤكد", "en": "Confirmed"},
+    "shiftGrid.noDate": {"ar": "بدون تاريخ", "en": "No date"},
+    "shiftGrid.pickDevice": {"ar": "اختر جهاز البصمة", "en": "Select a punch device"},
+    "shiftGrid.pickLocation": {"ar": "اختر الموقع", "en": "Select a location"},
+    "shiftGrid.pickDepartment": {"ar": "اختر قسماً واحداً على الأقل", "en": "Select at least one department"},
+    "shiftGrid.pickEmployee": {"ar": "اختر موظفاً واحداً على الأقل", "en": "Select at least one employee"},
+    "shiftGrid.unknownBranch": {"ar": "فرع غير محدد", "en": "Unassigned branch"},
+    "shiftGrid.branchLabel": {"ar": "الفرع: {branch}", "en": "Branch: {branch}"},
+    "shiftGrid.optionA": {"ar": "الخيار أ — فرع الأسبوع الأخير يملك الشهر", "en": "Option A — the last week's branch owns the month"},
+    "shiftGrid.mergeAddWeeks": {"ar": "إضافة أسابيع إلى جدول شهري قائم — اختر أسابيع فرع الهدف نفسه فقط.", "en": "Add weeks to an existing monthly grid — pick weeks from the target branch only."},
+    "shiftGrid.mergeHint": {"ar": "ادمج فرعاً واحداً في كل مرة. الخيار أ يجمع أيام الموظفين المنقولين من باقي الفروع إلى فرع الأسبوع الأخير.", "en": "Merge one branch at a time. Option A gathers transferred employees' days from the other branches into the last week's branch."},
+    "shiftGrid.moveWithinMonth": {"ar": "نقل خلال الشهر ({count})", "en": "Move within the month ({count})"},
+    "shiftGrid.mainBranchRule": {"ar": "الفرع الأساسي = آخر أسبوع لهم في الشهر", "en": "Main branch = their last week in the month"},
+    "shiftGrid.weeksCount": {"ar": "{count} أسبوع", "en": "{count} weeks"},
+    "shiftGrid.weeksCountSelected": {"ar": "{count} أسبوع · {selected} محدد", "en": "{count} weeks · {selected} selected"},
+    "shiftGrid.mergedOnlyHint": {"ar": "الجداول الشهرية المدمجة تظهر هنا فقط — للإضافة عليها", "en": "Merged monthly grids appear here only, so you can add to them"}
+  },
+  "files": {
+    "lib/features/shift_grid/shift_grid_helpers.dart": [
+      [
+        "  const ordinals = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس'];\n",
+        ""
+      ],
+      [
+        "      current = WeekGroup(label: 'الأسبوع ${weeks.length + 1}', colspan: 0);",
+        "      current = WeekGroup(\n        label: tr('shiftGrid.weekOrdinal', {'n': weeks.length + 1}),\n        colspan: 0,\n      );"
+      ],
+      [
+        "      label: 'الأسبوع ${ordinals.length > i ? ordinals[i] : '${i + 1}'}',",
+        "      label: tr('shiftGrid.weekOrdinal', {'n': i + 1}),"
+      ],
+      ["      return 'إعداد';", "      return tr('shiftGrid.state.setup');"],
+      ["      return 'الجدول';", "      return tr('shiftGrid.state.grid');"],
+      ["      return 'مؤكد';", "      return tr('shiftGrid.state.confirmed');"],
+      ["? 'بدون تاريخ'", "? tr('shiftGrid.noDate')"]
+    ],
+    "lib/features/shift_grid/shift_grid_setup_panel.dart": [
+      ["'اختر جهاز البصمة'", "context.t('shiftGrid.pickDevice')"],
+      ["'اختر الموقع'", "context.t('shiftGrid.pickLocation')"],
+      ["'اختر قسماً واحداً على الأقل'", "context.t('shiftGrid.pickDepartment')"],
+      ["'اختر موظفاً واحداً على الأقل'", "context.t('shiftGrid.pickEmployee')"]
+    ],
+    "lib/features/shift_grid/shift_grid_merge_dialog.dart": [
+      ["'الفرع: $branchName'", "context.t('shiftGrid.branchLabel', {'branch': branchName})"],
+      ["'Option A — فرع آخر أسبوع يملك الشهر'", "context.t('shiftGrid.optionA')"],
+      ["'إضافة أسابيع لجدول شهري موجود — اختر أسابيع نفس فرع الهدف فقط.'", "context.t('shiftGrid.mergeAddWeeks')"],
+      ["'ادمج فرع واحد في المرة. Option A يجمع أيام الموظفين المنقولين من باقي الفروع لفرع آخر أسبوع.'", "context.t('shiftGrid.mergeHint')"],
+      ["'نقل خلال الشهر (${visible.length})'", "context.t('shiftGrid.moveWithinMonth', {'count': visible.length})"],
+      ["'الفرع الأساسي = آخر أسبوع لهم في الشهر'", "context.t('shiftGrid.mainBranchRule')"],
+      ["'${group.grids.length} أسبوع · $selectedInGroup محدد'", "context.t('shiftGrid.weeksCountSelected', {'count': group.grids.length, 'selected': selectedInGroup})"],
+      ["'${group.grids.length} أسبوع'", "context.t('shiftGrid.weeksCount', {'count': group.grids.length})"],
+      ["'الجداول الشهرية المدمجة تظهر هنا فقط — للإضافة عليها'", "context.t('shiftGrid.mergedOnlyHint')"]
+    ]
+  },
+  "import": "../../l10n/l10n_extension.dart"
+}

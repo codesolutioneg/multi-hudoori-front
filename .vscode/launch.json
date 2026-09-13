@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Hudoori Web (local backend :3000)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "args": [
+        "--web-port=8900",
+        "--dart-define=BIOTIME_PIN_LOCALHOST=true"
+      ]
+    }
+  ]
+}

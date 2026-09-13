@@ -1,0 +1,56 @@
+name: Deploy Flutter Web
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Do not cancel mid-flight — avoids "in progress deployment" errors
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web
+        env:
+          API_URL: ${{ secrets.BIOTIME_API_URL }}
+        run: |
+          URL="${API_URL:-https://hr-api.hudoori.code-solution.org}"
+          flutter build web --release \
+            --base-href "/" \
+            --dart-define=BIOTIME_API_URL="$URL" \
+            --dart-define=BIOTIME_PIN_LOCALHOST=false
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

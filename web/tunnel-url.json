@@ -1,0 +1,5 @@
+{
+  "apiUrl": "https://apihodouri.all.eatbalkans.com",
+  "updatedAt": "2026-06-15T00:00:00.000Z",
+  "note": "Production API — not shown on login; app uses api_config.dart."
+}
