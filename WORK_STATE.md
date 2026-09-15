@@ -13,6 +13,7 @@
 ## Daily log
 
 ### 2026-09-15
+- **Auto**: Android release needs `INTERNET` in main `AndroidManifest` (was only debug/profile). Verified `flutter test` 88/88; analyze 0 errors. Multi API not running on :3003 (hr-api down) — deploy pending user OK. **MULTI**.
 - **Auto**: Ported loan-import «معتمد» field formatting (`formatMoneyField` / `parseMoney`) from single-company prod. **MULTI**.
 
 ### 2026-09-13
