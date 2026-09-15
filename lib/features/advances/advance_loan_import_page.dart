@@ -2095,7 +2095,7 @@ class _ApprovedAmountField extends StatefulWidget {
 
 class _ApprovedAmountFieldState extends State<_ApprovedAmountField> {
   late final TextEditingController _controller = TextEditingController(
-    text: widget.value.toString(),
+    text: formatMoneyField(widget.value),
   );
   final FocusNode _focusNode = FocusNode();
   bool _saving = false;
@@ -2110,7 +2110,7 @@ class _ApprovedAmountFieldState extends State<_ApprovedAmountField> {
   void didUpdateWidget(_ApprovedAmountField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.value != oldWidget.value && !_focusNode.hasFocus) {
-      _controller.text = widget.value.toString();
+      _controller.text = formatMoneyField(widget.value);
     }
   }
 
@@ -2128,21 +2128,26 @@ class _ApprovedAmountFieldState extends State<_ApprovedAmountField> {
 
   Future<void> _save() async {
     if (_saving) return;
-    final parsed = double.tryParse(_controller.text.trim());
+    final parsed = parseMoney(_controller.text);
     if (parsed == null || parsed == widget.value) {
-      _controller.text = widget.value.toString();
+      _controller.text = formatMoneyField(widget.value);
       return;
     }
     _saving = true;
     final saved = await widget.onSubmit(parsed);
     _saving = false;
-    if (mounted && !saved) _controller.text = widget.value.toString();
+    if (!mounted) return;
+    if (!saved) {
+      _controller.text = formatMoneyField(widget.value);
+    } else {
+      _controller.text = formatMoneyField(parsed);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 90,
+      width: 110,
       child: TextField(
         controller: _controller,
         focusNode: _focusNode,

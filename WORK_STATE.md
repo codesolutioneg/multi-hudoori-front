@@ -12,6 +12,9 @@
 
 ## Daily log
 
+### 2026-09-15
+- **Auto**: Ported loan-import «معتمد» field formatting (`formatMoneyField` / `parseMoney`) from single-company prod. **MULTI**.
+
 ### 2026-09-13
 - **Auto**: Scaffold — copied Dev dashboard into `/root/hudoori-multi/dashboard` (excluded build, .dart_tool, .git). Fresh git repo, no remotes. **MULTI**.
 - **Auto**: Domains — dashboard default API `https://hr-api.hudoori.code-solution.org`; frontend host `https://hr.hudoori.code-solution.org`. **MULTI**.
