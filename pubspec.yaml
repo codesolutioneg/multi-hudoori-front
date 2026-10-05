@@ -26,11 +26,14 @@ dependencies:
   skeletonizer: ^2.0.0
   percent_indicator: ^4.2.3
   geolocator: ^13.0.2
+  path_provider: ^2.1.6
+  share_plus: ^13.3.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  change_app_package_name: 1.5.0
 
 flutter:
   uses-material-design: true
