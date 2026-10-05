@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/utils/file_download.dart';
 import '../../core/utils/money_format.dart';
+import '../../core/utils/payroll_month.dart';
 import '../../core/widgets/hr_local_data_info.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
@@ -25,13 +26,78 @@ class PayrollListPage extends StatefulWidget {
 class _PayrollListPageState extends State<PayrollListPage> {
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
+
   /// Period keys currently expanded (all collapsed by default).
   final Set<String> _expandedPeriods = {};
+  final Map<String, TextEditingController> _periodSearchControllers = {};
+  final Map<String, String> _periodSearchQueries = {};
+  final Map<String, List<Map<String, dynamic>>> _periodSearchResults = {};
+  final Set<String> _searchingPeriods = {};
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _periodSearchControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _periodSearchController(String key) =>
+      _periodSearchControllers.putIfAbsent(key, () => TextEditingController());
+
+  Future<void> _searchPeriodEmployees({
+    required String key,
+    required String from,
+    required String to,
+  }) async {
+    final query = _periodSearchController(key).text.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _periodSearchQueries.remove(key);
+        _periodSearchResults.remove(key);
+      });
+      return;
+    }
+    setState(() {
+      _periodSearchQueries[key] = query;
+      _searchingPeriods.add(key);
+    });
+    try {
+      final data = await api.payrollPeriodEmployeeSearch(
+        dateFrom: from,
+        dateTo: to,
+        search: query,
+      );
+      if (!mounted) return;
+      setState(() {
+        _periodSearchResults[key] = (data['items'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        _searchingPeriods.remove(key);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _searchingPeriods.remove(key));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  void _clearPeriodSearch(String key) {
+    _periodSearchController(key).clear();
+    setState(() {
+      _periodSearchQueries.remove(key);
+      _periodSearchResults.remove(key);
+      _searchingPeriods.remove(key);
+    });
   }
 
   Future<void> _load() async {
@@ -121,17 +187,19 @@ class _PayrollListPageState extends State<PayrollListPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
 
   static ButtonStyle get headerActionStyle => FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppDimensions.radiusMd),
+    ),
+  );
 
   Widget _periodHeader({
     required String from,
@@ -145,11 +213,16 @@ class _PayrollListPageState extends State<PayrollListPage> {
     required int employees,
   }) {
     final netTotal = _round2(cash + fawryApproved);
+    final periodEnd = parseIsoDate(to) ?? DateTime.now();
+    final monthName = payrollCycleMonthName(
+      periodEnd,
+      Localizations.localeOf(context).languageCode,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          context.t('payL.cycle', {'from': from, 'to': to}),
+          context.t('payL.monthCycle', {'month': monthName}),
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
         ),
         const SizedBox(height: 4),
@@ -164,7 +237,11 @@ class _PayrollListPageState extends State<PayrollListPage> {
             'commission': formatMoney(fawryCommission, fallback: '0'),
             'fawryGrand': formatMoney(fawryGrand, fallback: '0'),
           }),
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -237,18 +314,17 @@ class _PayrollListPageState extends State<PayrollListPage> {
       final filename = data['filename']?.toString() ?? 'download.bin';
       final mime = data['mimeType']?.toString();
       if (base64.isEmpty) throw Exception(context.t('payL.emptyFile'));
-      downloadBase64File(
-        base64,
-        filename,
-        mime ?? 'application/octet-stream',
-      );
+      downloadBase64File(base64, filename, mime ?? 'application/octet-stream');
       if (!mounted) return;
       final count = data['fileCount'];
       messenger.showSnackBar(
         SnackBar(
           content: Text(
             count is num
-                ? context.t('payL.filesCount', {'label': successLabel, 'count': count})
+                ? context.t('payL.filesCount', {
+                    'label': successLabel,
+                    'count': count,
+                  })
                 : successLabel,
           ),
         ),
@@ -277,6 +353,97 @@ class _PayrollListPageState extends State<PayrollListPage> {
 
   double _round2(double n) => (n * 100).round() / 100;
 
+  Widget _periodEmployeeSearch({
+    required String key,
+    required String from,
+    required String to,
+  }) {
+    final controller = _periodSearchController(key);
+    final query = _periodSearchQueries[key] ?? '';
+    final results = _periodSearchResults[key] ?? const [];
+    final searching = _searchingPeriods.contains(key);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) {
+                    _searchPeriodEmployees(key: key, from: from, to: to);
+                  },
+                  decoration: InputDecoration(
+                    hintText: context.t('payL.searchCycleEmployee'),
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: searching
+                    ? null
+                    : () {
+                        _searchPeriodEmployees(key: key, from: from, to: to);
+                      },
+                icon: const Icon(Icons.search),
+                label: Text(context.t('common.search')),
+              ),
+              if (query.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: context.t('common.clearAll'),
+                  onPressed: () => _clearPeriodSearch(key),
+                  icon: const Icon(Icons.clear),
+                ),
+              ],
+            ],
+          ),
+          if (searching)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            )
+          else if (query.isNotEmpty && results.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(context.t('payL.noEmployeeMatches')),
+            )
+          else if (query.isNotEmpty)
+            for (final result in results)
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.person_search_outlined),
+                title: Text(
+                  result['employeeName']?.toString() ?? '',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  context.t('payL.employeeMatchLine', {
+                    'code': result['employeeCode'] ?? '',
+                    'branch': result['branchName'] ?? '',
+                  }),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  final payrollId = result['payrollId']?.toString() ?? '';
+                  if (payrollId.isEmpty) return;
+                  context.go(
+                    '${AppRoutes.hrPayroll}/$payrollId'
+                    '?search=${Uri.encodeQueryComponent(query)}',
+                  );
+                },
+              ),
+        ],
+      ),
+    );
+  }
+
   Widget _payrollTile(Map<String, dynamic> p) {
     final fromImport =
         p['calculationSource']?.toString() == 'punch_report_import';
@@ -296,7 +463,9 @@ class _PayrollListPageState extends State<PayrollListPage> {
         : _round2(_num(p['totalNet']) + fawryComm);
     return ListTile(
       title: Text(
-        branch.isNotEmpty ? branch : (name.isNotEmpty ? name : context.t('pay.sheetTitle')),
+        branch.isNotEmpty
+            ? branch
+            : (name.isNotEmpty ? name : context.t('pay.sheetTitle')),
         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
       ),
       subtitle: Column(
@@ -323,7 +492,10 @@ class _PayrollListPageState extends State<PayrollListPage> {
                 visualDensity: VisualDensity.compact,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 avatar: Icon(Icons.fingerprint, size: 14),
-                label: Text(context.t('payL.fromPunchReport'), style: TextStyle(fontSize: 11)),
+                label: Text(
+                  context.t('payL.fromPunchReport'),
+                  style: TextStyle(fontSize: 11),
+                ),
               ),
             ),
         ],
@@ -367,93 +539,94 @@ class _PayrollListPageState extends State<PayrollListPage> {
             child: _loading
                 ? const _PayrollListSkeleton()
                 : _items.isEmpty
-                    ? HrEmptyListCard(
-                        message: context.t('payroll.emptyList'),
-                        actionLabel: context.t('payroll.newSheet'),
-                        onAction: _create,
-                      )
-                    : ListView.separated(
-                        itemCount: groups.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) {
-                          final entry = groups[i];
-                          final key = entry.key;
-                          final parts = key.split('|');
-                          final from = parts.isNotEmpty ? parts.first : '';
-                          final to = parts.length > 1 ? parts[1] : from;
-                          final payrolls = entry.value;
-                          final branchCount = payrolls.length;
-                          var cash = 0.0;
-                          var fawryApproved = 0.0;
-                          var fawryCommission = 0.0;
-                          var fawryGrand = 0.0;
-                          var grandTotalSum = 0.0;
-                          var employees = 0;
-                          for (final p in payrolls) {
-                            cash += _num(p['cashTotal']);
-                            final approved = _num(p['fawryTotal']);
-                            final comm = p['fawryCommission'] != null
-                                ? _num(p['fawryCommission'])
-                                : _round2(approved * 0.0015);
-                            final grand = p['fawryGrandTotal'] != null
-                                ? _num(p['fawryGrandTotal'])
-                                : _round2(approved + comm);
-                            final sheetGrand = p['grandTotal'] != null
-                                ? _num(p['grandTotal'])
-                                : _round2(_num(p['totalNet']) + comm);
-                            fawryApproved += approved;
-                            fawryCommission += comm;
-                            fawryGrand += grand;
-                            grandTotalSum += sheetGrand;
-                            final n = p['employeeCount'];
-                            employees += n is num
-                                ? n.toInt()
-                                : int.tryParse(n?.toString() ?? '') ?? 0;
-                          }
-                          cash = _round2(cash);
-                          fawryApproved = _round2(fawryApproved);
-                          fawryCommission = _round2(fawryCommission);
-                          fawryGrand = _round2(fawryGrand);
-                          grandTotalSum = _round2(grandTotalSum);
-                          final expanded = _expandedPeriods.contains(key);
-                          return SellixCard(
-                            padding: EdgeInsets.zero,
-                            child: ExpansionTile(
-                              key: PageStorageKey('payroll-period-$key'),
-                              initiallyExpanded: expanded,
-                              maintainState: true,
-                              onExpansionChanged: (open) {
-                                setState(() {
-                                  if (open) {
-                                    _expandedPeriods.add(key);
-                                  } else {
-                                    _expandedPeriods.remove(key);
-                                  }
-                                });
-                              },
-                              title: _periodHeader(
-                                from: from,
-                                to: to,
-                                branchCount: branchCount,
-                                cash: cash,
-                                fawryApproved: fawryApproved,
-                                fawryCommission: fawryCommission,
-                                fawryGrand: fawryGrand,
-                                grandTotalSum: grandTotalSum,
-                                employees: employees,
-                              ),
-                              children: [
-                                const Divider(height: 1),
-                                for (var j = 0; j < payrolls.length; j++) ...[
-                                  _payrollTile(payrolls[j]),
-                                  if (j < payrolls.length - 1)
-                                    const Divider(height: 1),
-                                ],
+                ? HrEmptyListCard(
+                    message: context.t('payroll.emptyList'),
+                    actionLabel: context.t('payroll.newSheet'),
+                    onAction: _create,
+                  )
+                : ListView.separated(
+                    itemCount: groups.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) {
+                      final entry = groups[i];
+                      final key = entry.key;
+                      final parts = key.split('|');
+                      final from = parts.isNotEmpty ? parts.first : '';
+                      final to = parts.length > 1 ? parts[1] : from;
+                      final payrolls = entry.value;
+                      final branchCount = payrolls.length;
+                      var cash = 0.0;
+                      var fawryApproved = 0.0;
+                      var fawryCommission = 0.0;
+                      var fawryGrand = 0.0;
+                      var grandTotalSum = 0.0;
+                      var employees = 0;
+                      for (final p in payrolls) {
+                        cash += _num(p['cashTotal']);
+                        final approved = _num(p['fawryTotal']);
+                        final comm = p['fawryCommission'] != null
+                            ? _num(p['fawryCommission'])
+                            : _round2(approved * 0.0015);
+                        final grand = p['fawryGrandTotal'] != null
+                            ? _num(p['fawryGrandTotal'])
+                            : _round2(approved + comm);
+                        final sheetGrand = p['grandTotal'] != null
+                            ? _num(p['grandTotal'])
+                            : _round2(_num(p['totalNet']) + comm);
+                        fawryApproved += approved;
+                        fawryCommission += comm;
+                        fawryGrand += grand;
+                        grandTotalSum += sheetGrand;
+                        final n = p['employeeCount'];
+                        employees += n is num
+                            ? n.toInt()
+                            : int.tryParse(n?.toString() ?? '') ?? 0;
+                      }
+                      cash = _round2(cash);
+                      fawryApproved = _round2(fawryApproved);
+                      fawryCommission = _round2(fawryCommission);
+                      fawryGrand = _round2(fawryGrand);
+                      grandTotalSum = _round2(grandTotalSum);
+                      final expanded = _expandedPeriods.contains(key);
+                      return SellixCard(
+                        padding: EdgeInsets.zero,
+                        child: ExpansionTile(
+                          initiallyExpanded: expanded,
+                          maintainState: false,
+                          onExpansionChanged: (open) {
+                            setState(() {
+                              if (open) {
+                                _expandedPeriods.add(key);
+                              } else {
+                                _expandedPeriods.remove(key);
+                              }
+                            });
+                          },
+                          title: _periodHeader(
+                            from: from,
+                            to: to,
+                            branchCount: branchCount,
+                            cash: cash,
+                            fawryApproved: fawryApproved,
+                            fawryCommission: fawryCommission,
+                            fawryGrand: fawryGrand,
+                            grandTotalSum: grandTotalSum,
+                            employees: employees,
+                          ),
+                          children: [
+                            const Divider(height: 1),
+                            _periodEmployeeSearch(key: key, from: from, to: to),
+                            if ((_periodSearchQueries[key] ?? '').isEmpty)
+                              for (var j = 0; j < payrolls.length; j++) ...[
+                                _payrollTile(payrolls[j]),
+                                if (j < payrolls.length - 1)
+                                  const Divider(height: 1),
                               ],
-                            ),
-                          );
-                        },
-                      ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -504,7 +677,12 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
     try {
       final grids = await api.shiftGridList(limit: 100);
       final devices = await api.devicesList();
-      if (mounted) setState(() { _grids = grids; _devices = devices; _loading = false; });
+      if (mounted)
+        setState(() {
+          _grids = grids;
+          _devices = devices;
+          _loading = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -519,7 +697,8 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
       lastDate: DateTime(2035),
     );
     if (picked != null) {
-      ctrl.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      ctrl.text =
+          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     }
   }
 
@@ -527,7 +706,10 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
     setState(() {
       _shiftGridId = gridId;
       if (gridId == null || gridId.isEmpty) return;
-      final grid = _grids.firstWhere((g) => g['id']?.toString() == gridId, orElse: () => {});
+      final grid = _grids.firstWhere(
+        (g) => g['id']?.toString() == gridId,
+        orElse: () => {},
+      );
       if (grid.isEmpty) return;
       final from = grid['dateFrom']?.toString();
       final to = grid['dateTo']?.toString();
@@ -542,14 +724,17 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
     final from = _fromCtrl.text.trim();
     final to = _toCtrl.text.trim();
     if (from.isEmpty || to.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t('payL.pickPeriod'))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.t('payL.pickPeriod'))));
       return;
     }
     Navigator.pop(context, {
       'name': _nameCtrl.text.trim(),
       'dateFrom': from,
       'dateTo': to,
-      if (_shiftGridId != null && _shiftGridId!.isNotEmpty) 'shiftGridId': _shiftGridId,
+      if (_shiftGridId != null && _shiftGridId!.isNotEmpty)
+        'shiftGridId': _shiftGridId,
       if (_deviceId != null && _deviceId!.isNotEmpty) 'deviceId': _deviceId,
     });
   }
@@ -561,7 +746,10 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
       content: SizedBox(
         width: 420,
         child: _loading
-            ? const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()))
+            ? const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator()),
+              )
             : SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -588,7 +776,10 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                               border: const OutlineInputBorder(),
                               isDense: true,
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.calendar_today, size: 18),
+                                icon: const Icon(
+                                  Icons.calendar_today,
+                                  size: 18,
+                                ),
                                 onPressed: () => _pickDate(_fromCtrl),
                               ),
                             ),
@@ -604,7 +795,10 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                               border: const OutlineInputBorder(),
                               isDense: true,
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.calendar_today, size: 18),
+                                icon: const Icon(
+                                  Icons.calendar_today,
+                                  size: 18,
+                                ),
                                 onPressed: () => _pickDate(_toCtrl),
                               ),
                             ),
@@ -621,7 +815,10 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                         isDense: true,
                       ),
                       items: [
-                        DropdownMenuItem<String?>(value: null, child: Text(context.t('payL.generalSheet'))),
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(context.t('payL.generalSheet')),
+                        ),
                         for (final g in _grids)
                           DropdownMenuItem<String?>(
                             value: g['id']?.toString(),
@@ -642,11 +839,18 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                         isDense: true,
                       ),
                       items: [
-                        DropdownMenuItem<String?>(value: null, child: Text(context.t('payL.unspecified'))),
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(context.t('payL.unspecified')),
+                        ),
                         for (final d in _devices)
                           DropdownMenuItem<String?>(
                             value: d['id']?.toString(),
-                            child: Text(d['name']?.toString() ?? d['id']?.toString() ?? ''),
+                            child: Text(
+                              d['name']?.toString() ??
+                                  d['id']?.toString() ??
+                                  '',
+                            ),
                           ),
                       ],
                       onChanged: (v) => setState(() => _deviceId = v),
@@ -661,8 +865,14 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
               ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.t('common.cancel'))),
-        FilledButton(onPressed: _loading ? null : _submit, child: Text(context.t('common.create'))),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.t('common.cancel')),
+        ),
+        FilledButton(
+          onPressed: _loading ? null : _submit,
+          child: Text(context.t('common.create')),
+        ),
       ],
     );
   }
@@ -686,17 +896,18 @@ class _PeriodPayrollReportDialog extends StatefulWidget {
       _PeriodPayrollReportDialogState();
 }
 
-class _PeriodPayrollReportDialogState extends State<_PeriodPayrollReportDialog> {
+class _PeriodPayrollReportDialogState
+    extends State<_PeriodPayrollReportDialog> {
   bool _loading = true;
   bool _exporting = false;
   String? _error;
   List<Map<String, dynamic>> _items = [];
 
   String get _title => switch (widget.kind) {
-        _PeriodReportKind.zeroBasic => context.t('payL.zeroBasicEmployees'),
-        _PeriodReportKind.negativeNet => context.t('payL.negativeNetEmployees'),
-        _PeriodReportKind.duplicates => context.t('payL.dupInCycleGrids'),
-      };
+    _PeriodReportKind.zeroBasic => context.t('payL.zeroBasicEmployees'),
+    _PeriodReportKind.negativeNet => context.t('payL.negativeNetEmployees'),
+    _PeriodReportKind.duplicates => context.t('payL.dupInCycleGrids'),
+  };
 
   @override
   void initState() {
@@ -712,24 +923,22 @@ class _PeriodPayrollReportDialogState extends State<_PeriodPayrollReportDialog> 
     try {
       final data = switch (widget.kind) {
         _PeriodReportKind.zeroBasic => await api.payrollPeriodZeroBasicList(
-            dateFrom: widget.dateFrom,
-            dateTo: widget.dateTo,
-          ),
+          dateFrom: widget.dateFrom,
+          dateTo: widget.dateTo,
+        ),
         _PeriodReportKind.negativeNet => await api.payrollPeriodNegativeNetList(
-            dateFrom: widget.dateFrom,
-            dateTo: widget.dateTo,
-          ),
+          dateFrom: widget.dateFrom,
+          dateTo: widget.dateTo,
+        ),
         _PeriodReportKind.duplicates => await api.payrollPeriodDuplicatesList(
-            dateFrom: widget.dateFrom,
-            dateTo: widget.dateTo,
-          ),
+          dateFrom: widget.dateFrom,
+          dateTo: widget.dateTo,
+        ),
       };
       final raw = (data['items'] as List?) ?? [];
       if (!mounted) return;
       setState(() {
-        _items = raw
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
+        _items = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _loading = false;
       });
     } catch (e) {
@@ -747,7 +956,8 @@ class _PeriodPayrollReportDialogState extends State<_PeriodPayrollReportDialog> 
     final messenger = ScaffoldMessenger.of(context);
     try {
       final r = switch (widget.kind) {
-        _PeriodReportKind.zeroBasic => await api.payrollPeriodZeroBasicExportXlsx(
+        _PeriodReportKind.zeroBasic =>
+          await api.payrollPeriodZeroBasicExportXlsx(
             dateFrom: widget.dateFrom,
             dateTo: widget.dateTo,
           ),
@@ -762,19 +972,25 @@ class _PeriodPayrollReportDialogState extends State<_PeriodPayrollReportDialog> 
             dateTo: widget.dateTo,
           ),
       };
-      final filename = r['filename']?.toString() ??
+      final filename =
+          r['filename']?.toString() ??
           switch (widget.kind) {
             _PeriodReportKind.zeroBasic => 'zero_basic.xlsx',
             _PeriodReportKind.negativeNet => 'negative_net.xlsx',
             _PeriodReportKind.duplicates => 'period_duplicates.xlsx',
           };
       final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
-      final mime = r['mimeType']?.toString() ??
+      final mime =
+          r['mimeType']?.toString() ??
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       if (base64.isEmpty) throw Exception(context.t('pay.emptyFromServer'));
       downloadBase64File(base64, filename, mime);
       if (mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(context.t('emp.downloaded', {'file': filename}))));
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(context.t('emp.downloaded', {'file': filename})),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -809,68 +1025,93 @@ class _PeriodPayrollReportDialogState extends State<_PeriodPayrollReportDialog> 
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Center(child: Text(_error!, style: const TextStyle(color: AppColors.danger)))
-                : _items.isEmpty
-                    ? Center(child: Text(context.t('payL.noResultsInCycle')))
-                    : ListView(
-                        children: [
-                          Text(
-                            context.t('payL.cycle', {'from': widget.dateFrom, 'to': widget.dateTo}),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          for (final entry in groups.entries) ...[
-                            Padding(
-                              padding: const EdgeInsets.only(top: 10, bottom: 4),
-                              child: Text(
-                                '${entry.key} (${entry.value.length})',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                            for (final row in entry.value)
-                              ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  '${row['employeeCode'] ?? ''} — ${row['employeeName'] ?? ''}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                                subtitle: Text(
-                                  switch (widget.kind) {
-                                    _PeriodReportKind.zeroBasic =>
-                                      context.t('payL.zeroBasicLine', {
-                                        'sheet': row['payrollName'] ?? '',
-                                        'basic': row['profileBasicSalary'] ?? 0,
-                                        'net': formatMoney(row['netSalary'], fallback: '0'),
-                                      }),
-                                    _PeriodReportKind.negativeNet =>
-                                      context.t('payL.negativeNetLine', {
-                                        'sheet': row['payrollName'] ?? '',
-                                        'earnings': formatMoney(row['totalEarnings'], fallback: '0'),
-                                        'deductions': formatMoney(row['totalDeductions'], fallback: '0'),
-                                        'net': formatMoney(row['signedNet'], fallback: '0'),
-                                      }),
-                                    _PeriodReportKind.duplicates =>
-                                      context.t('payL.duplicateLine', {
-                                        'sheet': row['payrollName'] ?? '',
-                                        'count': row['occurrenceCount'] ?? '',
-                                        'branches': (row['otherBranches']?.toString().isNotEmpty ?? false)
-                                            ? context.t('payL.otherBranches', {'branches': row['otherBranches']})
-                                            : '',
-                                      }),
-                                  },
-                                  style: const TextStyle(fontSize: 11.5),
-                                ),
-                              ),
-                          ],
-                        ],
+            ? Center(
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: AppColors.danger),
+                ),
+              )
+            : _items.isEmpty
+            ? Center(child: Text(context.t('payL.noResultsInCycle')))
+            : ListView(
+                children: [
+                  Text(
+                    context.t('payL.cycle', {
+                      'from': widget.dateFrom,
+                      'to': widget.dateTo,
+                    }),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final entry in groups.entries) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10, bottom: 4),
+                      child: Text(
+                        '${entry.key} (${entry.value.length})',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
                       ),
+                    ),
+                    for (final row in entry.value)
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          '${row['employeeCode'] ?? ''} — ${row['employeeName'] ?? ''}',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        subtitle: Text(switch (widget.kind) {
+                          _PeriodReportKind.zeroBasic =>
+                            context.t('payL.zeroBasicLine', {
+                              'sheet': row['payrollName'] ?? '',
+                              'basic': row['profileBasicSalary'] ?? 0,
+                              'net': formatMoney(
+                                row['netSalary'],
+                                fallback: '0',
+                              ),
+                            }),
+                          _PeriodReportKind.negativeNet =>
+                            context.t('payL.negativeNetLine', {
+                              'sheet': row['payrollName'] ?? '',
+                              'earnings': formatMoney(
+                                row['totalEarnings'],
+                                fallback: '0',
+                              ),
+                              'deductions': formatMoney(
+                                row['totalDeductions'],
+                                fallback: '0',
+                              ),
+                              'net': formatMoney(
+                                row['signedNet'],
+                                fallback: '0',
+                              ),
+                            }),
+                          _PeriodReportKind.duplicates => context.t(
+                            'payL.duplicateLine',
+                            {
+                              'sheet': row['payrollName'] ?? '',
+                              'count': row['occurrenceCount'] ?? '',
+                              'branches':
+                                  (row['otherBranches']
+                                          ?.toString()
+                                          .isNotEmpty ??
+                                      false)
+                                  ? context.t('payL.otherBranches', {
+                                      'branches': row['otherBranches'],
+                                    })
+                                  : '',
+                            },
+                          ),
+                        }, style: const TextStyle(fontSize: 11.5)),
+                      ),
+                  ],
+                ],
+              ),
       ),
       actions: [
         TextButton(
@@ -968,4 +1209,3 @@ class _PayrollRowSkeleton extends StatelessWidget {
     );
   }
 }
-

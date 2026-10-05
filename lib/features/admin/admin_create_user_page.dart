@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,6 +12,8 @@ import '../../core/theme/app_theme_v2.dart';
 import '../../core/widgets/hr_local_data_info.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
+import '../auth/auth_cubit.dart';
+import '../auth/auth_state.dart';
 import 'widgets/admin_role_badge.dart';
 import '../../l10n/l10n_extension.dart';
 
@@ -139,7 +142,13 @@ class _AdminCreateUserPageState extends State<AdminCreateUserPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppPageScaffold(
+    return BlocListener<AuthCubit, AuthState>(
+      listenWhen: (a, b) => a.activeCompanyId != b.activeCompanyId,
+      listener: (_, __) {
+        _locationId = null;
+        _loadLocations();
+      },
+      child: AppPageScaffold(
       child: Form(
         key: _formKey,
         child: Column(
@@ -322,6 +331,7 @@ class _AdminCreateUserPageState extends State<AdminCreateUserPage> {
           ],
         ),
       ),
+    ),
     );
   }
 }

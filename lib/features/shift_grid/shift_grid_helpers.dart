@@ -37,7 +37,11 @@ List<WeekGroup> buildWeekGroups(List<Map<String, dynamic>> dates) {
 List<MapEntry<String, List<Map<String, dynamic>>>> parseJobGroups(dynamic raw) {
   if (raw is! Map) return [];
   return raw.entries
-      .map((e) => MapEntry(e.key.toString(), _employeeList(e.value)))
+      .map((e) {
+        final list = _employeeList(e.value);
+        _sortEmployeesByCode(list);
+        return MapEntry(e.key.toString(), list);
+      })
       .toList();
 }
 
@@ -50,8 +54,11 @@ void mergeJobGroups(
     final idx = target.indexWhere((e) => e.key == entry.key);
     if (idx >= 0) {
       target[idx].value.addAll(entry.value);
+      _sortEmployeesByCode(target[idx].value);
     } else {
-      target.add(MapEntry(entry.key, List<Map<String, dynamic>>.from(entry.value)));
+      final list = List<Map<String, dynamic>>.from(entry.value);
+      _sortEmployeesByCode(list);
+      target.add(MapEntry(entry.key, list));
     }
   }
 }
@@ -59,6 +66,23 @@ void mergeJobGroups(
 List<Map<String, dynamic>> _employeeList(dynamic value) {
   if (value is! List) return [];
   return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+}
+
+/// Ascending employee code within a job/department section (numeric-aware).
+void _sortEmployeesByCode(List<Map<String, dynamic>> employees) {
+  employees.sort((a, b) {
+    final ac = a['code']?.toString() ?? '';
+    final bc = b['code']?.toString() ?? '';
+    final byCode = ac.compareTo(bc);
+    // Dart's String.compareTo is lexicographic; prefer numeric when both parse.
+    final an = int.tryParse(ac);
+    final bn = int.tryParse(bc);
+    if (an != null && bn != null && an != bn) return an.compareTo(bn);
+    if (byCode != 0) return byCode;
+    final aname = a['name']?.toString() ?? '';
+    final bname = b['name']?.toString() ?? '';
+    return aname.compareTo(bname);
+  });
 }
 
 List<Map<String, dynamic>> parseDates(dynamic raw) {

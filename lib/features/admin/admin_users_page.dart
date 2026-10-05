@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,11 +9,14 @@ import '../../core/layout/app_page_scaffold.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/api_connection_help.dart';
+import '../../core/utils/api_error_message.dart';
 import '../../core/widgets/alert_banner.dart';
 import '../../core/widgets/hr_local_data_info.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/skeleton_box.dart';
+import '../auth/auth_cubit.dart';
+import '../auth/auth_state.dart';
 import 'widgets/admin_role_badge.dart';
 import 'widgets/admin_user_card.dart';
 import '../../l10n/l10n_extension.dart';
@@ -100,14 +104,15 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     final id = user['id']?.toString();
     if (id == null || id.isEmpty) return;
     final name = user['name']?.toString() ?? context.t('admin.theUser');
+    final login = _userLogin(user);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(context.t('admin.resetPassword')),
-        content: Text(context.t('admin.resetQuestion', {'name': name})),
+        title: Text(context.t('admin.resendEmailTitle')),
+        content: Text(context.t('admin.resendEmailBody', {'name': name, 'email': login})),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.t('common.cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.t('admin.reset'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.t('admin.resendEmail'))),
         ],
       ),
     );
@@ -115,8 +120,14 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     try {
       final result = await api.adminUserResetPassword(id);
       if (!mounted) return;
+      final emailSent = result['emailSent'] == true;
+      final emailTo = result['emailTo']?.toString();
+      final emailError = result['emailError']?.toString();
+      final msg = emailSent
+          ? context.t('admin.resendEmailOk', {'email': emailTo ?? login})
+          : context.t('admin.resendEmailFail', {'error': emailError ?? 'unknown'});
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t('admin.passwordCreated')), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
       );
       final password = result['password']?.toString();
       if (password != null && password.isNotEmpty) {
@@ -228,6 +239,15 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
               if (user['createdAt'] != null)
                 _DetailRow(label: context.t('admin.createdAtLabel'), value: user['createdAt']?.toString().substring(0, 10) ?? ''),
               const Gap(16),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _resetPassword(user);
+                },
+                icon: const Icon(Icons.mark_email_unread_outlined, size: 18),
+                label: Text(context.t('admin.resendEmail')),
+              ),
+              const Gap(10),
               Row(
                 children: [
                   Expanded(
@@ -249,17 +269,6 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                   ],
                 ],
               ),
-              if (password == null) ...[
-                const Gap(10),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _resetPassword(user);
-                  },
-                  icon: const Icon(Icons.lock_reset_rounded, size: 18),
-                  label: Text(context.t('admin.newPassword')),
-                ),
-              ],
               if (user['active'] != false) ...[
                 const Gap(10),
                 FilledButton.icon(
@@ -284,23 +293,30 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     if (msg.contains('Failed to fetch') || msg.contains('ClientException')) {
       return ApiConnectionHelp.connectionError(api.baseUrl);
     }
-    return msg;
+    return friendlyApiError(context, e);
   }
 
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
+    final companyName = context.watch<AuthCubit>().state.activeCompanyName;
 
-    return AppPageScaffold(
+    return BlocListener<AuthCubit, AuthState>(
+      listenWhen: (a, b) => a.activeCompanyId != b.activeCompanyId,
+      listener: (_, __) => _load(),
+      child: AppPageScaffold(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
             title: context.t('admin.users'),
-            subtitle: context.t('admin.usersSubtitle', {
-              'total': _users.length,
-              'active': _users.where((u) => u['active'] != false).length,
-            }),
+            subtitle: [
+              if (companyName != null && companyName.trim().isNotEmpty) companyName.trim(),
+              context.t('admin.usersSubtitle', {
+                'total': _users.length,
+                'active': _users.where((u) => u['active'] != false).length,
+              }),
+            ].join(' · '),
             icon: Icons.people_outline_rounded,
             showRefresh: true,
             onRefresh: _load,
@@ -412,6 +428,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                   onCopyPassword: _userPassword(u) == null
                       ? null
                       : () => _copyText(_userPassword(u)!, context.t('admin.password')),
+                  onResendEmail: u['active'] == false ? null : () => _resetPassword(u),
                   onDeactivate: u['active'] == false ? null : () => _confirmDeactivate(u),
                   onTap: () => _showUserDetails(u),
                 ),
@@ -419,6 +436,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
             ),
         ],
       ),
+    ),
     );
   }
 }

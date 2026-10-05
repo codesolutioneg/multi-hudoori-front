@@ -2136,6 +2136,25 @@ class BioTimeApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> payrollPeriodEmployeeSearch({
+    required String dateFrom,
+    required String dateTo,
+    required String search,
+    int limit = 100,
+  }) async {
+    return Map<String, dynamic>.from(
+      _unwrap(
+            await _call('/api/biotime/payroll/period/employees/search', {
+              'dateFrom': dateFrom,
+              'dateTo': dateTo,
+              'search': search,
+              'limit': limit,
+            }),
+          )
+          as Map,
+    );
+  }
+
   Future<Map<String, dynamic>> payrollPeriodCashFawryExportZip({
     required String dateFrom,
     required String dateTo,
@@ -2575,6 +2594,38 @@ class BioTimeApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> shiftGridMonthlyReportsPeriods() async {
+    return _unwrap(
+      await _call('/api/biotime/shift-grid/monthly-reports/periods', {}),
+    );
+  }
+
+  Future<Map<String, dynamic>> shiftGridMonthlyReportsExportTemplate({
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/shift-grid/monthly-reports/export-template', {
+        'dateFrom': dateFrom,
+        'dateTo': dateTo,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> shiftGridMonthlyReportsImport({
+    required String base64,
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/shift-grid/monthly-reports/import', {
+        'base64': base64,
+        'dateFrom': dateFrom,
+        'dateTo': dateTo,
+      }),
+    );
+  }
+
   Future<List<Map<String, dynamic>>> overtimeList({String? state}) async {
     final data = _unwrap(
       await _call('/api/biotime/overtime/list', {
@@ -2723,6 +2774,13 @@ class BioTimeApiClient {
 
   Future<void> deductionCancel(Object id) async {
     _unwrap(await _call('/api/biotime/deductions/cancel', {'deductionId': id}));
+  }
+
+  Future<Map<String, dynamic>> deductionDeleteBulk(List<String> ids) async {
+    final data = _unwrap(
+      await _call('/api/biotime/deductions/delete-bulk', {'ids': ids}),
+    );
+    return Map<String, dynamic>.from(data as Map? ?? {});
   }
 
   Future<Map<String, dynamic>> deductionExportTemplate({
@@ -2884,12 +2942,16 @@ class BioTimeApiClient {
   Future<Map<String, dynamic>> deductionConfirmBranchImport({
     required List<Map<String, dynamic>> lines,
     String? date,
+    String? dateFrom,
+    String? dateTo,
     String? deviceId,
   }) async {
     return _unwrap(
       await _call('/api/biotime/deductions/confirm-branch-import', {
         'lines': lines,
         if (date != null) 'date': date,
+        if (dateFrom != null) 'dateFrom': dateFrom,
+        if (dateTo != null) 'dateTo': dateTo,
         if (deviceId != null) 'deviceId': deviceId,
       }),
     );
@@ -3115,6 +3177,14 @@ class BioTimeApiClient {
     return Map<String, dynamic>.from(data['line'] as Map? ?? {});
   }
 
+  Future<void> advanceLoanImportLineDelete({required Object lineId}) async {
+    _unwrap(
+      await _call('/api/biotime/advances/loan-import/lines/delete', {
+        'lineId': lineId,
+      }),
+    );
+  }
+
   Future<Map<String, dynamic>> advanceLoanImportLineAddManual({
     required Object importId,
     required String employeeId,
@@ -3134,10 +3204,14 @@ class BioTimeApiClient {
     return Map<String, dynamic>.from(data['line'] as Map? ?? {});
   }
 
-  Future<Map<String, dynamic>> advanceLoanImportApprove(Object importId) async {
+  Future<Map<String, dynamic>> advanceLoanImportApprove(
+    Object importId, {
+    bool approveConflicts = false,
+  }) async {
     return _unwrap(
       await _call('/api/biotime/advances/loan-import/approve', {
         'importId': importId,
+        if (approveConflicts) 'approveConflicts': true,
       }),
     );
   }
@@ -3492,6 +3566,27 @@ class BioTimeApiClient {
           .post(uri, headers: headers, body: body)
           .timeout(timeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) {
+            final code = decoded['error_code']?.toString() ??
+                decoded['code']?.toString();
+            final msg = decoded['message']?.toString();
+            if ((code != null && code.isNotEmpty) ||
+                (msg != null && msg.trim().isNotEmpty)) {
+              throw BioTimeApiException(
+                (msg != null && msg.trim().isNotEmpty)
+                    ? msg.trim()
+                    : 'HTTP ${response.statusCode}',
+                code: code ?? 'HTTP_${response.statusCode}',
+              );
+            }
+          }
+        } on BioTimeApiException {
+          rethrow;
+        } catch (_) {
+          // fall through to generic HTTP error
+        }
         throw BioTimeApiException(
           'HTTP ${response.statusCode}',
           code: 'HTTP_${response.statusCode}',
@@ -3674,7 +3769,8 @@ class BioTimeApiClient {
   /// Starts pulling the period from BioTime for the selected branch unless a
   /// recent sync already covered it, and returns the job to wait on. Branch-only
   /// pulls finish in about a minute; company-wide ones take many minutes.
-  Future<String?> reportPunchSyncStart({
+  /// When BioTime is down/unconfigured, returns [usedLocal]=true and no job.
+  Future<({String? jobId, bool usedLocal, String? message})> reportPunchSyncStart({
     required String dateFrom,
     required String dateTo,
     required String locationId,
@@ -3686,8 +3782,16 @@ class BioTimeApiClient {
         'locationId': locationId,
       }),
     );
-    if (data['queued'] != true) return null;
-    return data['jobId']?.toString();
+    final usedLocal = data['usedLocal'] == true;
+    final message = data['message']?.toString();
+    if (data['queued'] != true) {
+      return (jobId: null, usedLocal: usedLocal, message: message);
+    }
+    return (
+      jobId: data['jobId']?.toString(),
+      usedLocal: false,
+      message: message,
+    );
   }
 
   Future<Map<String, dynamic>> reportPunchSyncWait(
@@ -3952,6 +4056,8 @@ class BioTimeApiClient {
   Future<Map<String, dynamic>> adminCompaniesCreate({
     required String code,
     required String name,
+    required int maxEmployees,
+    required int maxUsers,
     String? hrManagerName,
     String? hrManagerLogin,
     String? hrManagerPassword,
@@ -3960,6 +4066,8 @@ class BioTimeApiClient {
       await _call('/api/admin/companies/create', {
         'code': code,
         'name': name,
+        'maxEmployees': maxEmployees,
+        'maxUsers': maxUsers,
         if (hrManagerName != null) 'hrManagerName': hrManagerName,
         if (hrManagerLogin != null) 'hrManagerLogin': hrManagerLogin,
         if (hrManagerPassword != null) 'hrManagerPassword': hrManagerPassword,
@@ -3979,6 +4087,191 @@ class BioTimeApiClient {
         if (active != null) 'active': active,
       }),
     );
+  }
+
+  /// Seats: null = unlimited. Both keys are always sent so clearing a field removes the cap.
+  /// Employees / quota / per-branch / per-department counts for one company.
+  Future<Map<String, dynamic>> adminCompanyStats(String id) async {
+    final data = _unwrap(await _call('/api/admin/companies/stats', {'id': id}));
+    final s = data['stats'];
+    return s is Map ? Map<String, dynamic>.from(s) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> adminCompaniesUpdateQuota({
+    required String id,
+    required int? maxEmployees,
+    required int? maxUsers,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/companies/update', {
+        'id': id,
+        'maxEmployees': maxEmployees,
+        'maxUsers': maxUsers,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminSalesRequestsList({String? status}) async {
+    return _unwrap(
+      await _call('/api/admin/sales-requests/list', {
+        if (status != null && status.isNotEmpty) 'status': status,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminSalesRequestsApprove({required String id}) async {
+    return _unwrap(await _call('/api/admin/sales-requests/approve', {'id': id}));
+  }
+
+  Future<Map<String, dynamic>> adminSalesRequestsUpdate({
+    required String id,
+    String? companyCode,
+    String? companyName,
+    String? contactName,
+    String? email,
+    String? phone,
+    int? requestedEmployees,
+    String? planId,
+    String? notes,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/sales-requests/update', {
+        'id': id,
+        if (companyCode != null) 'companyCode': companyCode,
+        if (companyName != null) 'companyName': companyName,
+        if (contactName != null) 'contactName': contactName,
+        if (email != null) 'email': email,
+        if (phone != null) 'phone': phone,
+        if (requestedEmployees != null) 'requestedEmployees': requestedEmployees,
+        'planId': planId,
+        if (notes != null) 'notes': notes,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminSalesRequestsReject({
+    required String id,
+    String? reason,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/sales-requests/reject', {
+        'id': id,
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminPlansList() async {
+    return _unwrap(await _call('/api/admin/plans/list', {}));
+  }
+
+  Future<Map<String, dynamic>> adminPlansFeatureCatalog() async {
+    return _unwrap(await _call('/api/admin/plans/feature-catalog', {}));
+  }
+
+  Future<Map<String, dynamic>> adminPlansCreate({
+    required String slug,
+    required String nameAr,
+    required String nameEn,
+    required String priceDisplayAr,
+    required String priceDisplayEn,
+    String? descriptionAr,
+    String? descriptionEn,
+    List<String>? featuresAr,
+    List<String>? featuresEn,
+    int? defaultMaxEmployees,
+    int? defaultMaxUsers,
+    int sortOrder = 0,
+    String status = 'DRAFT',
+    bool highlighted = false,
+    List<String>? featureKeys,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/plans/create', {
+        'slug': slug,
+        'nameAr': nameAr,
+        'nameEn': nameEn,
+        'descriptionAr': descriptionAr,
+        'descriptionEn': descriptionEn,
+        'priceDisplayAr': priceDisplayAr,
+        'priceDisplayEn': priceDisplayEn,
+        if (defaultMaxEmployees != null) 'defaultMaxEmployees': defaultMaxEmployees,
+        if (defaultMaxUsers != null) 'defaultMaxUsers': defaultMaxUsers,
+        'sortOrder': sortOrder,
+        'status': status,
+        'highlighted': highlighted,
+        'featuresAr': featuresAr ?? <String>[],
+        'featuresEn': featuresEn ?? <String>[],
+        'featureKeys': featureKeys ?? <String>[],
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminPlansUpdate({
+    required String id,
+    String? slug,
+    String? nameAr,
+    String? nameEn,
+    String? descriptionAr,
+    String? descriptionEn,
+    String? priceDisplayAr,
+    String? priceDisplayEn,
+    List<String>? featuresAr,
+    List<String>? featuresEn,
+    int? defaultMaxEmployees,
+    int? defaultMaxUsers,
+    int? sortOrder,
+    bool? highlighted,
+    List<String>? featureKeys,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/plans/update', {
+        'id': id,
+        if (slug != null) 'slug': slug,
+        if (nameAr != null) 'nameAr': nameAr,
+        if (nameEn != null) 'nameEn': nameEn,
+        if (descriptionAr != null) 'descriptionAr': descriptionAr,
+        if (descriptionEn != null) 'descriptionEn': descriptionEn,
+        if (priceDisplayAr != null) 'priceDisplayAr': priceDisplayAr,
+        if (priceDisplayEn != null) 'priceDisplayEn': priceDisplayEn,
+        if (featuresAr != null) 'featuresAr': featuresAr,
+        if (featuresEn != null) 'featuresEn': featuresEn,
+        if (defaultMaxEmployees != null) 'defaultMaxEmployees': defaultMaxEmployees,
+        if (defaultMaxUsers != null) 'defaultMaxUsers': defaultMaxUsers,
+        if (sortOrder != null) 'sortOrder': sortOrder,
+        if (highlighted != null) 'highlighted': highlighted,
+        if (featureKeys != null) 'featureKeys': featureKeys,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminCompaniesFeaturesGet({required String id}) async {
+    return _unwrap(await _call('/api/admin/companies/features/get', {'id': id}));
+  }
+
+  Future<Map<String, dynamic>> adminCompaniesFeaturesUpdate({
+    required String id,
+    required List<Map<String, dynamic>> features,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/companies/features/update', {'id': id, 'features': features}),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminPlansSetStatus({
+    required String id,
+    required String status,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/plans/set-status', {'id': id, 'status': status}),
+    );
+  }
+
+  /// Read-only seats of the active company (HR screens).
+  Future<Map<String, dynamic>> companyQuota() async {
+    final data = _unwrap(await _call('/api/biotime/company/quota', {}));
+    final q = data['quota'];
+    return q is Map ? Map<String, dynamic>.from(q) : <String, dynamic>{};
   }
 
   bool _isNetworkError(Object e) {

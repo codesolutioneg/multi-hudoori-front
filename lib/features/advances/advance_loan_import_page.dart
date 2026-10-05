@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
@@ -15,9 +17,11 @@ import '../../core/widgets/list_picker_field.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
+import '../../data/api/biotime_api_client.dart';
 import '../../l10n/l10n_extension.dart';
 
-String _money(dynamic value) => formatMoney(value, fallback: value?.toString() ?? '');
+String _money(dynamic value) =>
+    formatMoney(value, fallback: value?.toString() ?? '');
 
 const _fawryCommissionRate = 0.0015;
 
@@ -26,12 +30,15 @@ double _roundMoney(double value) => (value * 100).roundToDouble() / 100;
 ({double approved, double commission, double total}) _fawryTotalsFromBatch(
   Map<String, dynamic>? batch,
 ) {
-  final approved = (batch?['fawryApprovedAmount'] as num?)?.toDouble() ??
+  final approved =
+      (batch?['fawryApprovedAmount'] as num?)?.toDouble() ??
       (batch?['fawryAmount'] as num?)?.toDouble() ??
       0;
-  final commission = (batch?['fawryCommissionAmount'] as num?)?.toDouble() ??
+  final commission =
+      (batch?['fawryCommissionAmount'] as num?)?.toDouble() ??
       _roundMoney(approved * _fawryCommissionRate);
-  final total = (batch?['fawryAmount'] as num?)?.toDouble() ??
+  final total =
+      (batch?['fawryAmount'] as num?)?.toDouble() ??
       _roundMoney(approved + commission);
   return (approved: approved, commission: commission, total: total);
 }
@@ -50,10 +57,9 @@ String _cashPlusFawryApprovedLine(
   BuildContext context, {
   required double cash,
   required double fawryApproved,
-}) =>
-    context.t('fawryLine.cashPlus', {
-      'amount': _money(_roundMoney(cash + fawryApproved)),
-    });
+}) => context.t('fawryLine.cashPlus', {
+  'amount': _money(_roundMoney(cash + fawryApproved)),
+});
 
 String _primaryLocationFromBatch(Map<String, dynamic>? batch) {
   final primary =
@@ -82,7 +88,8 @@ String _sheetHeadlineFromBatch(
         '';
     if (primary.trim().isNotEmpty) return '$reference — $primary';
   }
-  final mixed = batch?['mixedLocations'] == true ||
+  final mixed =
+      batch?['mixedLocations'] == true ||
       ((batch?['locationCount'] as num?)?.toInt() ?? 0) > 1;
   if (mixed) return '$reference — multiple';
   final lines = (batch?['lines'] as List? ?? []).whereType<Map>();
@@ -108,6 +115,13 @@ String _locationLabel(Map<String, dynamic> d) {
   final loc = d['locationName']?.toString().trim();
   if (loc != null && loc.isNotEmpty) return loc;
   return d['name']?.toString() ?? d['alias']?.toString() ?? '';
+}
+
+String? _locationIdFromDevice(Map<String, dynamic> d) {
+  final id = d['locationId'];
+  if (id == null || id == false) return null;
+  final text = id.toString().trim();
+  return text.isEmpty ? null : text;
 }
 
 enum _ImportPhase { drafts, setup, review }
@@ -137,10 +151,14 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
   String? _deviceId;
   final Set<String> _tipLocationIds = {};
   final _dateCtrl = TextEditingController(text: _fmtDate(DateTime.now()));
-  final _reasonCtrl = TextEditingController(text: tr('loanImp.eligibilityReason'));
+  final _reasonCtrl = TextEditingController(
+    text: tr('loanImp.eligibilityReason'),
+  );
   final _searchCtrl = TextEditingController();
   final _tipsFromCtrl = TextEditingController();
   final _tipsToCtrl = TextEditingController();
+  final _reviewTableHScroll = ScrollController();
+  final _reviewTableVScroll = ScrollController();
   String _statusFilter = '';
   String _approveFilter = '';
   String _jobFilter = '';
@@ -168,6 +186,8 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     _searchCtrl.dispose();
     _tipsFromCtrl.dispose();
     _tipsToCtrl.dispose();
+    _reviewTableHScroll.dispose();
+    _reviewTableVScroll.dispose();
     super.dispose();
   }
 
@@ -175,7 +195,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     setState(() => _loading = true);
     try {
       final devices = await api.devicesList();
-      final locations = _isTip ? await api.locationsList() : <Map<String, dynamic>>[];
+      final locations = _isTip
+          ? await api.locationsList()
+          : <Map<String, dynamic>>[];
       final drafts = await api.advanceLoanImportList(kind: widget.kind);
       final initialBatch = widget.initialImportId == null
           ? null
@@ -192,8 +214,7 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
         var startDay = 26;
         try {
           final config = await api.configGet();
-          startDay =
-              (config['payrollMonthStartDay'] as num?)?.toInt() ?? 26;
+          startDay = (config['payrollMonthStartDay'] as num?)?.toInt() ?? 26;
         } catch (_) {}
         final now = DateTime.now();
         final range = payrollMonthRange(now, startDay);
@@ -317,6 +338,10 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
         final aJob = a['jobTitle']?.toString().trim().toLowerCase() ?? '';
         final bJob = b['jobTitle']?.toString().trim().toLowerCase() ?? '';
         comparison = aJob.compareTo(bJob);
+      } else if (_sortColumnIndex == 4) {
+        final aDate = a['hiringDate']?.toString().trim() ?? '';
+        final bDate = b['hiringDate']?.toString().trim() ?? '';
+        comparison = aDate.compareTo(bDate);
       } else {
         final aCode = a['employeeCode']?.toString().trim() ?? '';
         final bCode = b['employeeCode']?.toString().trim() ?? '';
@@ -329,28 +354,6 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       return _sortAscending ? comparison : -comparison;
     });
     return filtered;
-  }
-
-  bool _showIneligibilityInfo(Map<String, dynamic> line) {
-    final status = line['compareStatus']?.toString() ?? '';
-    final reason = (line['ineligibilityReason']?.toString() ?? '').trim();
-    return reason.isNotEmpty ||
-        status == 'not_eligible' ||
-        status == 'no_mapping' ||
-        status == 'missing_in_eligibility';
-  }
-
-  String _ineligibilityReasonText(Map<String, dynamic> line) {
-    final reason = (line['ineligibilityReason']?.toString() ?? '').trim();
-    if (reason.isNotEmpty) return reason;
-    switch (line['compareStatus']?.toString()) {
-      case 'no_mapping':
-        return context.t('loanImp.reasonNotMapped');
-      case 'missing_in_eligibility':
-        return context.t('loanImp.reasonNotInSheet');
-      default:
-        return context.t('loanImp.reasonNotEligible');
-    }
   }
 
   bool get _locked => _batch?['state']?.toString() == 'locked';
@@ -373,7 +376,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       _deviceId = null;
       _tipLocationIds.clear();
       _dateCtrl.text = _fmtDate(DateTime.now());
-      _reasonCtrl.text = _isTip ? 'Commission' : context.t('loanImp.eligibilityReason');
+      _reasonCtrl.text = _isTip
+          ? 'Commission'
+          : context.t('loanImp.eligibilityReason');
       _phase = _ImportPhase.setup;
     });
   }
@@ -425,7 +430,11 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(ctx.t('loanImp.deleteDraft')),
-        content: Text(ctx.t('loanImp.deleteConfirm', {'name': draft['reference'] ?? ctx.t('loanImp.theDraft')})),
+        content: Text(
+          ctx.t('loanImp.deleteConfirm', {
+            'name': draft['reference'] ?? ctx.t('loanImp.theDraft'),
+          }),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -462,7 +471,10 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
         names.add(loc['name']?.toString() ?? id);
       }
     }
-    if (names.isEmpty) return context.t('loanImp.branchCount', {'count': _tipLocationIds.length});
+    if (names.isEmpty)
+      return context.t('loanImp.branchCount', {
+        'count': _tipLocationIds.length,
+      });
     if (names.length <= 3) return names.join(tr('common.listSeparator'));
     return '${names.take(3).join(tr('common.listSeparator'))} +${names.length - 3}';
   }
@@ -513,7 +525,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                         ),
                         const Spacer(),
                         Text(
-                          ctx.t('loanImp.selectedCount', {'count': selectedIds.length}),
+                          ctx.t('loanImp.selectedCount', {
+                            'count': selectedIds.length,
+                          }),
                           style: TextStyle(
                             fontSize: 12,
                             color: Theme.of(ctx).colorScheme.onSurfaceVariant,
@@ -522,32 +536,39 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                       ],
                     ),
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 320),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _locations.length,
-                        itemBuilder: (_, i) {
-                          final loc = _locations[i];
-                          final id = loc['id']?.toString() ?? '';
-                          if (id.isEmpty) return const SizedBox.shrink();
-                          final name = loc['name']?.toString() ?? id;
-                          return CheckboxListTile(
-                            dense: true,
-                            value: selectedIds.contains(id),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(
-                              name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onChanged: (v) => setLocal(() {
-                              if (v == true) {
-                                selectedIds.add(id);
-                              } else {
-                                selectedIds.remove(id);
-                              }
-                            }),
-                          );
-                        },
+                      constraints: BoxConstraints(
+                        maxHeight: (MediaQuery.sizeOf(ctx).height * 0.5)
+                            .clamp(220.0, 400.0)
+                            .toDouble(),
+                      ),
+                      child: Scrollbar(
+                        thumbVisibility: true,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _locations.length,
+                          itemBuilder: (_, i) {
+                            final loc = _locations[i];
+                            final id = loc['id']?.toString() ?? '';
+                            if (id.isEmpty) return const SizedBox.shrink();
+                            final name = loc['name']?.toString() ?? id;
+                            return CheckboxListTile(
+                              dense: true,
+                              value: selectedIds.contains(id),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(
+                                name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onChanged: (v) => setLocal(() {
+                                if (v == true) {
+                                  selectedIds.add(id);
+                                } else {
+                                  selectedIds.remove(id);
+                                }
+                              }),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],
@@ -571,9 +592,11 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       },
     );
     if (selected == null || !mounted) return;
-    setState(() => _tipLocationIds
-      ..clear()
-      ..addAll(selected));
+    setState(
+      () => _tipLocationIds
+        ..clear()
+        ..addAll(selected),
+    );
   }
 
   /// Tips: branches chosen once in setup (multi-select).
@@ -637,7 +660,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                         ),
                         const Spacer(),
                         Text(
-                          ctx.t('loanImp.selectedCount', {'count': selectedIds.length}),
+                          ctx.t('loanImp.selectedCount', {
+                            'count': selectedIds.length,
+                          }),
                           style: TextStyle(
                             fontSize: 12,
                             color: Theme.of(ctx).colorScheme.onSurfaceVariant,
@@ -646,32 +671,39 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                       ],
                     ),
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 320),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: locations.length,
-                        itemBuilder: (_, i) {
-                          final loc = locations[i];
-                          final id = loc['id']?.toString() ?? '';
-                          if (id.isEmpty) return const SizedBox.shrink();
-                          final name = loc['name']?.toString() ?? id;
-                          return CheckboxListTile(
-                            dense: true,
-                            value: selectedIds.contains(id),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(
-                              name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            onChanged: (v) => setLocal(() {
-                              if (v == true) {
-                                selectedIds.add(id);
-                              } else {
-                                selectedIds.remove(id);
-                              }
-                            }),
-                          );
-                        },
+                      constraints: BoxConstraints(
+                        maxHeight: (MediaQuery.sizeOf(ctx).height * 0.5)
+                            .clamp(220.0, 400.0)
+                            .toDouble(),
+                      ),
+                      child: Scrollbar(
+                        thumbVisibility: true,
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: locations.length,
+                          itemBuilder: (_, i) {
+                            final loc = locations[i];
+                            final id = loc['id']?.toString() ?? '';
+                            if (id.isEmpty) return const SizedBox.shrink();
+                            final name = loc['name']?.toString() ?? id;
+                            return CheckboxListTile(
+                              dense: true,
+                              value: selectedIds.contains(id),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(
+                                name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onChanged: (v) => setLocal(() {
+                                if (v == true) {
+                                  selectedIds.add(id);
+                                } else {
+                                  selectedIds.remove(id);
+                                }
+                              }),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ],
@@ -696,6 +728,16 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     );
   }
 
+  String? _selectedSetupLocationId() {
+    if (_deviceId == null) return null;
+    for (final device in _devices) {
+      if (device['id']?.toString() == _deviceId) {
+        return _locationIdFromDevice(device);
+      }
+    }
+    return null;
+  }
+
   Future<void> _downloadLoanTemplate() async {
     try {
       List<String>? selected;
@@ -710,11 +752,15 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
           return;
         }
       } else {
-        selected = await _pickLoanTemplateLocations();
+        final setupLocationId = _selectedSetupLocationId();
+        selected = setupLocationId == null
+            ? await _pickLoanTemplateLocations()
+            : [setupLocationId];
       }
       if (selected == null || selected.isEmpty) return;
 
-      final blank = selected.length == 1 && selected.first == '_blank_multiple_';
+      final blank =
+          selected.length == 1 && selected.first == '_blank_multiple_';
       final r = await api.advancesExportImportTemplate(
         locationIds: blank ? null : selected,
         blank: blank,
@@ -744,11 +790,17 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                   : '',
             })
           : (count != null
-                ? context.t('loanImp.loanTemplateDownloadedCount', {'count': count})
+                ? context.t('loanImp.loanTemplateDownloadedCount', {
+                    'count': count,
+                  })
                 : context.t('loanImp.loanTemplateDownloaded'));
       if (!_isTip && fileCount is num && fileCount > 1) {
-        msg = context.t('loanImp.downloadedFiles', {'name': filename, 'count': fileCount});
-        if (count != null) msg += context.t('loanImp.employeesSuffix', {'count': count});
+        msg = context.t('loanImp.downloadedFiles', {
+          'name': filename,
+          'count': fileCount,
+        });
+        if (count != null)
+          msg += context.t('loanImp.employeesSuffix', {'count': count});
         msg += ')';
       }
       if (skipN > 0) {
@@ -825,24 +877,22 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       final useEligibility = _isTip
           ? false
           : await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(ctx.t('loanImp.eligibilityFileTitle')),
-          content: Text(
-            ctx.t('loanImp.eligibilityFileBody'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(ctx.t('loanImp.no')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(ctx.t('loanImp.yes')),
-            ),
-          ],
-        ),
-      );
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text(ctx.t('loanImp.eligibilityFileTitle')),
+                content: Text(ctx.t('loanImp.eligibilityFileBody')),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text(ctx.t('loanImp.no')),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text(ctx.t('loanImp.yes')),
+                  ),
+                ],
+              ),
+            );
 
       final batch = await api.advanceLoanImportCreate({
         if (_deviceId != null) 'deviceId': _deviceId,
@@ -874,8 +924,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
           );
           await _downloadFileFromResult(
             generated,
-            okMsg:
-                context.t('loanImp.eligSheetDownloadedState', {'count': generated['count'] ?? ''}),
+            okMsg: context.t('loanImp.eligSheetDownloadedState', {
+              'count': generated['count'] ?? '',
+            }),
           );
         } catch (e) {
           // Fallback: generate directly from loan file with live compute.
@@ -884,7 +935,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
           );
           await _downloadFileFromResult(
             generated,
-            okMsg: context.t('loanImp.eligSheetDownloaded', {'count': generated['count'] ?? ''}),
+            okMsg: context.t('loanImp.eligSheetDownloaded', {
+              'count': generated['count'] ?? '',
+            }),
           );
         } finally {
           if (mounted) setState(() => _busy = false);
@@ -901,7 +954,10 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     try {
       setState(() => _busy = true);
       final r = await api.advanceLoanImportExportEligibility(_importId!);
-      await _downloadFileFromResult(r, okMsg: context.t('loanImp.eligSheetExported'));
+      await _downloadFileFromResult(
+        r,
+        okMsg: context.t('loanImp.eligSheetExported'),
+      );
     } catch (e) {
       _snack(e.toString());
     } finally {
@@ -918,7 +974,10 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       final fawry = r['fawryAmount'] ?? 0;
       await _downloadFileFromResult(
         r,
-        okMsg: context.t('loanImp.loanSheetDownloaded', {'cash': cash, 'fawry': fawry}),
+        okMsg: context.t('loanImp.loanSheetDownloaded', {
+          'cash': cash,
+          'fawry': fawry,
+        }),
       );
     } catch (e) {
       _snack(e.toString());
@@ -957,10 +1016,10 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.t(_isTip ? 'loanImp.reuploadTip' : 'loanImp.reuploadLoan')),
-        content: Text(
-          ctx.t('loanImp.reuploadBody'),
+        title: Text(
+          ctx.t(_isTip ? 'loanImp.reuploadTip' : 'loanImp.reuploadLoan'),
         ),
+        content: Text(ctx.t('loanImp.reuploadBody')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1028,7 +1087,11 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
         _batch = batch;
         _busy = false;
       });
-      _snack(context.t(_isTip ? 'loanImp.employeeAddedTip' : 'loanImp.employeeAddedLoan'));
+      _snack(
+        context.t(
+          _isTip ? 'loanImp.employeeAddedTip' : 'loanImp.employeeAddedLoan',
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -1065,12 +1128,54 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     }
   }
 
+  Future<void> _deleteLine(Map<String, dynamic> line) async {
+    if (_locked || _busy || _importId == null) return;
+    final name = (line['employeeName']?.toString().trim().isNotEmpty == true)
+        ? line['employeeName'].toString()
+        : (line['employeeCode']?.toString() ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.t('loanImp.deleteLine')),
+        content: Text(ctx.t('loanImp.deleteLineConfirm', {'name': name})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(ctx.t('loanImp.delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      await api.advanceLoanImportLineDelete(lineId: line['id']);
+      final batch = await api.advanceLoanImportGet(_importId!);
+      if (!mounted) return;
+      setState(() {
+        _batch = batch;
+        _busy = false;
+      });
+      _snack(context.t('loanImp.lineDeleted'));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _snack(e.toString());
+    }
+  }
+
   Future<void> _approve() async {
     if (_importId == null) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(ctx.t(_isTip ? 'loanImp.approveTip' : 'loanImp.approveLoan')),
+        title: Text(
+          ctx.t(_isTip ? 'loanImp.approveTip' : 'loanImp.approveLoan'),
+        ),
         content: Text(
           _isTip
               ? ctx.t('loanImp.approveBodyTip')
@@ -1090,9 +1195,17 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     );
     if (ok != true) return;
 
+    await _submitApproval();
+  }
+
+  Future<void> _submitApproval({bool approveConflicts = false}) async {
+    if (_importId == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      final result = await api.advanceLoanImportApprove(_importId!);
+      final result = await api.advanceLoanImportApprove(
+        _importId!,
+        approveConflicts: approveConflicts,
+      );
       final batch =
           result['import'] as Map<String, dynamic>? ??
           await api.advanceLoanImportGet(_importId!);
@@ -1102,15 +1215,49 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
           _busy = false;
         });
         _snack(
-        _isTip
-            ? context.t('loanImp.approvedTip', {'count': result['created'] ?? 0})
-            : context.t('loanImp.approvedLoan', {'count': result['created'] ?? 0}),
-      );
+          _isTip
+              ? context.t('loanImp.approvedTip', {
+                  'count': result['created'] ?? 0,
+                })
+              : context.t('loanImp.approvedLoan', {
+                  'count': result['created'] ?? 0,
+                }),
+        );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
-        _snack(e.toString());
+        final apiError = e is BioTimeApiException ? e : null;
+        final message =
+            apiError?.message ?? e.toString().replaceFirst('Exception: ', '');
+        final canSkip =
+            !_isTip &&
+            !approveConflicts &&
+            apiError?.code == 'LOAN_IMPORT_PREFLIGHT_FAILED';
+        final skip = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(ctx.t('loanImp.approvalErrorsTitle')),
+            content: SizedBox(
+              width: 680,
+              child: SingleChildScrollView(child: SelectableText(message)),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(ctx.t('common.close')),
+              ),
+              if (canSkip)
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(ctx.t('loanImp.approveAnyway')),
+                ),
+            ],
+          ),
+        );
+        if (skip == true && mounted) {
+          await _submitApproval(approveConflicts: true);
+        }
       }
     }
   }
@@ -1119,7 +1266,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     if (_importId == null) return;
     if (_batch?['odooAccountsSendId'] != null) {
       _snack(
-        context.t('loanImp.alreadySent', {'ref': _batch?['odooSendRef'] ?? _batch?['odooAccountsSendId']}),
+        context.t('loanImp.alreadySent', {
+          'ref': _batch?['odooSendRef'] ?? _batch?['odooAccountsSendId'],
+        }),
       );
       return;
     }
@@ -1127,9 +1276,7 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(ctx.t('loanImp.sendToOdoo')),
-        content: Text(
-          ctx.t('loanImp.sendToOdooBody'),
-        ),
+        content: Text(ctx.t('loanImp.sendToOdooBody')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -1156,9 +1303,7 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       if (email['sent'] == true) {
         _snack(context.t('loanImp.sentOk'));
       } else {
-        _snack(
-          context.t('loanImp.sentMailPartial'),
-        );
+        _snack(context.t('loanImp.sentMailPartial'));
       }
     } catch (e) {
       if (mounted) {
@@ -1207,6 +1352,8 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
         return context.t('loanImp.stNoMapping');
       case 'approved':
         return context.t('loanImp.stApproved');
+      case 'skipped':
+        return context.t('loanImp.stSkipped');
       default:
         return s;
     }
@@ -1221,16 +1368,38 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
   }
 
   Widget _buildDrafts() {
+    final duplicateRows = _draftDuplicateRows();
+    final duplicateCodes = duplicateRows
+        .map((r) => r['employeeCode']?.toString() ?? '')
+        .toSet();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: FilledButton.icon(
-            onPressed: _busy ? null : _startNewImport,
-            icon: const Icon(Icons.add),
-            label: Text(context.t(_isTip ? 'loanImp.newImportTip' : 'loanImp.newImportLoan')),
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            FilledButton.icon(
+              onPressed: _busy ? null : _startNewImport,
+              icon: const Icon(Icons.add),
+              label: Text(
+                context.t(
+                  _isTip ? 'loanImp.newImportTip' : 'loanImp.newImportLoan',
+                ),
+              ),
+            ),
+            if (_drafts.isNotEmpty && duplicateRows.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () => _showDraftDuplicateEmployees(duplicateRows),
+                icon: const Icon(Icons.copy_all_outlined, size: 18),
+                label: Text(
+                  context.t('loanImp.duplicatesOnly', {
+                    'count': duplicateRows.length,
+                  }),
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 12),
         if (_drafts.isEmpty)
@@ -1251,20 +1420,25 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                     leading: const Icon(Icons.description_outlined),
                     title: Text(
                       _sheetHeadlineFromBatch(
-                        _drafts[i],
-                        preferPrimaryLocation: _isTip,
-                      ).isNotEmpty
+                            _drafts[i],
+                            preferPrimaryLocation: _isTip,
+                          ).isNotEmpty
                           ? _sheetHeadlineFromBatch(
                               _drafts[i],
                               preferPrimaryLocation: _isTip,
                             )
                           : (_drafts[i]['reference']?.toString() ??
-                              context.t(_isTip ? 'loanImp.draftTip' : 'loanImp.draftLoan')),
+                                context.t(
+                                  _isTip
+                                      ? 'loanImp.draftTip'
+                                      : 'loanImp.draftLoan',
+                                )),
                     ),
                     subtitle: Text(
                       '${_drafts[i]['locationName'] ?? context.t('loanImp.noBranch')}'
                       ' • ${context.t('loanImp.employeeCount', {'count': _drafts[i]['lineCount'] ?? 0})}'
-                      ' • ${_drafts[i]['date'] ?? ''}',
+                      ' • ${_drafts[i]['date'] ?? ''}'
+                      '${_draftDuplicateCountLabel(_drafts[i], duplicateCodes)}',
                     ),
                     onTap: _busy ? null : () => _openDraft(_drafts[i]),
                     trailing: IconButton(
@@ -1283,6 +1457,161 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
           ),
       ],
     );
+  }
+
+  String _draftSheetLabel(Map<String, dynamic> draft) {
+    final headline = _sheetHeadlineFromBatch(
+      draft,
+      preferPrimaryLocation: _isTip,
+    );
+    if (headline.isNotEmpty) return headline;
+    return draft['reference']?.toString() ??
+        context.t(_isTip ? 'loanImp.draftTip' : 'loanImp.draftLoan');
+  }
+
+  List<Map<String, dynamic>> _draftEmployees(Map<String, dynamic> draft) {
+    final raw = (draft['employees'] as List?) ?? const [];
+    if (raw.isNotEmpty) {
+      return raw
+          .whereType<Map>()
+          .map((e) => e.cast<String, dynamic>())
+          .toList();
+    }
+    // Fallback if older API only sent codes.
+    return ((draft['employeeCodes'] as List?) ?? const [])
+        .map((e) => e.toString().trim().replaceAll(RegExp(r'\.0$'), ''))
+        .where((code) => code.isNotEmpty)
+        .map(
+          (code) => <String, dynamic>{
+            'code': code,
+            'name': code,
+            'jobTitle': '',
+            'amount': 0,
+          },
+        )
+        .toList();
+  }
+
+  List<Map<String, dynamic>> _draftDuplicateRows() {
+    final byCode = <String, Map<String, dynamic>>{};
+    for (final draft in _drafts) {
+      final sheetLabel = _draftSheetLabel(draft);
+      for (final emp in _draftEmployees(draft)) {
+        final code = (emp['code']?.toString() ?? '').trim().replaceAll(
+          RegExp(r'\.0$'),
+          '',
+        );
+        if (code.isEmpty) continue;
+        final row = byCode.putIfAbsent(code, () {
+          return {
+            'employeeCode': code,
+            'employeeName': emp['name']?.toString() ?? code,
+            'jobTitle': emp['jobTitle']?.toString() ?? '',
+            'sheets': <String>{},
+            'totalAmount': 0.0,
+          };
+        });
+        final name = emp['name']?.toString().trim() ?? '';
+        if (name.isNotEmpty &&
+            (row['employeeName'] == null ||
+                row['employeeName'].toString().isEmpty ||
+                row['employeeName'] == code)) {
+          row['employeeName'] = name;
+        }
+        final job = emp['jobTitle']?.toString().trim() ?? '';
+        if (job.isNotEmpty &&
+            (row['jobTitle'] == null || row['jobTitle'].toString().isEmpty)) {
+          row['jobTitle'] = job;
+        }
+        (row['sheets'] as Set<String>).add(sheetLabel);
+        row['totalAmount'] =
+            ((row['totalAmount'] as num?)?.toDouble() ?? 0) +
+            ((emp['amount'] as num?)?.toDouble() ?? 0);
+      }
+    }
+    final rows = byCode.values
+        .where((row) => (row['sheets'] as Set<String>).length > 1)
+        .map((row) {
+          final sheets = (row['sheets'] as Set<String>).toList()..sort();
+          return {
+            ...row,
+            'sheets': sheets,
+            'totalAmount': _roundMoney(
+              (row['totalAmount'] as num?)?.toDouble() ?? 0,
+            ),
+          };
+        })
+        .toList();
+    rows.sort((a, b) {
+      final ac = a['employeeCode']?.toString() ?? '';
+      final bc = b['employeeCode']?.toString() ?? '';
+      return ac.compareTo(bc);
+    });
+    return rows;
+  }
+
+  void _showDraftDuplicateEmployees(List<Map<String, dynamic>> rows) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.t('loanImp.duplicatesPopupTitle')),
+        content: SizedBox(
+          width: 720,
+          height: 460,
+          child: rows.isEmpty
+              ? Center(child: Text(ctx.t('loanImp.noDuplicatesAcrossDrafts')))
+              : ListView.separated(
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, index) {
+                    final row = rows[index];
+                    final sheets = ((row['sheets'] as List?) ?? const [])
+                        .map((e) => e.toString())
+                        .where((e) => e.isNotEmpty)
+                        .toList();
+                    return ListTile(
+                      title: Text(
+                        '${row['employeeName'] ?? ''} • ${row['employeeCode'] ?? ''}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        '${ctx.t('adv.lineJob', {'value': row['jobTitle'] ?? '—'})}\n'
+                        '${ctx.t('adv.duplicateInSheets', {'sheets': sheets.join('، ')})}\n'
+                        '${ctx.t('adv.lineApproved', {'amount': _money(row['totalAmount'] as num?)})}'
+                        ' • ${ctx.t('adv.sheetAppearances', {'count': sheets.length})}',
+                      ),
+                      isThreeLine: true,
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(ctx.t('common.close')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _draftDuplicateCountLabel(
+    Map<String, dynamic> draft,
+    Set<String> duplicateCodes,
+  ) {
+    if (duplicateCodes.isEmpty) return '';
+    final codes = _draftEmployees(draft)
+        .map(
+          (e) => (e['code']?.toString() ?? '').trim().replaceAll(
+            RegExp(r'\.0$'),
+            '',
+          ),
+        )
+        .where((code) => code.isNotEmpty)
+        .toSet();
+    final count = codes.where(duplicateCodes.contains).length;
+    if (count <= 0) return '';
+    return ' • ${context.t('loanImp.draftDuplicateCount', {'count': count})}';
   }
 
   Widget _buildSetup() {
@@ -1323,7 +1652,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                     child: Text(
                       _tipLocationIds.isEmpty
                           ? context.t('loanImp.pickBranches')
-                          : context.t('loanImp.editCount', {'count': _tipLocationIds.length}),
+                          : context.t('loanImp.editCount', {
+                              'count': _tipLocationIds.length,
+                            }),
                     ),
                   ),
                 ],
@@ -1347,7 +1678,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
             readOnly: true,
             enabled: !_locked,
             decoration: InputDecoration(
-              labelText: context.t(_isTip ? 'loanImp.dateTip' : 'loanImp.dateLoan'),
+              labelText: context.t(
+                _isTip ? 'loanImp.dateTip' : 'loanImp.dateLoan',
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -1399,7 +1732,11 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
               onPressed: _busy ? null : _downloadLoanTemplate,
               icon: const Icon(Icons.download_outlined, size: 18),
               label: Text(
-                context.t(_isTip ? 'loanImp.downloadTemplateTip' : 'loanImp.downloadTemplateLoan'),
+                context.t(
+                  _isTip
+                      ? 'loanImp.downloadTemplateTip'
+                      : 'loanImp.downloadTemplateLoan',
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -1434,6 +1771,15 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: _busy ? null : _showDrafts,
+                  icon: const Icon(Icons.arrow_back, size: 18),
+                  label: Text(_backLabel),
+                ),
+              ),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   const Icon(
@@ -1445,7 +1791,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                     child: Text(
                       _isTip
                           ? _tipReviewTitle(context, _batch)
-                          : context.t('loanImp.reviewEligTitleRef', {'ref': _batch?['reference'] ?? ''}),
+                          : context.t('loanImp.reviewEligTitleRef', {
+                              'ref': _batch?['reference'] ?? '',
+                            }),
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
@@ -1498,28 +1846,27 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _showDrafts,
-                      icon: const Icon(Icons.arrow_back, size: 18),
-                      label: Text(_backLabel),
-                    ),
                     if (!_isTip) ...[
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _exportEligibility,
-                      icon: const Icon(Icons.download_outlined, size: 18),
-                      label: Text(context.t('loanImp.exportEligSheet')),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: _busy ? null : _importEligibility,
-                      icon: const Icon(Icons.upload_file_outlined, size: 18),
-                      label: Text(context.t('loanImp.importEligSheet')),
-                    ),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _exportEligibility,
+                        icon: const Icon(Icons.download_outlined, size: 18),
+                        label: Text(context.t('loanImp.exportEligSheet')),
+                      ),
+                      FilledButton.tonalIcon(
+                        onPressed: _busy ? null : _importEligibility,
+                        icon: const Icon(Icons.upload_file_outlined, size: 18),
+                        label: Text(context.t('loanImp.importEligSheet')),
+                      ),
                     ],
                     OutlinedButton.icon(
                       onPressed: _busy ? null : _reimportLoanSheet,
                       icon: const Icon(Icons.upload_outlined, size: 18),
                       label: Text(
-                        context.t(_isTip ? 'loanImp.reuploadTip' : 'loanImp.reuploadLoan'),
+                        context.t(
+                          _isTip
+                              ? 'loanImp.reuploadTip'
+                              : 'loanImp.reuploadLoan',
+                        ),
                       ),
                     ),
                     OutlinedButton.icon(
@@ -1545,7 +1892,11 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                       onPressed: _busy || _lines.isEmpty ? null : _approve,
                       icon: const Icon(Icons.check, size: 18),
                       label: Text(
-                        context.t(_isTip ? 'loanImp.approveTip' : 'loanImp.approveCreateLoans'),
+                        context.t(
+                          _isTip
+                              ? 'loanImp.approveTip'
+                              : 'loanImp.approveCreateLoans',
+                        ),
                       ),
                     ),
                   ],
@@ -1559,12 +1910,6 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                         : context.t('loanImp.lockedLoan'),
                     style: const TextStyle(color: AppColors.success),
                   ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _showDrafts,
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: Text(_backLabel),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -1606,7 +1951,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                                 .isNotEmpty ??
                             false)) ...[
                           Text(
-                            context.t('loanImp.mailError', {'error': _batch?['notificationEmailError']}),
+                            context.t('loanImp.mailError', {
+                              'error': _batch?['notificationEmailError'],
+                            }),
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.warning,
@@ -1632,7 +1979,8 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
             ],
           ),
         ),
-        if (_batch?['cashAmount'] != null || _batch?['fawryAmount'] != null) ...[
+        if (_batch?['cashAmount'] != null ||
+            _batch?['fawryAmount'] != null) ...[
           const SizedBox(height: 8),
           SellixCard(
             child: Wrap(
@@ -1671,7 +2019,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           Text(
-                            context.t('loanImp.total', {'amount': _money(_batch?['totalAmount'])}),
+                            context.t('loanImp.total', {
+                              'amount': _money(_batch?['totalAmount']),
+                            }),
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                         ],
@@ -1680,15 +2030,21 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                   ),
                 ] else ...[
                   Text(
-                    context.t('loanImp.cash', {'amount': _money(_batch?['cashAmount'])}),
+                    context.t('loanImp.cash', {
+                      'amount': _money(_batch?['cashAmount']),
+                    }),
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   Text(
-                    context.t('loanImp.fawry', {'amount': _money(_batch?['fawryAmount'])}),
+                    context.t('loanImp.fawry', {
+                      'amount': _money(_batch?['fawryAmount']),
+                    }),
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   Text(
-                    context.t('loanImp.total', {'amount': _money(_batch?['totalAmount'])}),
+                    context.t('loanImp.total', {
+                      'amount': _money(_batch?['totalAmount']),
+                    }),
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ],
@@ -1737,14 +2093,30 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                           hint: context.t('loanImp.allStates'),
                           options: [
                             (value: '', label: context.t('loanImp.allStates')),
-                            (value: 'ready', label: context.t('loanImp.stReady')),
-                            (value: 'not_eligible', label: context.t('loanImp.stNotEligible')),
+                            (
+                              value: 'ready',
+                              label: context.t('loanImp.stReady'),
+                            ),
+                            (
+                              value: 'not_eligible',
+                              label: context.t('loanImp.stNotEligible'),
+                            ),
                             (
                               value: 'missing_in_eligibility',
                               label: context.t('loanImp.stNotFound'),
                             ),
-                            (value: 'no_mapping', label: context.t('loanImp.stNoMapping')),
-                            (value: 'approved', label: context.t('loanImp.stApproved')),
+                            (
+                              value: 'no_mapping',
+                              label: context.t('loanImp.stNoMapping'),
+                            ),
+                            (
+                              value: 'approved',
+                              label: context.t('loanImp.stApproved'),
+                            ),
+                            (
+                              value: 'skipped',
+                              label: context.t('loanImp.stSkipped'),
+                            ),
                           ],
                           onChanged: (v) => setState(() => _statusFilter = v),
                         ),
@@ -1758,7 +2130,10 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                           options: [
                             (value: '', label: context.t('loanImp.all')),
                             (value: 'yes', label: context.t('loanImp.checked')),
-                            (value: 'no', label: context.t('loanImp.unchecked')),
+                            (
+                              value: 'no',
+                              label: context.t('loanImp.unchecked'),
+                            ),
                           ],
                           onChanged: (v) => setState(() => _approveFilter = v),
                         ),
@@ -1786,159 +2161,323 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                     child: Text(context.t('loanImp.noMatches')),
                   )
                 else
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      sortColumnIndex: _sortColumnIndex,
-                      sortAscending: _sortAscending,
-                      columns: [
-                        DataColumn(
-                          label: Text(context.t('loanImp.colCode')),
-                          onSort: (columnIndex, ascending) => setState(() {
-                            _sortColumnIndex = columnIndex;
-                            _sortAscending = ascending;
-                          }),
-                        ),
-                        DataColumn(label: Text(context.t('loanImp.colName'))),
-                        DataColumn(
-                          label: Text(context.t('loanImp.jobTitle')),
-                          onSort: (columnIndex, ascending) => setState(() {
-                            _sortColumnIndex = columnIndex;
-                            _sortAscending = ascending;
-                          }),
-                        ),
-                        DataColumn(label: Text(context.t('loanImp.colBranch'))),
-                        DataColumn(label: Text(context.t('loanImp.colRequested'))),
-                        DataColumn(label: Text(context.t('loanImp.colEligible'))),
-                        DataColumn(label: Text(context.t('loanImp.colDays'))),
-                        DataColumn(label: Text(context.t('loanImp.colCashFawry'))),
-                        DataColumn(label: Text(context.t('loanImp.colApproved'))),
-                        DataColumn(label: Text(context.t('loanImp.state'))),
-                        DataColumn(label: Text(context.t('loanImp.colApproval'))),
-                      ],
-                      rows: [
-                        for (final line in _filteredLines)
-                          DataRow(
-                            cells: [
-                              DataCell(
-                                Text(line['employeeCode']?.toString() ?? ''),
-                              ),
-                              DataCell(
-                                Text(line['employeeName']?.toString() ?? ''),
-                              ),
-                              DataCell(
-                                Text(line['jobTitle']?.toString() ?? ''),
-                              ),
-                              DataCell(
-                                Text(line['locationName']?.toString() ?? ''),
-                              ),
-                              DataCell(Text(_money(line['requestedAmount']))),
-                              DataCell(
-                                line['eligibilityOverridden'] == true
-                                    ? Tooltip(
-                                        message:
-                                            context.t('loanImp.manualOverride', {'amount': _money(line['systemEligibleAmount'])}),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(_money(line['eligibleAmount'])),
-                                            const SizedBox(width: 4),
-                                            const Icon(
-                                              Icons.edit_note,
-                                              size: 16,
-                                              color: AppColors.warning,
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final availableWidth = constraints.maxWidth.isFinite
+                          ? constraints.maxWidth
+                          : MediaQuery.sizeOf(context).width;
+                      const preferredWidth = 1520.0;
+                      final tableMinWidth = availableWidth > preferredWidth
+                          ? availableWidth
+                          : preferredWidth;
+                      final tableHeight =
+                          (MediaQuery.sizeOf(context).height * 0.55)
+                              .clamp(360.0, 640.0)
+                              .toDouble();
+                      return SizedBox(
+                        height: tableHeight,
+                        width: double.infinity,
+                        child: ScrollConfiguration(
+                          behavior: const MaterialScrollBehavior().copyWith(
+                            scrollbars: true,
+                            dragDevices: {
+                              PointerDeviceKind.touch,
+                              PointerDeviceKind.mouse,
+                              PointerDeviceKind.trackpad,
+                              PointerDeviceKind.stylus,
+                            },
+                          ),
+                          child: Listener(
+                            onPointerSignal: _onReviewTablePointerSignal,
+                            child: Scrollbar(
+                              controller: _reviewTableHScroll,
+                              thumbVisibility: true,
+                              trackVisibility: true,
+                              interactive: true,
+                              scrollbarOrientation: ScrollbarOrientation.bottom,
+                              child: SingleChildScrollView(
+                                controller: _reviewTableHScroll,
+                                scrollDirection: Axis.horizontal,
+                                child: SizedBox(
+                                  width: tableMinWidth,
+                                  child: Scrollbar(
+                                    controller: _reviewTableVScroll,
+                                    thumbVisibility: true,
+                                    trackVisibility: true,
+                                    interactive: true,
+                                    child: SingleChildScrollView(
+                                      controller: _reviewTableVScroll,
+                                      child: DataTable(
+                                        sortColumnIndex: _sortColumnIndex,
+                                        sortAscending: _sortAscending,
+                                        columns: [
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colCode'),
                                             ),
-                                          ],
-                                        ),
-                                      )
-                                    : Text(_money(line['eligibleAmount'])),
-                              ),
-                              DataCell(
-                                Text('${line['actualWorkingDays'] ?? ''}'),
-                              ),
-                              DataCell(
-                                StatusTag(
-                                  label: context.t(line['isFawry'] == true ? 'loanImp.tagFawry' : 'loanImp.tagCash'),
-                                  type: line['isFawry'] == true
-                                      ? StatusTagType.info
-                                      : StatusTagType.success,
-                                ),
-                              ),
-                              DataCell(
-                                _locked
-                                    ? Text(_money(line['approvedAmount']))
-                                    : _ApprovedAmountField(
-                                        key: ValueKey(line['id']),
-                                        value:
-                                            (line['approvedAmount'] as num?) ??
-                                            0,
-                                        onSubmit: (v) =>
-                                            _updateLine(line, approved: v),
-                                      ),
-                              ),
-                              DataCell(
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    StatusTag(
-                                      label: _statusAr(
-                                        line['compareStatus']?.toString() ?? '',
-                                      ),
-                                      type: _statusTag(
-                                        line['compareStatus']?.toString() ?? '',
+                                            onSort: (columnIndex, ascending) =>
+                                                setState(() {
+                                                  _sortColumnIndex =
+                                                      columnIndex;
+                                                  _sortAscending = ascending;
+                                                }),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colName'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.jobTitle'),
+                                            ),
+                                            onSort: (columnIndex, ascending) =>
+                                                setState(() {
+                                                  _sortColumnIndex =
+                                                      columnIndex;
+                                                  _sortAscending = ascending;
+                                                }),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colBranch'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colHiringDate'),
+                                            ),
+                                            onSort: (columnIndex, ascending) =>
+                                                setState(() {
+                                                  _sortColumnIndex =
+                                                      columnIndex;
+                                                  _sortAscending = ascending;
+                                                }),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colRequested'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colEligible'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colDays'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colCashFawry'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colApproved'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.state'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colApproval'),
+                                            ),
+                                          ),
+                                          DataColumn(
+                                            label: Text(
+                                              context.t('loanImp.colDelete'),
+                                            ),
+                                          ),
+                                        ],
+                                        rows: [
+                                          for (final line in _filteredLines)
+                                            DataRow(
+                                              cells: [
+                                                DataCell(
+                                                  Text(
+                                                    line['employeeCode']
+                                                            ?.toString() ??
+                                                        '',
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    line['employeeName']
+                                                            ?.toString() ??
+                                                        '',
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    line['jobTitle']
+                                                            ?.toString() ??
+                                                        '',
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    line['locationName']
+                                                            ?.toString() ??
+                                                        '',
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    line['hiringDate']
+                                                            ?.toString() ??
+                                                        '',
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    _money(
+                                                      line['requestedAmount'],
+                                                    ),
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    _money(
+                                                      line['eligibleAmount'],
+                                                    ),
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Text(
+                                                    '${line['actualWorkingDays'] ?? ''}',
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  StatusTag(
+                                                    label: context.t(
+                                                      line['isFawry'] == true
+                                                          ? 'loanImp.tagFawry'
+                                                          : 'loanImp.tagCash',
+                                                    ),
+                                                    type:
+                                                        line['isFawry'] == true
+                                                        ? StatusTagType.info
+                                                        : StatusTagType.success,
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  _locked
+                                                      ? Text(
+                                                          _money(
+                                                            line['approvedAmount'],
+                                                          ),
+                                                        )
+                                                      : _ApprovedAmountField(
+                                                          key: ValueKey(
+                                                            line['id'],
+                                                          ),
+                                                          value:
+                                                              (line['approvedAmount']
+                                                                  as num?) ??
+                                                              0,
+                                                          onSubmit: (v) =>
+                                                              _updateLine(
+                                                                line,
+                                                                approved: v,
+                                                              ),
+                                                        ),
+                                                ),
+                                                DataCell(
+                                                  StatusTag(
+                                                    label: _statusAr(
+                                                      line['compareStatus']
+                                                              ?.toString() ??
+                                                          '',
+                                                    ),
+                                                    type: _statusTag(
+                                                      line['compareStatus']
+                                                              ?.toString() ??
+                                                          '',
+                                                    ),
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  Checkbox(
+                                                    value:
+                                                        line['toApprove'] ==
+                                                        true,
+                                                    onChanged: _locked
+                                                        ? null
+                                                        : (v) => _updateLine(
+                                                            line,
+                                                            toApprove:
+                                                                v ?? false,
+                                                          ),
+                                                  ),
+                                                ),
+                                                DataCell(
+                                                  _locked
+                                                      ? const SizedBox.shrink()
+                                                      : IconButton(
+                                                          tooltip: context.t(
+                                                            'loanImp.deleteLine',
+                                                          ),
+                                                          onPressed: _busy
+                                                              ? null
+                                                              : () =>
+                                                                    _deleteLine(
+                                                                      line,
+                                                                    ),
+                                                          icon: const Icon(
+                                                            Icons
+                                                                .delete_outline,
+                                                            color: AppColors
+                                                                .danger,
+                                                          ),
+                                                        ),
+                                                ),
+                                              ],
+                                            ),
+                                        ],
                                       ),
                                     ),
-                                    if (_showIneligibilityInfo(line))
-                                      IconButton(
-                                        tooltip: context.t('loanImp.notEligibleReason'),
-                                        icon: const Icon(
-                                          Icons.info_outline,
-                                          size: 18,
-                                          color: AppColors.warning,
-                                        ),
-                                        onPressed: () => showDialog<void>(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            title: Text(
-                                              context.t('loanImp.notEligibleReason'),
-                                            ),
-                                            content: Text(
-                                              _ineligibilityReasonText(line),
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    Navigator.pop(ctx),
-                                                child: Text(context.t('common.close')),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                              DataCell(
-                                Checkbox(
-                                  value: line['toApprove'] == true,
-                                  onChanged: _locked
-                                      ? null
-                                      : (v) => _updateLine(
-                                          line,
-                                          toApprove: v ?? false,
-                                        ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
-                      ],
-                    ),
+                        ),
+                      );
+                    },
                   ),
               ],
             ),
           ),
       ],
     );
+  }
+
+  void _onReviewTablePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final shift =
+        HardwareKeyboard.instance.isLogicalKeyPressed(
+          LogicalKeyboardKey.shiftLeft,
+        ) ||
+        HardwareKeyboard.instance.isLogicalKeyPressed(
+          LogicalKeyboardKey.shiftRight,
+        );
+    final preferHorizontal =
+        shift || event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs();
+    if (!preferHorizontal || !_reviewTableHScroll.hasClients) return;
+    final delta = event.scrollDelta.dx != 0
+        ? event.scrollDelta.dx
+        : event.scrollDelta.dy;
+    final next = (_reviewTableHScroll.offset + delta).clamp(
+      0.0,
+      _reviewTableHScroll.position.maxScrollExtent,
+    );
+    _reviewTableHScroll.jumpTo(next);
   }
 
   @override
@@ -1952,17 +2491,25 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                 children: [
                   PageHeader(
                     title: switch (_phase) {
-                      _ImportPhase.drafts =>
-                        context.t(_isTip ? 'loanImp.navDraftsTip' : 'loanImp.navDraftsLoan'),
-                      _ImportPhase.setup =>
-                        context.t(_isTip ? 'loanImp.navUploadTip' : 'loanImp.navUploadLoan'),
+                      _ImportPhase.drafts => context.t(
+                        _isTip
+                            ? 'loanImp.navDraftsTip'
+                            : 'loanImp.navDraftsLoan',
+                      ),
+                      _ImportPhase.setup => context.t(
+                        _isTip
+                            ? 'loanImp.navUploadTip'
+                            : 'loanImp.navUploadLoan',
+                      ),
                       _ImportPhase.review =>
-                        _isTip ? _tipReviewTitle(context, _batch) : context.t('loanImp.reviewEligTitle'),
+                        _isTip
+                            ? _tipReviewTitle(context, _batch)
+                            : context.t('loanImp.reviewEligTitle'),
                     },
                     subtitle: _phase == _ImportPhase.review
                         ? (_isTip
-                            ? (_batch?['reference']?.toString() ?? '')
-                            : _sheetHeadlineFromBatch(_batch))
+                              ? (_batch?['reference']?.toString() ?? '')
+                              : _sheetHeadlineFromBatch(_batch))
                         : (_batch?['reference']?.toString() ?? ''),
                     icon: switch (_phase) {
                       _ImportPhase.drafts => Icons.drafts_outlined,
@@ -2006,9 +2553,7 @@ class _AddLoanEmployeeDialogState extends State<_AddLoanEmployeeDialog> {
     final amount = double.tryParse(_amountCtrl.text.trim());
     if (_employeeId == null || amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t('loanImp.addNeedsInput')),
-        ),
+        SnackBar(content: Text(context.t('loanImp.addNeedsInput'))),
       );
       return;
     }
@@ -2018,7 +2563,11 @@ class _AddLoanEmployeeDialogState extends State<_AddLoanEmployeeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(context.t(widget.isTip ? 'loanImp.addEmployeeTip' : 'loanImp.addEmployeeLoan')),
+      title: Text(
+        context.t(
+          widget.isTip ? 'loanImp.addEmployeeTip' : 'loanImp.addEmployeeLoan',
+        ),
+      ),
       content: SizedBox(
         width: 460,
         child: Column(
@@ -2029,7 +2578,10 @@ class _AddLoanEmployeeDialogState extends State<_AddLoanEmployeeDialog> {
               widget.isTip
                   ? context.t('loanImp.addHintTip')
                   : context.t('loanImp.addHintLoan'),
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 12),
             EmployeeSearchField(
@@ -2055,7 +2607,9 @@ class _AddLoanEmployeeDialogState extends State<_AddLoanEmployeeDialog> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                labelText: context.t(widget.isTip ? 'loanImp.amountTip' : 'loanImp.amountLoan'),
+                labelText: context.t(
+                  widget.isTip ? 'loanImp.amountTip' : 'loanImp.amountLoan',
+                ),
                 prefixIcon: const Icon(Icons.payments_outlined),
               ),
             ),

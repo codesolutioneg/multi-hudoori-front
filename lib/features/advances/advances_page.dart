@@ -15,8 +15,8 @@ import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
 import 'advance_request_common.dart';
+import 'long_advance_filters.dart';
 import 'widgets/advance_create_dialogs.dart';
-import 'widgets/long_advance_flow_dialog.dart';
 import '../../l10n/l10n_extension.dart';
 
 String _money(num? value) => formatMoney(value ?? 0);
@@ -120,198 +120,6 @@ class _AdvancesPageState extends State<AdvancesPage>
     if (ok == true && mounted) await _load();
   }
 
-  PopupMenuItem<String> _menuItem(String value, IconData icon, String label) {
-    return PopupMenuItem(
-      value: value,
-      child: Row(
-        children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
-      ),
-    );
-  }
-
-  Future<void> _exportKind(String kind) async {
-    try {
-      if (kind == 'template') {
-        await _exportImportTemplateForBranch();
-        return;
-      }
-      final Map<String, dynamic> r;
-      switch (kind) {
-        case 'short':
-          r = await api.advancesExportShort();
-          break;
-        case 'long':
-          r = await api.advancesExportLong();
-          break;
-        default:
-          return;
-      }
-      final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
-      final filename = r['filename']?.toString() ?? 'advances.xlsx';
-      if (base64.isEmpty) throw Exception(context.t('adv.emptyFile'));
-      downloadBase64File(
-        base64,
-        filename,
-        r['mimeType']?.toString() ??
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      if (mounted) _snack(context.t('adv.downloaded', {'name': filename}));
-    } catch (e) {
-      if (mounted) _snack(e.toString());
-    }
-  }
-
-  Future<void> _exportImportTemplateForBranch() async {
-    final locations = await api.locationsList();
-    if (!mounted) return;
-
-    final selected = await showDialog<List<String>>(
-      context: context,
-      builder: (ctx) {
-        final selectedIds = <String>{};
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            final allIds = locations
-                .map((loc) => loc['id']?.toString() ?? '')
-                .where((id) => id.isNotEmpty)
-                .toList();
-            return AlertDialog(
-              title: Text(ctx.t('adv.pickBranches')),
-              content: SizedBox(
-                width: 440,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      ctx.t('adv.pickBranchesHint'),
-                      style: const TextStyle(fontSize: 13, height: 1.35),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          Navigator.pop(ctx, <String>['_blank_multiple_']),
-                      icon: const Icon(Icons.note_add_outlined),
-                      label: Text(ctx.t('adv.blankTemplate')),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => setLocal(() {
-                            selectedIds
-                              ..clear()
-                              ..addAll(allIds);
-                          }),
-                          child: Text(ctx.t('adv.selectAll')),
-                        ),
-                        TextButton(
-                          onPressed: selectedIds.isEmpty
-                              ? null
-                              : () => setLocal(() => selectedIds.clear()),
-                          child: Text(ctx.t('adv.clearSelection')),
-                        ),
-                        const Spacer(),
-                        Text(
-                          ctx.t('adv.selectedCount', {
-                            'count': selectedIds.length,
-                          }),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 320),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: locations.length,
-                        itemBuilder: (_, i) {
-                          final loc = locations[i];
-                          final id = loc['id']?.toString() ?? '';
-                          if (id.isEmpty) return const SizedBox.shrink();
-                          final name = loc['name']?.toString() ?? id;
-                          final checked = selectedIds.contains(id);
-                          return CheckboxListTile(
-                            dense: true,
-                            value: checked,
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(name, overflow: TextOverflow.ellipsis),
-                            onChanged: (v) => setLocal(() {
-                              if (v == true) {
-                                selectedIds.add(id);
-                              } else {
-                                selectedIds.remove(id);
-                              }
-                            }),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text(ctx.t('common.cancel')),
-                ),
-                FilledButton(
-                  onPressed: selectedIds.isEmpty
-                      ? null
-                      : () => Navigator.pop(ctx, selectedIds.toList()),
-                  child: Text(ctx.t('adv.downloadTemplate')),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    if (selected == null || selected.isEmpty) return;
-
-    final blank = selected.length == 1 && selected.first == '_blank_multiple_';
-    final r = await api.advancesExportImportTemplate(
-      locationIds: blank ? null : selected,
-      blank: blank,
-    );
-    final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
-    final filename = r['filename']?.toString() ?? 'advances_import.xlsx';
-    if (base64.isEmpty) throw Exception(context.t('adv.emptyFile'));
-    downloadBase64File(
-      base64,
-      filename,
-      r['mimeType']?.toString() ??
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    if (mounted) {
-      final count = r['count'];
-      final fileCount = r['fileCount'];
-      final skipped = r['skipped'];
-      final skipN = skipped is List ? skipped.length : 0;
-      var msg = context.t('adv.downloaded', {'name': filename});
-      if (fileCount is num && fileCount > 1) {
-        msg = context.t('adv.downloadedFiles', {
-          'name': filename,
-          'count': fileCount,
-        });
-        if (count != null)
-          msg += context.t('adv.employeesSuffix', {'count': count});
-        msg += ')';
-      } else if (count != null) {
-        msg = context.t('adv.downloadedEmployees', {
-          'name': filename,
-          'count': count,
-        });
-      }
-      if (skipN > 0) msg += context.t('adv.skippedBranches', {'count': skipN});
-      _snack(msg);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppPageScaffold(
@@ -323,66 +131,21 @@ class _AdvancesPageState extends State<AdvancesPage>
             title: context.t('advances.title'),
             subtitle: context.t('advances.subtitle'),
             icon: Icons.account_balance_wallet_outlined,
-            // Granting an advance is what people come here to do; importing,
-            // exporting and the lifecycle reference are occasional. Six buttons
-            // wrapped onto a second row and cost the list a third of the fold.
             actions: [
               OutlinedButton.icon(
                 onPressed: _openCreateShort,
                 icon: const Icon(Icons.payments_outlined, size: 18),
                 label: Text(context.t('adv.shortBtn')),
               ),
+              OutlinedButton.icon(
+                onPressed: () => context.push(AppRoutes.hrAdvanceLoanImport),
+                icon: const Icon(Icons.upload_file_outlined, size: 18),
+                label: Text(context.t('adv.importFromSheet')),
+              ),
               FilledButton.icon(
                 onPressed: _openCreateLong,
                 icon: const Icon(Icons.calendar_month_outlined, size: 18),
                 label: Text(context.t('adv.longBtn')),
-              ),
-              PopupMenuButton<String>(
-                tooltip: context.t('common.more'),
-                offset: const Offset(0, 40),
-                icon: const Icon(Icons.more_vert_rounded),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'import':
-                      context.push(AppRoutes.hrAdvanceLoanImport);
-                    case 'flow':
-                      showLongAdvanceFlowDialog(context);
-                    case 'refresh':
-                      _load();
-                    default:
-                      _exportKind(value);
-                  }
-                },
-                itemBuilder: (ctx) => [
-                  _menuItem(
-                    'import',
-                    Icons.upload_file_outlined,
-                    ctx.t('adv.importFromSheet'),
-                  ),
-                  _menuItem(
-                    'flow',
-                    Icons.route_outlined,
-                    ctx.t('adv.longFlowBtn'),
-                  ),
-                  const PopupMenuDivider(),
-                  _menuItem(
-                    'template',
-                    Icons.description_outlined,
-                    ctx.t('adv.importTemplate'),
-                  ),
-                  _menuItem(
-                    'long',
-                    Icons.calendar_month_outlined,
-                    ctx.t('adv.exportLong'),
-                  ),
-                  _menuItem(
-                    'short',
-                    Icons.payments_outlined,
-                    ctx.t('adv.exportShort'),
-                  ),
-                  const PopupMenuDivider(),
-                  _menuItem('refresh', Icons.refresh, ctx.t('common.refresh')),
-                ],
               ),
             ],
           ),
@@ -688,46 +451,50 @@ void _showOutsiderEmployees(
   );
 }
 
-Widget _cashFawryFooter(
+/// Read-only popup: employees who appear on 2+ import sheets inside one cycle.
+void _showPeriodDuplicateEmployees(
   BuildContext context, {
-  required double cash,
-  required double fawryApproved,
-  required double fawryCommission,
-  required double total,
-  int? sheetCount,
+  required String periodLabel,
+  required List<Map<String, dynamic>> rows,
 }) {
-  final fawryTotal = _roundMoney(fawryApproved + fawryCommission);
-  return SellixCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (sheetCount != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              context.t('adv.rollupMany', {
-                'count': sheetCount,
-                'amount': _money(cash),
-              }),
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              context.t('adv.rollupOne', {'amount': _money(cash)}),
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            ),
-          ),
-        _moneyBreakdownText(
-          context,
-          cash: cash,
-          fawryApproved: fawryApproved,
-          fawryCommission: fawryCommission,
-          fawryTotal: fawryTotal,
-          total: total,
-          fontSize: 12.5,
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(ctx.t('adv.duplicatesPopupTitle', {'period': periodLabel})),
+      content: SizedBox(
+        width: 720,
+        height: 460,
+        child: rows.isEmpty
+            ? Center(child: Text(ctx.t('adv.noDuplicatesInCycle')))
+            : ListView.separated(
+                itemCount: rows.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (_, index) {
+                  final row = rows[index];
+                  final sheets = ((row['sheets'] as List?) ?? const [])
+                      .map((e) => e.toString())
+                      .where((e) => e.isNotEmpty)
+                      .toList();
+                  return ListTile(
+                    title: Text(
+                      '${row['employeeName'] ?? ''} • ${row['employeeCode'] ?? ''}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      '${ctx.t('adv.lineJob', {'value': row['jobTitle'] ?? '—'})}\n'
+                      '${ctx.t('adv.duplicateInSheets', {'sheets': sheets.join('، ')})}\n'
+                      '${ctx.t('adv.lineApproved', {'amount': _money(row['totalAmount'] as num?)})}'
+                      ' • ${ctx.t('adv.sheetAppearances', {'count': sheets.length})}',
+                    ),
+                    isThreeLine: true,
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(ctx.t('common.close')),
         ),
       ],
     ),
@@ -764,22 +531,6 @@ class _ApprovedLoanImportList extends StatelessWidget {
       items,
       (item) => parseIsoDate(item['date']?.toString()),
       payrollMonthStartDay,
-    );
-    final allCash = items.fold<double>(
-      0,
-      (s, i) => s + ((i['cashAmount'] as num?)?.toDouble() ?? 0),
-    );
-    final allFawryApproved = items.fold<double>(
-      0,
-      (s, i) => s + ((i['fawryApprovedAmount'] as num?)?.toDouble() ?? 0),
-    );
-    final allFawryCommission = items.fold<double>(
-      0,
-      (s, i) => s + ((i['fawryCommissionAmount'] as num?)?.toDouble() ?? 0),
-    );
-    final allTotal = items.fold<double>(
-      0,
-      (s, i) => s + ((i['totalAmount'] as num?)?.toDouble() ?? 0),
     );
 
     return Column(
@@ -844,15 +595,6 @@ class _ApprovedLoanImportList extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 8),
-        _cashFawryFooter(
-          context,
-          cash: allCash,
-          fawryApproved: allFawryApproved,
-          fawryCommission: allFawryCommission,
-          total: allTotal,
-          sheetCount: items.length,
-        ),
       ],
     );
   }
@@ -868,6 +610,8 @@ class _PayrollPeriodBlock extends StatelessWidget {
     required this.total,
     required this.onExportPeriod,
     this.sheetCount,
+    this.duplicateCount = 0,
+    this.onShowDuplicates,
   });
 
   final String periodKey;
@@ -878,6 +622,8 @@ class _PayrollPeriodBlock extends StatelessWidget {
   final double total;
   final Future<void> Function(DateTime from, DateTime to) onExportPeriod;
   final int? sheetCount;
+  final int duplicateCount;
+  final VoidCallback? onShowDuplicates;
 
   @override
   Widget build(BuildContext context) {
@@ -885,18 +631,19 @@ class _PayrollPeriodBlock extends StatelessWidget {
     final from = parseIsoDate(parts.first) ?? DateTime.now();
     final to = parseIsoDate(parts.length > 1 ? parts[1] : parts.first) ?? from;
     final fawryTotal = _roundMoney(fawryApproved + fawryCommission);
+    final monthName = payrollCycleMonthName(
+      to,
+      Localizations.localeOf(context).languageCode,
+    );
     return SellixCard(
       padding: EdgeInsets.zero,
       child: ExpansionTile(
-        initiallyExpanded: true,
+        initiallyExpanded: false,
         title: Text.rich(
           TextSpan(
             children: [
               TextSpan(
-                text: context.t('adv.cycle', {
-                  'from': formatIsoDate(from),
-                  'to': formatIsoDate(to),
-                }),
+                text: context.t('adv.monthCycle', {'month': monthName}),
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
@@ -926,14 +673,32 @@ class _PayrollPeriodBlock extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: _moneyBreakdownText(
-          context,
-          cash: cash,
-          fawryApproved: fawryApproved,
-          fawryCommission: fawryCommission,
-          fawryTotal: fawryTotal,
-          total: total,
-          fontSize: 11.5,
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _moneyBreakdownText(
+              context,
+              cash: cash,
+              fawryApproved: fawryApproved,
+              fawryCommission: fawryCommission,
+              fawryTotal: fawryTotal,
+              total: total,
+              fontSize: 11.5,
+            ),
+            if (duplicateCount > 0 && onShowDuplicates != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: onShowDuplicates,
+                  icon: const Icon(Icons.copy_all_outlined, size: 18),
+                  label: Text(
+                    context.t('adv.duplicatesOnly', {'count': duplicateCount}),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         children: [
           Padding(
@@ -1104,7 +869,6 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
   String? _locationFilter;
   String? _stateFilter;
   String? _importFilter;
-  bool _duplicatesOnly = false;
 
   @override
   void dispose() {
@@ -1118,21 +882,66 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
     return item['employeeCode']?.toString().trim() ?? '';
   }
 
-  /// Employees carried by more than one imported loan sheet. Manual advances
-  /// have no import reference, so they never make an employee a duplicate.
-  Set<String> get _duplicateEmployees {
-    final importsByEmployee = <String, Set<String>>{};
-    for (final item in widget.items) {
-      final importId = item['importId']?.toString().trim() ?? '';
-      if (importId.isEmpty) continue;
-      final key = _employeeKey(item);
-      if (key.isEmpty) continue;
-      importsByEmployee.putIfAbsent(key, () => <String>{}).add(importId);
+  /// Duplicates **inside this cycle only**: same employee on 2+ sheets of the period.
+  List<Map<String, dynamic>> _periodDuplicateRows(
+    List<MapEntry<String, List<Map<String, dynamic>>>> sheets,
+  ) {
+    final byEmployee = <String, Map<String, dynamic>>{};
+    for (final sheet in sheets) {
+      if (sheet.key == '__manual__') continue;
+      final first = sheet.value.isEmpty ? null : sheet.value.first;
+      final sheetLabel = () {
+        final meta = _sheetMeta(sheet.key, sheet.value);
+        final primary =
+            meta['primaryLocationName']?.toString() ??
+            context.t('adv.noBranch');
+        final reference =
+            first?['importReference']?.toString() ??
+            context.t('adv.advanceSheet');
+        return _sheetHeadline(
+          reference,
+          primary: primary,
+          locationCount: _locationCountOf(meta),
+        );
+      }();
+      for (final item in sheet.value) {
+        final key = _employeeKey(item);
+        if (key.isEmpty) continue;
+        final row = byEmployee.putIfAbsent(key, () {
+          return {
+            'employeeKey': key,
+            'employeeCode': item['employeeCode']?.toString() ?? '',
+            'employeeName': item['employeeName']?.toString() ?? '',
+            'jobTitle': item['employeeJobTitle']?.toString() ?? '',
+            'sheets': <String>{},
+            'totalAmount': 0.0,
+          };
+        });
+        (row['sheets'] as Set<String>).add(sheetLabel);
+        row['totalAmount'] =
+            ((row['totalAmount'] as num?)?.toDouble() ?? 0) +
+            ((item['amount'] as num?)?.toDouble() ?? 0);
+      }
     }
-    return importsByEmployee.entries
-        .where((entry) => entry.value.length > 1)
-        .map((entry) => entry.key)
-        .toSet();
+    final rows = byEmployee.values
+        .where((row) => (row['sheets'] as Set<String>).length > 1)
+        .map((row) {
+          final sheets = (row['sheets'] as Set<String>).toList()..sort();
+          return {
+            ...row,
+            'sheets': sheets,
+            'totalAmount': _roundMoney(
+              (row['totalAmount'] as num?)?.toDouble() ?? 0,
+            ),
+          };
+        })
+        .toList();
+    rows.sort((a, b) {
+      final ac = a['employeeCode']?.toString() ?? '';
+      final bc = b['employeeCode']?.toString() ?? '';
+      return ac.compareTo(bc);
+    });
+    return rows;
   }
 
   List<String> _options(String key) {
@@ -1146,12 +955,9 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
     return values;
   }
 
-  List<Map<String, dynamic>> _filtered(Set<String> duplicates) {
+  List<Map<String, dynamic>> _filtered() {
     final query = _searchController.text.trim().toLowerCase();
     return widget.items.where((item) {
-      if (_duplicatesOnly && !duplicates.contains(_employeeKey(item))) {
-        return false;
-      }
       if (query.isNotEmpty) {
         final text = [
           item['employeeCode'],
@@ -1305,8 +1111,7 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
     }
     final importEntries = imports.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final duplicates = _duplicateEmployees;
-    final filtered = _filtered(duplicates);
+    final filtered = _filtered();
     final groups = _groups(filtered);
 
     return Column(
@@ -1364,18 +1169,6 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                 ],
                 onChanged: (value) => setState(() => _importFilter = value),
               ),
-              FilterChip(
-                selected: _duplicatesOnly,
-                onSelected: (value) => setState(() => _duplicatesOnly = value),
-                avatar: Icon(
-                  Icons.copy_all_outlined,
-                  size: 18,
-                  color: _duplicatesOnly ? AppColors.danger : null,
-                ),
-                label: Text(
-                  context.t('adv.duplicatesOnly', {'count': duplicates.length}),
-                ),
-              ),
               OutlinedButton.icon(
                 onPressed: () {
                   _searchController.clear();
@@ -1383,7 +1176,6 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                     _locationFilter = null;
                     _stateFilter = null;
                     _importFilter = null;
-                    _duplicatesOnly = false;
                   });
                 },
                 icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
@@ -1411,22 +1203,6 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                 first['deductionStartDate']?.toString(),
                               );
                         }, widget.payrollMonthStartDay);
-                    var allCash = 0.0;
-                    var allFawryApproved = 0.0;
-                    var allFawryCommission = 0.0;
-                    var allTotal = 0.0;
-                    for (final entry in groups.entries) {
-                      final meta = _sheetMeta(entry.key, entry.value);
-                      allCash += (meta['cashAmount'] as num?)?.toDouble() ?? 0;
-                      allFawryApproved +=
-                          (meta['fawryApprovedAmount'] as num?)?.toDouble() ??
-                          0;
-                      allFawryCommission +=
-                          (meta['fawryCommissionAmount'] as num?)?.toDouble() ??
-                          0;
-                      allTotal +=
-                          (meta['totalAmount'] as num?)?.toDouble() ?? 0;
-                    }
                     return Column(
                       children: [
                         Expanded(
@@ -1481,6 +1257,38 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                     }),
                                     onExportPeriod: widget.onExportPeriod,
                                     sheetCount: period.value.length,
+                                    duplicateCount: _periodDuplicateRows(
+                                      period.value,
+                                    ).length,
+                                    onShowDuplicates: () {
+                                      final rows = _periodDuplicateRows(
+                                        period.value,
+                                      );
+                                      final parts = period.key.split('|');
+                                      final from =
+                                          parseIsoDate(parts.first) ??
+                                          DateTime.now();
+                                      final to =
+                                          parseIsoDate(
+                                            parts.length > 1
+                                                ? parts[1]
+                                                : parts.first,
+                                          ) ??
+                                          from;
+                                      _showPeriodDuplicateEmployees(
+                                        context,
+                                        periodLabel: context
+                                            .t('adv.monthCycle', {
+                                              'month': payrollCycleMonthName(
+                                                to,
+                                                Localizations.localeOf(
+                                                  context,
+                                                ).languageCode,
+                                              ),
+                                            }),
+                                        rows: rows,
+                                      );
+                                    },
                                     children: [
                                       for (final entry in period.value)
                                         Padding(
@@ -1664,7 +1472,20 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                                           widget.onRefresh,
                                                       embedded: true,
                                                       duplicateEmployees:
-                                                          duplicates,
+                                                          _periodDuplicateRows(
+                                                                period.value,
+                                                              )
+                                                              .map(
+                                                                (row) =>
+                                                                    row['employeeKey']
+                                                                        ?.toString() ??
+                                                                    '',
+                                                              )
+                                                              .where(
+                                                                (key) => key
+                                                                    .isNotEmpty,
+                                                              )
+                                                              .toSet(),
                                                     ),
                                                   ],
                                                 ),
@@ -1677,14 +1498,6 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                 ),
                             ],
                           ),
-                        ),
-                        _cashFawryFooter(
-                          context,
-                          cash: allCash,
-                          fawryApproved: allFawryApproved,
-                          fawryCommission: allFawryCommission,
-                          total: allTotal,
-                          sheetCount: groups.length,
                         ),
                       ],
                     );
@@ -1713,6 +1526,9 @@ class _LongAdvanceList extends StatefulWidget {
 
 class _LongAdvanceListState extends State<_LongAdvanceList> {
   final _searchController = TextEditingController();
+  String? _stateFilter;
+  LongAdvanceRepaymentFilter _repaymentFilter = LongAdvanceRepaymentFilter.all;
+  LongAdvanceEmployeeFilter _employeeFilter = LongAdvanceEmployeeFilter.all;
 
   @override
   void dispose() {
@@ -1721,13 +1537,35 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
   }
 
   List<Map<String, dynamic>> get _filtered {
-    final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return widget.items;
-    return widget.items.where((a) {
-      final code = a['employeeCode']?.toString().toLowerCase() ?? '';
-      final name = a['employeeName']?.toString().toLowerCase() ?? '';
-      return code.contains(q) || name.contains(q);
-    }).toList();
+    return widget.items
+        .where(
+          (advance) => longAdvanceMatchesFilters(
+            advance,
+            query: _searchController.text,
+            state: _stateFilter,
+            repayment: _repaymentFilter,
+            employee: _employeeFilter,
+          ),
+        )
+        .toList();
+  }
+
+  Widget _filterDropdown<T>({
+    required String label,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return SizedBox(
+      width: 210,
+      child: DropdownButtonFormField<T>(
+        key: ValueKey('$label-$value'),
+        initialValue: value,
+        decoration: InputDecoration(labelText: label),
+        items: items,
+        onChanged: onChanged,
+      ),
+    );
   }
 
   bool _canCancel(Map<String, dynamic> a) {
@@ -1746,7 +1584,7 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
   bool _canAdjustRemaining(Map<String, dynamic> a) =>
       a['canAdjustRemaining'] == true;
 
-  bool _canRetryOdoo(Map<String, dynamic> a) {
+  bool _canSendToOdoo(Map<String, dynamic> a) {
     final state = _advanceStateRaw(a);
     return (state == 'running' || state == 'done') && a['odooMoveId'] == null;
   }
@@ -1855,19 +1693,12 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
 
   Future<void> _confirmLongAdvance(Map<String, dynamic> a) async {
     try {
-      final activated = await api.advanceLongConfirm(a['id']);
+      await api.advanceLongConfirm(a['id']);
       widget.onRefresh();
       if (mounted) {
-        final sent = activated['odooMoveId'] != null;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              context.t(
-                sent ? 'adv.activatedOdooSent' : 'adv.activatedOdooFailed',
-              ),
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.t('adv.activated'))));
       }
     } catch (e) {
       if (mounted) {
@@ -1878,14 +1709,14 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
     }
   }
 
-  Future<void> _retryOdoo(Map<String, dynamic> a) async {
+  Future<void> _sendToOdoo(Map<String, dynamic> a) async {
     try {
       await api.advanceLongSendToOdoo(a['id']);
       widget.onRefresh();
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.t('adv.odooRetryDone'))));
+        ).showSnackBar(SnackBar(content: Text(context.t('adv.odooSendDone'))));
       }
     } catch (e) {
       widget.onRefresh();
@@ -1933,6 +1764,23 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
     );
   }
 
+  Widget _summaryStat(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCard(Map<String, dynamic> a) {
     final state = _advanceStateRaw(a);
     final stateLabel = _advanceStateLabel(context, state, isLong: true);
@@ -1943,6 +1791,7 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
     final odooSent = a['odooMoveId'] != null;
     final odooError = a['odooSyncError']?.toString().trim() ?? '';
     final odooMoveName = a['odooMoveName']?.toString().trim() ?? '';
+    final employeeArchived = a['employeeActive'] == false;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1996,6 +1845,13 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
                   ),
                 ),
                 StatusTag(label: stateLabel, type: _advanceStateTag(state)),
+                if (employeeArchived) ...[
+                  const SizedBox(width: 6),
+                  StatusTag(
+                    label: context.t('adv.employeeArchived'),
+                    type: StatusTagType.warning,
+                  ),
+                ],
                 if (state != 'draft') ...[
                   const SizedBox(width: 6),
                   StatusTag(
@@ -2010,7 +1866,7 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
                     _canAdjustRemaining(a) ||
                     _canStopLong(a) ||
                     _canCancel(a) ||
-                    _canRetryOdoo(a))
+                    _canSendToOdoo(a))
                   PopupMenuButton<String>(
                     tooltip: context.t('adv.actions'),
                     padding: EdgeInsets.zero,
@@ -2026,8 +1882,8 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
                           await _confirmStop(a);
                         case 'cancel':
                           await _confirmCancel(a);
-                        case 'retryOdoo':
-                          await _retryOdoo(a);
+                        case 'sendOdoo':
+                          await _sendToOdoo(a);
                       }
                     },
                     itemBuilder: (_) => [
@@ -2056,10 +1912,10 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
                           value: 'cancel',
                           child: Text(context.t('adv.cancel')),
                         ),
-                      if (_canRetryOdoo(a))
+                      if (_canSendToOdoo(a))
                         PopupMenuItem(
-                          value: 'retryOdoo',
-                          child: Text(context.t('adv.odooRetry')),
+                          value: 'sendOdoo',
+                          child: Text(context.t('adv.odooSend')),
                         ),
                     ],
                     icon: const Icon(Icons.more_vert, size: 20),
@@ -2166,23 +2022,136 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
     }
 
     final filtered = _filtered;
+    final activeTotals = longAdvanceActiveTotals(widget.items);
+    final states =
+        widget.items
+            .map(_advanceStateRaw)
+            .where((state) => state.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            labelText: context.t('adv.searchCodeName'),
-            prefixIcon: const Icon(Icons.search, size: 20),
+        SellixCard(
+          child: Wrap(
+            spacing: 24,
+            runSpacing: 8,
+            children: [
+              _summaryStat(
+                context.t('adv.activePaidTotal'),
+                _money(activeTotals.paid),
+              ),
+              _summaryStat(
+                context.t('adv.activeRemainingTotal'),
+                _money(activeTotals.remaining),
+              ),
+            ],
           ),
-          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 12),
+        SellixCard(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.end,
+            children: [
+              SizedBox(
+                width: 280,
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    labelText: context.t('adv.searchCodeName'),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              _filterDropdown<String?>(
+                label: context.t('adv.state'),
+                value: _stateFilter,
+                items: [
+                  DropdownMenuItem(
+                    value: null,
+                    child: Text(context.t('adv.all')),
+                  ),
+                  for (final state in states)
+                    DropdownMenuItem(
+                      value: state,
+                      child: Text(
+                        _advanceStateLabel(context, state, isLong: true),
+                      ),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _stateFilter = value),
+              ),
+              _filterDropdown<LongAdvanceRepaymentFilter>(
+                label: context.t('adv.repaymentStatus'),
+                value: _repaymentFilter,
+                items: [
+                  DropdownMenuItem(
+                    value: LongAdvanceRepaymentFilter.all,
+                    child: Text(context.t('adv.all')),
+                  ),
+                  DropdownMenuItem(
+                    value: LongAdvanceRepaymentFilter.fullyRepaid,
+                    child: Text(context.t('adv.fullyRepaid')),
+                  ),
+                  DropdownMenuItem(
+                    value: LongAdvanceRepaymentFilter.outstanding,
+                    child: Text(context.t('adv.outstandingBalance')),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _repaymentFilter = value);
+                  }
+                },
+              ),
+              _filterDropdown<LongAdvanceEmployeeFilter>(
+                label: context.t('adv.employeeStatus'),
+                value: _employeeFilter,
+                items: [
+                  DropdownMenuItem(
+                    value: LongAdvanceEmployeeFilter.all,
+                    child: Text(context.t('adv.all')),
+                  ),
+                  DropdownMenuItem(
+                    value: LongAdvanceEmployeeFilter.active,
+                    child: Text(context.t('adv.employeeActive')),
+                  ),
+                  DropdownMenuItem(
+                    value: LongAdvanceEmployeeFilter.archived,
+                    child: Text(context.t('adv.employeeArchived')),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _employeeFilter = value);
+                  }
+                },
+              ),
+              OutlinedButton.icon(
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() {
+                    _stateFilter = null;
+                    _repaymentFilter = LongAdvanceRepaymentFilter.all;
+                    _employeeFilter = LongAdvanceEmployeeFilter.all;
+                  });
+                },
+                icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+                label: Text(context.t('adv.clearFilters')),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty)
           Expanded(
             child: Center(
               child: Text(
-                context.t('adv.noSearchResults'),
+                context.t('adv.noMatches'),
                 style: const TextStyle(color: AppColors.textSecondary),
               ),
             ),
@@ -2324,6 +2293,7 @@ class _AdvanceList extends StatelessWidget {
     final state = _advanceStateRaw(a);
     final stateLabel = _advanceStateLabel(context, state, isLong: isLong);
     final payrollId = a['payrollId']?.toString();
+    final importId = a['importId']?.toString() ?? '';
 
     showModalBottomSheet<void>(
       context: context,
@@ -2410,10 +2380,31 @@ class _AdvanceList extends StatelessWidget {
             ],
             if (a['notes'] != null && a['notes'].toString().isNotEmpty)
               _detailRow(context.t('adv.notes'), a['notes'].toString()),
-            if (payrollId != null && payrollId.isNotEmpty)
+            if (!isLong && importId.isNotEmpty)
+              _detailRow(
+                context.t('adv.advanceSheet'),
+                (a['importReference']?.toString().trim().isNotEmpty == true)
+                    ? a['importReference'].toString()
+                    : importId,
+              )
+            else if (payrollId != null && payrollId.isNotEmpty)
               _detailRow(context.t('adv.payroll'), payrollId),
             const SizedBox(height: 16),
-            if (payrollId != null && payrollId.isNotEmpty)
+            // Short advances from a loan import always open the advances sheet,
+            // even after they were deducted on a payroll (closed / done).
+            if (!isLong && importId.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.push(
+                    '${AppRoutes.hrAdvanceLoanImport}'
+                    '?importId=${Uri.encodeQueryComponent(importId)}',
+                  );
+                },
+                icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                label: Text(context.t('adv.openLoanSheet')),
+              )
+            else if (payrollId != null && payrollId.isNotEmpty)
               OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(ctx);
@@ -2421,15 +2412,6 @@ class _AdvanceList extends StatelessWidget {
                 },
                 icon: const Icon(Icons.receipt_long_outlined, size: 18),
                 label: Text(context.t('adv.openPayroll')),
-              )
-            else if (!isLong && _isShortPending(a))
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  context.go(AppRoutes.hrPayroll);
-                },
-                icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                label: Text(context.t('adv.openPayrolls')),
               ),
             if (_canConfirmLong(a)) ...[
               const SizedBox(height: 8),

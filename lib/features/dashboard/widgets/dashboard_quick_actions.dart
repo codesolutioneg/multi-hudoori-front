@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme_v2.dart';
+import '../../../core/utils/feature_entitlements.dart';
 import '../../../l10n/l10n_extension.dart';
+import '../../auth/auth_cubit.dart';
+import '../../auth/auth_state.dart';
 
 class DashboardQuickAction {
   const DashboardQuickAction({
@@ -31,8 +35,19 @@ class DashboardQuickActions extends StatelessWidget {
 
   final List<DashboardQuickAction> actions;
 
+  static List<DashboardQuickAction> entitledOnly(
+    AuthState auth,
+    List<DashboardQuickAction> actions,
+  ) {
+    return actions.where((a) => isRouteEntitled(auth, a.route)).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthCubit>().state;
+    final visible = entitledOnly(auth, actions);
+    if (visible.isEmpty) return const SizedBox.shrink();
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossCount = constraints.maxWidth >= 1100
@@ -48,9 +63,9 @@ class DashboardQuickActions extends StatelessWidget {
         if (crossCount == 1) {
           return Column(
             children: [
-              for (var i = 0; i < actions.length; i++) ...[
+              for (var i = 0; i < visible.length; i++) ...[
                 if (i > 0) const Gap(12),
-                _QuickActionTile(action: actions[i], compact: true),
+                _QuickActionTile(action: visible[i], compact: true),
               ],
             ],
           );
@@ -65,9 +80,9 @@ class DashboardQuickActions extends StatelessWidget {
             crossAxisSpacing: 12,
             childAspectRatio: 2.1,
           ),
-          itemCount: actions.length,
+          itemCount: visible.length,
           itemBuilder: (context, index) =>
-              _QuickActionTile(action: actions[index]),
+              _QuickActionTile(action: visible[index]),
         );
       },
     );
@@ -228,7 +243,19 @@ class _QuickActionTileState extends State<_QuickActionTile> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => context.go(widget.action.route),
+          onTap: () {
+            final auth = context.read<AuthCubit>().state;
+            if (!isRouteEntitled(auth, widget.action.route)) {
+              final feat = featureKeyForRoute(widget.action.route);
+              context.go(
+                feat != null
+                    ? AppRoutes.accessDeniedFeature(feat)
+                    : AppRoutes.accessDeniedRole(),
+              );
+              return;
+            }
+            context.go(widget.action.route);
+          },
           borderRadius: BorderRadius.circular(AppThemeV2.cardRadius),
           child: AnimatedContainer(
             duration: AppThemeV2.normal,

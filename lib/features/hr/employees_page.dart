@@ -12,6 +12,7 @@ import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/api_error_message.dart';
+import '../../core/utils/company_quota.dart';
 import '../../core/utils/department_name.dart';
 import '../../core/utils/egyptian_national_id.dart';
 import '../../core/utils/money_format.dart';
@@ -57,6 +58,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
   bool _showArchived = false;
   int _total = 0;
   int _offset = 0;
+  CompanyQuota? _quota;
 
   @override
   void initState() {
@@ -124,6 +126,13 @@ class _EmployeesPageState extends State<EmployeesPage> {
     } catch (_) {}
   }
 
+  Future<void> _loadQuota() async {
+    try {
+      final q = CompanyQuota.fromJson(await api.companyQuota());
+      if (mounted) setState(() => _quota = q);
+    } catch (_) {}
+  }
+
   Future<void> _reload({required bool reset}) async {
     if (reset) {
       setState(() {
@@ -131,6 +140,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
         _offset = 0;
         _items.clear();
       });
+      unawaited(_loadQuota());
     }
     try {
       final auth = context.read<AuthCubit>().state;
@@ -905,11 +915,24 @@ class _EmployeesPageState extends State<EmployeesPage> {
               );
               final filters = _filtersCard(context);
               final list = _employeesList(context);
+              final quota = _quota;
+              final quotaBanner = quota != null && quota.employeesFull
+                  ? _QuotaFullBanner(
+                      message: context.t('quota.employeesFullBanner', {
+                        'used': quota.employeesUsed,
+                        'max': quota.employeesMax,
+                      }),
+                    )
+                  : null;
 
               if (shortViewport) {
                 return ListView(
                   children: [
                     header,
+                    if (quotaBanner != null) ...[
+                      const SizedBox(height: 12),
+                      quotaBanner,
+                    ],
                     const SizedBox(height: 16),
                     filters,
                     const SizedBox(height: 16),
@@ -922,6 +945,10 @@ class _EmployeesPageState extends State<EmployeesPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   header,
+                  if (quotaBanner != null) ...[
+                    const SizedBox(height: 12),
+                    quotaBanner,
+                  ],
                   const SizedBox(height: 16),
                   filters,
                   const SizedBox(height: 16),
@@ -963,6 +990,40 @@ class _EmployeesPageState extends State<EmployeesPage> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _QuotaFullBanner extends StatelessWidget {
+  const _QuotaFullBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded, color: Colors.orange.shade800),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import '../../core/di/injection.dart';
 import '../../core/platform/mobile_platform.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
+import '../../core/utils/feature_entitlements.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
@@ -197,83 +198,102 @@ class _DashboardPageV2State extends State<DashboardPageV2> {
                       ],
                       Skeletonizer(
                         enabled: _initialLoad && isLoading,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            DashboardSectionHeader(
-                              title: context.t('dash.quickActions'),
-                              subtitle: isHr
-                                  ? context.t('dash.quickActionsHr')
-                                  : isBranch
-                                  ? context.t('dash.quickActionsBranch')
-                                  : context.t('dash.quickActionsEmployee'),
-                            ),
-                            const Gap(14),
-                            DashboardQuickActions(
-                              actions: isHr
-                                  ? DashboardQuickActions.hrActions(
-                                      context,
-                                      pendingRequests:
-                                          (_stats['pendingRequests'] as num?)
-                                              ?.toInt() ??
-                                          0,
-                                      healthCertAlerts:
-                                          (_stats['healthCertAlerts'] as num?)
-                                              ?.toInt() ??
-                                          0,
-                                      hiringUnread:
-                                          (_stats['hiringUnread'] as num?)
-                                              ?.toInt() ??
-                                          0,
-                                      unreadAbsences:
-                                          (_stats['absentUnread'] as num?)
-                                              ?.toInt() ??
-                                          0,
-                                    )
-                                  : isBranch
-                                  ? DashboardQuickActions.branchManagerActions(
-                                      context,
-                                      hiringUnread:
-                                          (_stats['hiringUnread'] as num?)
-                                              ?.toInt() ??
-                                          0,
-                                    )
-                                  : DashboardQuickActions.employeeActions(
-                                      context,
+                        child: Builder(
+                          builder: (context) {
+                            final rawActions = isHr
+                                ? DashboardQuickActions.hrActions(
+                                    context,
+                                    pendingRequests:
+                                        (_stats['pendingRequests'] as num?)
+                                            ?.toInt() ??
+                                        0,
+                                    healthCertAlerts:
+                                        (_stats['healthCertAlerts'] as num?)
+                                            ?.toInt() ??
+                                        0,
+                                    hiringUnread:
+                                        (_stats['hiringUnread'] as num?)
+                                            ?.toInt() ??
+                                        0,
+                                    unreadAbsences:
+                                        (_stats['absentUnread'] as num?)
+                                            ?.toInt() ??
+                                        0,
+                                  )
+                                : isBranch
+                                ? DashboardQuickActions.branchManagerActions(
+                                    context,
+                                    hiringUnread:
+                                        (_stats['hiringUnread'] as num?)
+                                            ?.toInt() ??
+                                        0,
+                                  )
+                                : DashboardQuickActions.employeeActions(
+                                    context,
+                                  );
+                            final actions =
+                                DashboardQuickActions.entitledOnly(auth, rawActions);
+                            final showPayrollUi = isFeatureEnabled(auth, 'payroll');
+                            final showHrEmployees =
+                                isFeatureEnabled(auth, 'hr_employees');
+                            final showRequests =
+                                isFeatureEnabled(auth, 'hr_requests');
+                            final showAnalytics = isHr &&
+                                (showPayrollUi ||
+                                    isFeatureEnabled(auth, 'attendance') ||
+                                    showHrEmployees);
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (actions.isNotEmpty) ...[
+                                  DashboardSectionHeader(
+                                    title: context.t('dash.quickActions'),
+                                    subtitle: isHr
+                                        ? context.t('dash.quickActionsHr')
+                                        : isBranch
+                                        ? context.t('dash.quickActionsBranch')
+                                        : context.t('dash.quickActionsEmployee'),
+                                  ),
+                                  const Gap(14),
+                                  DashboardQuickActions(actions: actions),
+                                  const Gap(32),
+                                ],
+                                DashboardSectionHeader(
+                                  title: context.t('dash.kpis'),
+                                  subtitle: isHr
+                                      ? context.t('dash.kpisHr')
+                                      : isBranch
+                                      ? context.t('dash.kpisBranch')
+                                      : context.t('dash.kpisEmployee'),
+                                ),
+                                const Gap(14),
+                                _buildStatsGrid(context, isHr, isBranch),
+                                if (showAnalytics) ...[
+                                  const Gap(36),
+                                  DashboardSectionHeader(
+                                    title: context.t('dash.analytics'),
+                                    subtitle: context.t('dash.analyticsSub'),
+                                  ),
+                                  const Gap(14),
+                                  _buildChartsGrid(context),
+                                  if (showHrEmployees || showRequests) ...[
+                                    const Gap(36),
+                                    DashboardSectionHeader(
+                                      title: context.t('dash.liveActivity'),
+                                      subtitle: context.t('dash.liveActivitySub'),
                                     ),
-                            ),
-                            const Gap(32),
-                            DashboardSectionHeader(
-                              title: context.t('dash.kpis'),
-                              subtitle: isHr
-                                  ? context.t('dash.kpisHr')
-                                  : isBranch
-                                  ? context.t('dash.kpisBranch')
-                                  : context.t('dash.kpisEmployee'),
-                            ),
-                            const Gap(14),
-                            _buildStatsGrid(context, isHr, isBranch),
-                            if (isHr) ...[
-                              const Gap(36),
-                              DashboardSectionHeader(
-                                title: context.t('dash.analytics'),
-                                subtitle: context.t('dash.analyticsSub'),
-                              ),
-                              const Gap(14),
-                              _buildChartsGrid(context),
-                              const Gap(36),
-                              DashboardSectionHeader(
-                                title: context.t('dash.liveActivity'),
-                                subtitle: context.t('dash.liveActivitySub'),
-                              ),
-                              const Gap(14),
-                              _buildBottomSection(),
-                              if (isHrManager) ...[
-                                const Gap(32),
-                                const DashboardAutoSyncPanel(),
+                                    const Gap(14),
+                                    _buildBottomSection(),
+                                  ],
+                                  if (isHrManager) ...[
+                                    const Gap(32),
+                                    const DashboardAutoSyncPanel(),
+                                  ],
+                                ],
                               ],
-                            ],
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -289,71 +309,77 @@ class _DashboardPageV2State extends State<DashboardPageV2> {
 
   Widget _buildStatsGrid(BuildContext context, bool isHr, bool isBranch) {
     final l10n = AppLocalizations.of(context);
-    final configs = isHr
-        ? <_StatConfig>[
-            _StatConfig(
-              title: l10n.t('stat.activeEmployees'),
-              subtitle: l10n.t('stat.activeEmployeesSub'),
-              value: _stats['employeesCount'] ?? _stats['employees'] ?? 0,
-              icon: Icons.people_outline_rounded,
-              tone: StatToneV2.primary,
-              route: AppRoutes.hrEmployees,
-            ),
-            _StatConfig(
-              title: l10n.t('stat.attendanceToday'),
-              subtitle: l10n.t('stat.attendanceTodaySub'),
-              value: _stats['attendanceToday'] ?? 0,
-              icon: Icons.fact_check_outlined,
-              tone: StatToneV2.success,
-              route: AppRoutes.hrAttendance,
-            ),
-            _StatConfig(
-              title: l10n.t('stat.payrollsDraft'),
-              subtitle: l10n.t('stat.payrollsDraftSub'),
-              value: _stats['payrollsDraft'] ?? 0,
-              icon: Icons.payments_outlined,
-              tone: StatToneV2.warning,
-              route: AppRoutes.hrPayroll,
-            ),
-            _StatConfig(
-              title: l10n.t('stat.pendingRequests'),
-              subtitle: l10n.t('stat.pendingRequestsSub'),
-              value: _stats['pendingRequests'] ?? 0,
-              icon: Icons.pending_actions_outlined,
-              tone: StatToneV2.info,
-              route: AppRoutes.requests,
-            ),
-          ]
-        : isBranch
-        ? <_StatConfig>[
-            _StatConfig(
-              title: l10n.t('stat.newHiring'),
-              subtitle: l10n.t('stat.newHiringSub'),
-              value: _stats['hiringUnread'] ?? 0,
-              icon: Icons.assignment_ind_outlined,
-              tone: StatToneV2.primary,
-              route: AppRoutes.hrHiringAppointments,
-            ),
-            _StatConfig(
-              title: l10n.t('stat.attendanceToday'),
-              subtitle: l10n.t('stat.attendanceTodaySub'),
-              value: _stats['attendanceToday'] ?? 0,
-              icon: Icons.fact_check_outlined,
-              tone: StatToneV2.success,
-            ),
-          ]
-        // A branch employee gets their own figures only. Every other tile on
-        // this screen counts the whole company, which is not theirs to read.
-        : <_StatConfig>[
-            _StatConfig(
-              title: l10n.t('stat.myAttendance'),
-              subtitle: l10n.t('stat.myAttendanceSub'),
-              value: _employeeMonthAttendance,
-              icon: Icons.schedule_outlined,
-              tone: StatToneV2.primary,
-              route: AppRoutes.myAttendance,
-            ),
-          ];
+    final auth = context.watch<AuthCubit>().state;
+    final configs = (isHr
+            ? <_StatConfig>[
+                _StatConfig(
+                  title: l10n.t('stat.activeEmployees'),
+                  subtitle: l10n.t('stat.activeEmployeesSub'),
+                  value: _stats['employeesCount'] ?? _stats['employees'] ?? 0,
+                  icon: Icons.people_outline_rounded,
+                  tone: StatToneV2.primary,
+                  route: AppRoutes.hrEmployees,
+                ),
+                _StatConfig(
+                  title: l10n.t('stat.attendanceToday'),
+                  subtitle: l10n.t('stat.attendanceTodaySub'),
+                  value: _stats['attendanceToday'] ?? 0,
+                  icon: Icons.fact_check_outlined,
+                  tone: StatToneV2.success,
+                  route: AppRoutes.hrAttendance,
+                ),
+                _StatConfig(
+                  title: l10n.t('stat.payrollsDraft'),
+                  subtitle: l10n.t('stat.payrollsDraftSub'),
+                  value: _stats['payrollsDraft'] ?? 0,
+                  icon: Icons.payments_outlined,
+                  tone: StatToneV2.warning,
+                  route: AppRoutes.hrPayroll,
+                ),
+                _StatConfig(
+                  title: l10n.t('stat.pendingRequests'),
+                  subtitle: l10n.t('stat.pendingRequestsSub'),
+                  value: _stats['pendingRequests'] ?? 0,
+                  icon: Icons.pending_actions_outlined,
+                  tone: StatToneV2.info,
+                  route: AppRoutes.requests,
+                ),
+              ]
+            : isBranch
+            ? <_StatConfig>[
+                _StatConfig(
+                  title: l10n.t('stat.newHiring'),
+                  subtitle: l10n.t('stat.newHiringSub'),
+                  value: _stats['hiringUnread'] ?? 0,
+                  icon: Icons.assignment_ind_outlined,
+                  tone: StatToneV2.primary,
+                  route: AppRoutes.hrHiringAppointments,
+                ),
+                _StatConfig(
+                  title: l10n.t('stat.attendanceToday'),
+                  subtitle: l10n.t('stat.attendanceTodaySub'),
+                  value: _stats['attendanceToday'] ?? 0,
+                  icon: Icons.fact_check_outlined,
+                  tone: StatToneV2.success,
+                  route: AppRoutes.hrAttendance,
+                ),
+              ]
+            // A branch employee gets their own figures only. Every other tile on
+            // this screen counts the whole company, which is not theirs to read.
+            : <_StatConfig>[
+                _StatConfig(
+                  title: l10n.t('stat.myAttendance'),
+                  subtitle: l10n.t('stat.myAttendanceSub'),
+                  value: _employeeMonthAttendance,
+                  icon: Icons.schedule_outlined,
+                  tone: StatToneV2.primary,
+                  route: AppRoutes.myAttendance,
+                ),
+              ])
+        .where((c) => c.route == null || isRouteEntitled(auth, c.route!))
+        .toList();
+
+    if (configs.isEmpty) return const SizedBox.shrink();
 
     return LayoutBuilder(
       builder: (context, constraints) {

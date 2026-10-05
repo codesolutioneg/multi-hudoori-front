@@ -10,6 +10,7 @@ import '../../l10n/l10n_extension.dart';
 import '../../core/di/injection.dart';
 import '../../core/layout/app_page_scaffold.dart';
 import '../../core/utils/app_log.dart';
+import '../../core/utils/feature_entitlements.dart';
 import '../../core/utils/file_pick_web.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/alert_banner.dart';
@@ -1250,6 +1251,13 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
+    final auth = context.watch<AuthCubit>().state;
+    final showEmployees = isFeatureEnabled(auth, 'hr_employees');
+    final showAdvances = isFeatureEnabled(auth, 'advances');
+    final showPayroll = isFeatureEnabled(auth, 'payroll');
+    final showIntegrations = isFeatureEnabled(auth, 'integrations');
+    final showEmployeeApp = isFeatureEnabled(auth, 'employee_app');
+
     final connected = _config['isConnected'] == true;
     final credentialsConfigured = _config['credentialsConfigured'] == true;
     final counts =
@@ -1348,20 +1356,21 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const AppSettingsSection(embedded: true),
           ),
           const SizedBox(height: 10),
-          const SizedBox(height: 10),
           SettingsAccordionSection(
             title: context.t('setPg.branchManagers'),
             subtitle: context.t('setPg.branchManagersHint'),
             icon: Icons.badge_outlined,
             child: BranchManagersSettingsSection(),
           ),
-          const SizedBox(height: 10),
-          SettingsAccordionSection(
-            title: context.t('setPg.jobLadder'),
-            subtitle: context.t('setPg.jobLadderHint'),
-            icon: Icons.account_tree_outlined,
-            child: JobLadderSettingsSection(),
-          ),
+          if (showEmployees) ...[
+            const SizedBox(height: 10),
+            SettingsAccordionSection(
+              title: context.t('setPg.jobLadder'),
+              subtitle: context.t('setPg.jobLadderHint'),
+              icon: Icons.account_tree_outlined,
+              child: JobLadderSettingsSection(),
+            ),
+          ],
           BlocBuilder<AuthCubit, AuthState>(
             builder: (context, auth) {
               if (!auth.canViewAudit) return const SizedBox.shrink();
@@ -1433,7 +1442,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
-          if (ApiConfig.showOdooUi) ...[
+          if (ApiConfig.showOdooUi && showIntegrations) ...[
             const SizedBox(height: 10),
             SettingsAccordionSection(
               title: 'Odoo Integration',
@@ -1444,6 +1453,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: _buildOdooContent(),
             ),
           ],
+          if (showAdvances) ...[
           const SizedBox(height: 10),
           SettingsAccordionSection(
             title: context.t('setPg.advSettings'),
@@ -1506,6 +1516,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          ],
+          if (showPayroll) ...[
           const SizedBox(height: 10),
           SettingsAccordionSection(
             title: context.t('setPg.commSettings'),
@@ -1554,12 +1566,14 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          ],
           const SizedBox(height: 10),
           LocationPunchSettingsSection(
             locations: _locations,
             busy: _busy,
             onChanged: _load,
           ),
+          if (showAdvances) ...[
           const SizedBox(height: 10),
           SettingsAccordionSection(
             title: context.t('setPg.advEmails'),
@@ -1611,6 +1625,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          ],
+          if (showEmployeeApp) ...[
           const SizedBox(height: 10),
           SettingsAccordionSection(
             title: context.t('settings.teamVisibilityTitle'),
@@ -1707,6 +1723,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          ],
+          if (showPayroll) ...[
           const SizedBox(height: 10),
           SettingsAccordionSection(
             title: context.t('settings.payrollPeriodTitle'),
@@ -1778,6 +1796,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          ],
           const SizedBox(height: 10),
           SettingsAccordionSection(
             title: context.t('settings.latePolicyTitle'),

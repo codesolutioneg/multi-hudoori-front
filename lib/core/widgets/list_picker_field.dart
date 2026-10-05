@@ -29,33 +29,47 @@ class ListPickerField<T> extends StatelessWidget {
     return v.toString();
   }
 
+  /// Keep labelled options (including empty-string values like «كل المواقع»).
   List<({T value, String label})> get _validOptions =>
-      options.where((o) => o.label.isNotEmpty && o.value.toString().isNotEmpty).toList();
+      options.where((o) => o.label.trim().isNotEmpty).toList();
 
   Future<void> _pick(BuildContext context) async {
+    final options = _validOptions;
     final picked = await showDialog<T>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(label),
-        content: SizedBox(
-          width: 340,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final o in _validOptions)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(o.label),
-                  trailing: value == o.value
-                      ? const Icon(Icons.check_circle, color: AppColors.primary)
-                      : null,
-                  onTap: () => Navigator.pop(ctx, o.value),
-                ),
-            ],
+      builder: (ctx) {
+        final maxH =
+            (MediaQuery.sizeOf(ctx).height * 0.6).clamp(220.0, 480.0).toDouble();
+        return AlertDialog(
+          title: Text(label),
+          content: SizedBox(
+            width: 340,
+            height: maxH,
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: ListView.builder(
+                itemCount: options.length,
+                itemBuilder: (_, i) {
+                  final o = options[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      o.label,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: value == o.value
+                        ? const Icon(Icons.check_circle, color: AppColors.primary)
+                        : null,
+                    onTap: () => Navigator.pop(ctx, o.value),
+                  );
+                },
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
+    // Cancel → null. Empty-string picks (e.g. «كل المواقع») are non-null.
     if (picked != null) onChanged(picked);
   }
 

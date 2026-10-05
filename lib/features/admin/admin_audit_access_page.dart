@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/di/injection.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/api_error_message.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../l10n/l10n_extension.dart';
+import '../auth/auth_cubit.dart';
+import '../auth/auth_state.dart';
 
 class AdminAuditAccessPage extends StatefulWidget {
   const AdminAuditAccessPage({
@@ -55,7 +59,7 @@ class _AdminAuditAccessPageState extends State<AdminAuditAccessPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyApiError(context, e);
         _loading = false;
       });
     }
@@ -92,7 +96,10 @@ class _AdminAuditAccessPageState extends State<AdminAuditAccessPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return BlocListener<AuthCubit, AuthState>(
+      listenWhen: (a, b) => a.activeCompanyId != b.activeCompanyId,
+      listener: (_, __) => _load(),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         PageHeader(
@@ -181,6 +188,7 @@ class _AdminAuditAccessPageState extends State<AdminAuditAccessPage> {
             ),
           ),
       ],
+    ),
     );
   }
 }

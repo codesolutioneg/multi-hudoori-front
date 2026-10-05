@@ -6,6 +6,7 @@ import '../../core/di/injection.dart';
 import '../../core/layout/breakpoints.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
+import '../../core/utils/feature_entitlements.dart';
 import '../../core/widgets/hudoori_logo.dart';
 import '../../core/widgets/language_toggle.dart';
 import '../../features/dashboard/widgets/dashboard_page_background.dart';
@@ -14,7 +15,6 @@ import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import 'dashboard_notifications_panel.dart';
 import 'shell_nav.dart';
-import '../assistant/help_assistant_overlay.dart';
 
 class BioTimeShell extends StatefulWidget {
   const BioTimeShell({super.key, required this.child});
@@ -96,7 +96,7 @@ class _BioTimeShellState extends State<BioTimeShell> {
             ],
           ),
         ),
-            if (auth.canViewAssistant) const HelpAssistantOverlay(),
+            // Help assistant FAB hidden per product request (2026-09-15).
           ],
         );
       },
@@ -197,7 +197,17 @@ class _Sidebar extends StatelessWidget {
                     selected: location.startsWith(item.route),
                     collapsed: collapsed,
                     onTap: () {
-                      context.go(item.route);
+                      final auth = context.read<AuthCubit>().state;
+                      if (!isRouteEntitled(auth, item.route)) {
+                        final feat = featureKeyForRoute(item.route);
+                        context.go(
+                          feat != null
+                              ? AppRoutes.accessDeniedFeature(feat)
+                              : AppRoutes.accessDeniedRole(),
+                        );
+                      } else {
+                        context.go(item.route);
+                      }
                       onTap?.call();
                     },
                   ),
@@ -511,7 +521,20 @@ class _BottomNav extends StatelessWidget {
       backgroundColor: AppThemeV2.surface,
       indicatorColor: AppThemeV2.primarySoft,
       selectedIndex: index,
-      onDestinationSelected: (i) => context.go(items[i].route),
+      onDestinationSelected: (i) {
+        final route = items[i].route;
+        final auth = context.read<AuthCubit>().state;
+        if (!isRouteEntitled(auth, route)) {
+          final feat = featureKeyForRoute(route);
+          context.go(
+            feat != null
+                ? AppRoutes.accessDeniedFeature(feat)
+                : AppRoutes.accessDeniedRole(),
+          );
+          return;
+        }
+        context.go(route);
+      },
       destinations: [
         for (final item in items)
           NavigationDestination(icon: Icon(item.icon), label: item.label),

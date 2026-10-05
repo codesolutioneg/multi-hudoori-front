@@ -11,6 +11,7 @@ import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/file_download.dart';
 import '../../core/utils/file_pick.dart';
 import '../../core/utils/money_format.dart';
+import '../../core/utils/api_error_message.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../advances/widgets/advance_create_dialogs.dart';
@@ -19,8 +20,13 @@ import 'payroll_line_edit_dialog.dart';
 import '../../l10n/l10n_extension.dart';
 
 class PayrollDetailPage extends StatefulWidget {
-  const PayrollDetailPage({super.key, required this.payrollId});
+  const PayrollDetailPage({
+    super.key,
+    required this.payrollId,
+    this.initialSearch = '',
+  });
   final String payrollId;
+  final String initialSearch;
 
   @override
   State<PayrollDetailPage> createState() => _PayrollDetailPageState();
@@ -39,8 +45,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
   String? _pendingAction;
   final ScrollController _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
-  Timer? _searchDebounce;
   String _lineSearch = '';
+
   /// Same-cycle payrolls (dateFrom/dateTo), list order.
   List<Map<String, dynamic>> _cyclePayrolls = [];
   int _cycleIndex = -1;
@@ -49,7 +55,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
   void initState() {
     super.initState();
     _scrollCtrl.addListener(_onScroll);
-    _searchCtrl.addListener(_onSearchChanged);
+    _lineSearch = widget.initialSearch.trim();
+    _searchCtrl.text = _lineSearch;
     _load(reset: true);
   }
 
@@ -57,8 +64,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
   void didUpdateWidget(covariant PayrollDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.payrollId != widget.payrollId) {
-      _lineSearch = '';
-      _searchCtrl.clear();
+      _lineSearch = widget.initialSearch.trim();
+      _searchCtrl.text = _lineSearch;
       _cyclePayrolls = [];
       _cycleIndex = -1;
       _load(reset: true);
@@ -67,25 +74,22 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
 
   @override
   void dispose() {
-    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
-  void _onSearchChanged() {
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
-      final next = _searchCtrl.text.trim();
-      if (next == _lineSearch) return;
-      _lineSearch = next;
-      _load(reset: true);
-    });
+  void _submitLineSearch([String? value]) {
+    final next = (value ?? _searchCtrl.text).trim();
+    if (next == _lineSearch) return;
+    _lineSearch = next;
+    _load(reset: true);
   }
 
   void _onScroll() {
     if (!_hasMoreLines || _loadingMoreLines || _loading) return;
-    if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 240) {
+    if (_scrollCtrl.position.pixels >=
+        _scrollCtrl.position.maxScrollExtent - 240) {
       _loadMoreLines();
     }
   }
@@ -105,10 +109,16 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
       setState(() {
         _payroll = p;
         _lines = lines is List
-            ? lines.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+            ? lines
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList()
             : [];
         _lineOffset = _lines.length;
-        _lineTotal = (pag?['total'] as num?)?.toInt() ?? (p['employeeCount'] as num?)?.toInt() ?? _lines.length;
+        _lineTotal =
+            (pag?['total'] as num?)?.toInt() ??
+            (p['employeeCount'] as num?)?.toInt() ??
+            _lines.length;
         _hasMoreLines = pag?['hasMore'] == true;
         _loading = false;
       });
@@ -116,7 +126,9 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -180,7 +192,9 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
       final more = p['lines'];
       setState(() {
         if (more is List) {
-          _lines.addAll(more.whereType<Map>().map((e) => Map<String, dynamic>.from(e)));
+          _lines.addAll(
+            more.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+          );
         }
         _lineOffset = _lines.length;
         _hasMoreLines = pag?['hasMore'] == true;
@@ -189,7 +203,9 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     } catch (e) {
       if (mounted) {
         setState(() => _loadingMoreLines = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
   }
@@ -198,9 +214,14 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
 
   bool _loadingAction(String actionId) => _pendingAction == actionId;
 
-  VoidCallback? _go(bool ok, VoidCallback fn) => (!_actionBusy && ok) ? fn : null;
+  VoidCallback? _go(bool ok, VoidCallback fn) =>
+      (!_actionBusy && ok) ? fn : null;
 
-  Future<void> _run(String actionId, Future<dynamic> Function() fn, String success) async {
+  Future<void> _run(
+    String actionId,
+    Future<dynamic> Function() fn,
+    String success,
+  ) async {
     if (_actionBusy) return;
     setState(() => _pendingAction = actionId);
     final messenger = ScaffoldMessenger.of(context);
@@ -209,7 +230,11 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
       await _load(reset: false);
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(success)));
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(friendlyApiError(context, e))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _pendingAction = null);
     }
@@ -225,15 +250,17 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
       if (!mounted) return;
       final mode = data['calculateMode']?.toString();
       final msg = data['message']?.toString();
-      messenger.showSnackBar(SnackBar(
-        content: Text(
-          (msg != null && msg.isNotEmpty)
-              ? msg
-              : (mode == 'excel_link_only'
-                  ? context.t('pay.linkedOnly')
-                  : context.t('pay.calculated')),
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            (msg != null && msg.isNotEmpty)
+                ? msg
+                : (mode == 'excel_link_only'
+                      ? context.t('pay.linkedOnly')
+                      : context.t('pay.calculated')),
+          ),
         ),
-      ));
+      );
       final over = ((data['overDeducted'] as List?) ?? [])
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
@@ -246,7 +273,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
         );
       }
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        messenger.showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _pendingAction = null);
     }
@@ -284,8 +312,14 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             title: Text(title),
             content: Text(context.t('pay.noNegativeContinue')),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.t('common.cancel'))),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.t('pay.continue'))),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(context.t('common.cancel')),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(context.t('pay.continue')),
+              ),
             ],
           ),
         ) ??
@@ -296,17 +330,29 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     if (_actionBusy) return;
     final ok = await _promptBeforeConfirm(title: context.t('pay.confirmSheet'));
     if (!ok) return;
-    await _run('confirm', () => api.payrollConfirm(widget.payrollId), context.t('pay.confirmed'));
+    await _run(
+      'confirm',
+      () => api.payrollConfirm(widget.payrollId),
+      context.t('pay.confirmed'),
+    );
   }
 
-  String _fmtJournalAmount(dynamic v) => _fmtMoney((v as num?)?.toDouble() ?? 0);
+  String _fmtJournalAmount(dynamic v) =>
+      _fmtMoney((v as num?)?.toDouble() ?? 0);
 
   Future<void> _sendPayrollToOdoo() async {
     if (_actionBusy) return;
-    if (_payroll['odooSent'] == true || _payroll['odooPayrollJournalId'] != null) {
+    if (_payroll['odooSent'] == true ||
+        _payroll['odooPayrollJournalId'] != null) {
       final name = _payroll['odooMoveName']?.toString() ?? '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(name.isEmpty ? context.t('pay.alreadySent') : context.t('pay.alreadySentName', {'name': name}))),
+        SnackBar(
+          content: Text(
+            name.isEmpty
+                ? context.t('pay.alreadySent')
+                : context.t('pay.alreadySentName', {'name': name}),
+          ),
+        ),
       );
       return;
     }
@@ -317,13 +363,17 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _pendingAction = null);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyApiError(context, e))));
       return;
     }
     if (!mounted) return;
     setState(() => _pendingAction = null);
     final amounts = Map<String, dynamic>.from(preview['amounts'] as Map? ?? {});
-    final cashFawry = Map<String, dynamic>.from(preview['cashFawry'] as Map? ?? {});
+    final cashFawry = Map<String, dynamic>.from(
+      preview['cashFawry'] as Map? ?? {},
+    );
     final emails = ((preview['notificationEmails'] as List?) ?? [])
         .map((e) => e.toString())
         .where((e) => e.trim().isNotEmpty)
@@ -342,37 +392,93 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                 _payroll['odooMoveId'] != null
                     ? context.t('pay.journalExists')
                     : context.t('pay.journalNew'),
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.35),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  height: 1.35,
+                ),
               ),
               const SizedBox(height: 12),
-              Text(context.t('pay.jSalaryDebit', {'amount': _fmtJournalAmount(amounts['totalEarnings'])})),
-              Text(context.t('pay.jCompanyIns', {'amount': _fmtJournalAmount(amounts['companySocial'])})),
-              Text(context.t('pay.jPenalties', {'amount': _fmtJournalAmount(amounts['penalties'])})),
-              Text(context.t('pay.jLongAdv', {'amount': _fmtJournalAmount(amounts['longTermAdvance'])})),
-              Text(context.t('pay.jShortAdv', {'amount': _fmtJournalAmount(amounts['salaryAdvance'])})),
-              Text(context.t('pay.jPayable', {'amount': _fmtJournalAmount(amounts['netSalary'])})),
+              Text(
+                context.t('pay.jSalaryDebit', {
+                  'amount': _fmtJournalAmount(amounts['totalEarnings']),
+                }),
+              ),
+              Text(
+                context.t('pay.jCompanyIns', {
+                  'amount': _fmtJournalAmount(amounts['companySocial']),
+                }),
+              ),
+              Text(
+                context.t('pay.jPenalties', {
+                  'amount': _fmtJournalAmount(amounts['penalties']),
+                }),
+              ),
+              Text(
+                context.t('pay.jLongAdv', {
+                  'amount': _fmtJournalAmount(amounts['longTermAdvance']),
+                }),
+              ),
+              Text(
+                context.t('pay.jShortAdv', {
+                  'amount': _fmtJournalAmount(amounts['salaryAdvance']),
+                }),
+              ),
+              Text(
+                context.t('pay.jPayable', {
+                  'amount': _fmtJournalAmount(amounts['netSalary']),
+                }),
+              ),
               const SizedBox(height: 8),
               Text(
-                context.t('pay.jBalance', {'debit': _fmtJournalAmount(amounts['totalDebit']), 'credit': _fmtJournalAmount(amounts['totalCredit'])}),
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                context.t('pay.jBalance', {
+                  'debit': _fmtJournalAmount(amounts['totalDebit']),
+                  'credit': _fmtJournalAmount(amounts['totalCredit']),
+                }),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 10),
-              Text(context.t('pay.jCashTotal', {'amount': _fmtJournalAmount(cashFawry['cashTotal'])})),
-              Text(context.t('pay.jFawryTotal', {'amount': _fmtJournalAmount(cashFawry['fawryGrandTotal'])})),
-              Text(context.t('pay.jFawryComm', {'amount': _fmtJournalAmount(cashFawry['fawryCommission'])})),
+              Text(
+                context.t('pay.jCashTotal', {
+                  'amount': _fmtJournalAmount(cashFawry['cashTotal']),
+                }),
+              ),
+              Text(
+                context.t('pay.jFawryTotal', {
+                  'amount': _fmtJournalAmount(cashFawry['fawryGrandTotal']),
+                }),
+              ),
+              Text(
+                context.t('pay.jFawryComm', {
+                  'amount': _fmtJournalAmount(cashFawry['fawryCommission']),
+                }),
+              ),
               const SizedBox(height: 10),
               Text(
                 emails.isEmpty
                     ? context.t('pay.noBranchEmails')
                     : context.t('pay.willEmail', {'count': emails.length}),
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.35),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  height: 1.35,
+                ),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.t('common.cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.t('pay.send'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.t('pay.send')),
+          ),
         ],
       ),
     );
@@ -396,40 +502,54 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
       final r = await fetch();
       final filename = r['filename']?.toString() ?? fallbackName;
       final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
-      final mime = r['mimeType']?.toString() ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      final mime =
+          r['mimeType']?.toString() ??
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       if (base64.isEmpty) throw Exception(context.t('pay.emptyFromServer'));
       downloadBase64File(base64, filename, mime);
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(context.t('emp.downloaded', {'file': filename}))));
+      if (mounted)
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(context.t('emp.downloaded', {'file': filename})),
+          ),
+        );
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        messenger.showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _pendingAction = null);
     }
   }
 
-  Future<void> _exportFawry() =>
-      _downloadExport('export_fawry', () => api.payrollExportFawry(widget.payrollId), 'fawry.xlsx');
+  Future<void> _exportFawry() => _downloadExport(
+    'export_fawry',
+    () => api.payrollExportFawry(widget.payrollId),
+    'fawry.xlsx',
+  );
 
-  Future<void> _exportPayroll() =>
-      _downloadExport('export_xlsx', () => api.payrollExportXlsx(widget.payrollId), 'payroll.xlsx');
+  Future<void> _exportPayroll() => _downloadExport(
+    'export_xlsx',
+    () => api.payrollExportXlsx(widget.payrollId),
+    'payroll.xlsx',
+  );
 
   Future<void> _exportPayslips() => _downloadExport(
-        'export_payslips',
-        () => api.payrollExportPayslipsXlsx(widget.payrollId),
-        'payslips.xlsx',
-      );
+    'export_payslips',
+    () => api.payrollExportPayslipsXlsx(widget.payrollId),
+    'payslips.xlsx',
+  );
 
   Future<void> _exportCashFawry() => _downloadExport(
-        'export_cash_fawry',
-        () => api.payrollExportCashFawry(widget.payrollId),
-        'cash_fawry.xlsx',
-      );
+    'export_cash_fawry',
+    () => api.payrollExportCashFawry(widget.payrollId),
+    'cash_fawry.xlsx',
+  );
 
   Future<void> _exportPunchImportReference() => _downloadExport(
-        'export_punch_ref',
-        () => api.payrollExportPunchImportReference(widget.payrollId),
-        'punch_report_reference.xlsx',
-      );
+    'export_punch_ref',
+    () => api.payrollExportPunchImportReference(widget.payrollId),
+    'punch_report_reference.xlsx',
+  );
 
   Future<void> _reimportPunchReport() async {
     if (_actionBusy) return;
@@ -462,7 +582,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     await _load(reset: false);
   }
 
-  bool get _fromPunchImport => _payroll['calculationSource']?.toString() == 'punch_report_import';
+  bool get _fromPunchImport =>
+      _payroll['calculationSource']?.toString() == 'punch_report_import';
 
   bool get _excelSourceLocked => _payroll['excelSourceLocked'] == true;
 
@@ -486,11 +607,19 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     if (_actionBusy) return;
     final base64 = await pickExcelBase64();
     if (base64 == null || base64.isEmpty) return;
-    await _run('import_xlsx', () => api.payrollImportXlsx(widget.payrollId, base64), context.t('pay.excelImported'));
+    await _run(
+      'import_xlsx',
+      () => api.payrollImportXlsx(widget.payrollId, base64),
+      context.t('pay.excelImported'),
+    );
   }
 
   Future<void> _resetEditComparison() async {
-    await _run('reset_edit_cmp', () => api.payrollResetEditComparison(widget.payrollId), context.t('pay.comparisonReset'));
+    await _run(
+      'reset_edit_cmp',
+      () => api.payrollResetEditComparison(widget.payrollId),
+      context.t('pay.comparisonReset'),
+    );
   }
 
   Future<void> _showSingleEmployeeDialog() async {
@@ -504,13 +633,23 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
           Future<void> search() async {
             setDlg(() => searching = true);
             try {
-              final page = await api.employeesList(search: searchCtrl.text.trim(), limit: 30);
-              setDlg(() { results = page.items; searching = false; });
+              final page = await api.employeesList(
+                search: searchCtrl.text.trim(),
+                limit: 30,
+              );
+              setDlg(() {
+                results = page.items;
+                searching = false;
+              });
             } catch (e) {
               setDlg(() => searching = false);
-              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(e.toString())));
+              if (ctx.mounted)
+                ScaffoldMessenger.of(
+                  ctx,
+                ).showSnackBar(SnackBar(content: Text(e.toString())));
             }
           }
+
           return AlertDialog(
             title: Text(context.t('pay.addEmployee')),
             content: SizedBox(
@@ -522,7 +661,10 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                     controller: searchCtrl,
                     decoration: InputDecoration(
                       hintText: context.t('pay.searchNameCode'),
-                      suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: search),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.search),
+                        onPressed: search,
+                      ),
                       border: const OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -556,7 +698,12 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                 ],
               ),
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.t('common.cancel')))],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.t('common.cancel')),
+              ),
+            ],
           );
         },
       ),
@@ -565,7 +712,9 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
   }
 
   Future<void> _showLocationTransferDialog() async {
-    final targetCtrl = TextEditingController(text: _payroll['branchName']?.toString() ?? '');
+    final targetCtrl = TextEditingController(
+      text: _payroll['branchName']?.toString() ?? '',
+    );
     List<Map<String, dynamic>> items = [];
     bool loading = false;
     await showDialog<void>(
@@ -581,12 +730,19 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                 payrollId: widget.payrollId,
                 targetLocation: t,
               );
-              setDlg(() { items = list; loading = false; });
+              setDlg(() {
+                items = list;
+                loading = false;
+              });
             } catch (e) {
               setDlg(() => loading = false);
-              if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(e.toString())));
+              if (ctx.mounted)
+                ScaffoldMessenger.of(
+                  ctx,
+                ).showSnackBar(SnackBar(content: Text(e.toString())));
             }
           }
+
           return AlertDialog(
             title: Text(context.t('pay.moveLocation')),
             content: SizedBox(
@@ -631,7 +787,12 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                 ],
               ),
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.t('common.close')))],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.t('common.close')),
+              ),
+            ],
           );
         },
       ),
@@ -657,7 +818,10 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             'payroll_duplicates.xlsx',
           ),
           onDelete: (lineId) async {
-            await api.payrollDuplicateMoveLine(lineId: lineId, action: 'delete');
+            await api.payrollDuplicateMoveLine(
+              lineId: lineId,
+              action: 'delete',
+            );
             await _load(reset: false);
           },
           onMove: (lineId, targetPayrollId) async {
@@ -675,7 +839,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             return all.where((p) {
               if (p['id'] == widget.payrollId) return false;
               if (p['state'] == 'confirmed') return false;
-              if (from != null && p['dateFrom']?.toString() != from) return false;
+              if (from != null && p['dateFrom']?.toString() != from)
+                return false;
               if (to != null && p['dateTo']?.toString() != to) return false;
               return true;
             }).toList();
@@ -683,9 +848,13 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
         ),
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
-      if (mounted && _pendingAction == 'check_dup') setState(() => _pendingAction = null);
+      if (mounted && _pendingAction == 'check_dup')
+        setState(() => _pendingAction = null);
     }
   }
 
@@ -719,14 +888,19 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                 const SizedBox(height: 4),
                 Text(
                   [
-                    if (filename.isNotEmpty) context.t('pay.fileLine', {'file': filename}),
-                    if (empCount != null) context.t('pay.empInReport', {'count': empCount}),
+                    if (filename.isNotEmpty)
+                      context.t('pay.fileLine', {'file': filename}),
+                    if (empCount != null)
+                      context.t('pay.empInReport', {'count': empCount}),
                     if (hasFile)
                       context.t('pay.reportHint')
                     else
                       context.t('pay.noSavedFile'),
                   ].join(' • '),
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -738,8 +912,10 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
 
   Widget _editComparisonBanner() {
     if (_payroll['showEditComparison'] != true) return const SizedBox.shrink();
-    final before = (_payroll['comparisonTotalNetBefore'] as num?)?.toDouble() ?? 0;
-    final after = (_payroll['comparisonTotalNetAfter'] as num?)?.toDouble() ?? 0;
+    final before =
+        (_payroll['comparisonTotalNetBefore'] as num?)?.toDouble() ?? 0;
+    final after =
+        (_payroll['comparisonTotalNetAfter'] as num?)?.toDouble() ?? 0;
     final delta = after - before;
     final msg = _payroll['editImportMessage']?.toString() ?? '';
     return Container(
@@ -759,32 +935,59 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.t('pay.comparisonAfter'), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                if (msg.isNotEmpty) Text(msg, style: const TextStyle(fontSize: 12)),
                 Text(
-                  context.t('pay.netBeforeAfter', {'before': _fmtMoney(before), 'after': _fmtMoney(after), 'delta': '${delta >= 0 ? '+' : ''}${_fmtMoney(delta)}'}),
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  context.t('pay.comparisonAfter'),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                if (msg.isNotEmpty)
+                  Text(msg, style: const TextStyle(fontSize: 12)),
+                Text(
+                  context.t('pay.netBeforeAfter', {
+                    'before': _fmtMoney(before),
+                    'after': _fmtMoney(after),
+                    'delta': '${delta >= 0 ? '+' : ''}${_fmtMoney(delta)}',
+                  }),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
           ),
-          TextButton(onPressed: _actionBusy ? null : _resetEditComparison, child: Text(context.t('pay.hide'))),
+          TextButton(
+            onPressed: _actionBusy ? null : _resetEditComparison,
+            child: Text(context.t('pay.hide')),
+          ),
         ],
       ),
     );
   }
 
   Widget _linkStatsRow() {
-    if ((_payroll['state']?.toString() ?? '') == 'draft') return const SizedBox.shrink();
+    if ((_payroll['state']?.toString() ?? '') == 'draft')
+      return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          _statChip(context.t('pay.deductionsShort'), _payroll['deductionCount'], _payroll['deductionTotalAmount']),
-          _statChip(context.t('pay.shortAdv'), _payroll['shortAdvanceCount'], _payroll['shortAdvanceTotalAmount']),
-          _statChip(context.t('pay.longAdv'), _payroll['longAdvanceCount'], _payroll['longAdvanceTotalAmount']),
+          _statChip(
+            context.t('pay.deductionsShort'),
+            _payroll['deductionCount'],
+            _payroll['deductionTotalAmount'],
+          ),
+          _statChip(
+            context.t('pay.shortAdv'),
+            _payroll['shortAdvanceCount'],
+            _payroll['shortAdvanceTotalAmount'],
+          ),
+          _statChip(
+            context.t('pay.longAdv'),
+            _payroll['longAdvanceCount'],
+            _payroll['longAdvanceTotalAmount'],
+          ),
         ],
       ),
     );
@@ -792,7 +995,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
 
   Widget _odooSentBanner() {
     final journalListed =
-        _payroll['odooSent'] == true || _payroll['odooPayrollJournalId'] != null;
+        _payroll['odooSent'] == true ||
+        _payroll['odooPayrollJournalId'] != null;
     final moveOnly = !journalListed && _payroll['odooMoveId'] != null;
     if (!journalListed && !moveOnly) return const SizedBox.shrink();
     final name = _payroll['odooMoveName']?.toString().trim() ?? '';
@@ -817,14 +1021,24 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  journalListed ? context.t('pay.sentToOdoo') : context.t('pay.journalNotListed'),
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  journalListed
+                      ? context.t('pay.sentToOdoo')
+                      : context.t('pay.journalNotListed'),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
                 Text(
                   journalListed
-                      ? (name.isEmpty ? context.t('pay.draftJournal') : context.t('pay.journalName', {'name': name}))
+                      ? (name.isEmpty
+                            ? context.t('pay.draftJournal')
+                            : context.t('pay.journalName', {'name': name}))
                       : context.t('pay.pressSendHint'),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -843,36 +1057,66 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
 
   String _stateAr(String s) {
     switch (s) {
-      case 'draft': return context.t('pay.draft');
-      case 'calculated': return context.t('pay.computed');
-      case 'confirmed': return context.t('pay.confirmedState');
-      default: return s;
+      case 'draft':
+        return context.t('pay.draft');
+      case 'calculated':
+        return context.t('pay.computed');
+      case 'confirmed':
+        return context.t('pay.confirmedState');
+      default:
+        return s;
     }
   }
 
   Future<void> _runPayrollAction(String action) async {
     switch (action) {
       case 'sync_emp':
-        await _run('sync_emp', () => api.payrollSyncEmployeeInfo(widget.payrollId), context.t('pay.employeesUpdated'));
+        await _run(
+          'sync_emp',
+          () => api.payrollSyncEmployeeInfo(widget.payrollId),
+          context.t('pay.employeesUpdated'),
+        );
       case 'recalc_basic':
-        await _run('recalc_basic', () => api.payrollRecalculateBasicSalary(widget.payrollId), context.t('pay.basicRecalculated'));
+        await _run(
+          'recalc_basic',
+          () => api.payrollRecalculateBasicSalary(widget.payrollId),
+          context.t('pay.basicRecalculated'),
+        );
       case 'recalc_adv':
-        await _run('recalc_adv', () => api.payrollRecalculateAdvances(widget.payrollId), context.t('pay.advancesReset'));
+        await _run(
+          'recalc_adv',
+          () => api.payrollRecalculateAdvances(widget.payrollId),
+          context.t('pay.advancesReset'),
+        );
       case 'link_long':
-        await _run('link_long', () => api.payrollLinkLongAdvances(widget.payrollId), context.t('pay.advancesLinked'));
+        await _run(
+          'link_long',
+          () => api.payrollLinkLongAdvances(widget.payrollId),
+          context.t('pay.advancesLinked'),
+        );
       case 'fix_penalty':
-        await _run('fix_penalty', () => api.payrollFixPenaltyValues(widget.payrollId), context.t('pay.penaltyFixed'));
+        await _run(
+          'fix_penalty',
+          () => api.payrollFixPenaltyValues(widget.payrollId),
+          context.t('pay.penaltyFixed'),
+        );
       case 'check_dup':
         await _showDuplicatesDialog();
       case 'link_ded_conf':
-        await _run('link_ded_conf', () => api.payrollLinkDeductionsConfirmed(widget.payrollId), context.t('pay.deductionsLinked'));
+        await _run(
+          'link_ded_conf',
+          () => api.payrollLinkDeductionsConfirmed(widget.payrollId),
+          context.t('pay.deductionsLinked'),
+        );
     }
   }
 
   String _fmtMoney(dynamic v) => formatMoney(v);
 
   String _fmtQty(dynamic v) {
-    final n = v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0;
+    final n = v is num
+        ? v.toDouble()
+        : double.tryParse(v?.toString() ?? '') ?? 0;
     if (n == n.roundToDouble()) return '${n.round()}';
     return n.toStringAsFixed(2);
   }
@@ -883,7 +1127,8 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     return double.tryParse(v?.toString() ?? '') ?? 0;
   }
 
-  double _sumLines(String key) => _lines.fold(0.0, (s, l) => s + _lineNum(l, key));
+  double _sumLines(String key) =>
+      _lines.fold(0.0, (s, l) => s + _lineNum(l, key));
 
   Set<String> get _duplicateEmployeeIds {
     final counts = <String, int>{};
@@ -910,28 +1155,56 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
       decoration: BoxDecoration(
         color: isBranch ? AppColors.primarySoft : AppColors.muted,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isBranch ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border),
+        border: Border.all(
+          color: isBranch
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(isBranch ? Icons.apartment_rounded : Icons.public_rounded, color: AppColors.primary, size: 22),
+          Icon(
+            isBranch ? Icons.apartment_rounded : Icons.public_rounded,
+            color: AppColors.primary,
+            size: 22,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isBranch ? context.t('pay.branchSheet') : context.t('pay.generalSheet'),
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  isBranch
+                      ? context.t('pay.branchSheet')
+                      : context.t('pay.generalSheet'),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 if (scope.isNotEmpty)
-                  Text(scope, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  Text(
+                    scope,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 if (isBranch && branch.isNotEmpty)
-                  Text(context.t('pay.branchLine', {'branch': branch}), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  Text(
+                    context.t('pay.branchLine', {'branch': branch}),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 if (isBranch && grid.isNotEmpty && grid != branch)
-                  Text(context.t('pay.gridLine', {'grid': grid}), style: const TextStyle(fontSize: 12)),
+                  Text(
+                    context.t('pay.gridLine', {'grid': grid}),
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 if (isBranch)
                   Text(
                     context.t('pay.gridOnlyHint'),
@@ -955,13 +1228,29 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     bool loading = false,
   }) {
     final btnIcon = loading
-        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+        ? const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
         : Icon(icon, size: 18);
     final child = filled
-        ? FilledButton.icon(onPressed: onPressed, icon: btnIcon, label: Text(label))
+        ? FilledButton.icon(
+            onPressed: onPressed,
+            icon: btnIcon,
+            label: Text(label),
+          )
         : tonal
-            ? FilledButton.tonalIcon(onPressed: onPressed, icon: btnIcon, label: Text(label))
-            : OutlinedButton.icon(onPressed: onPressed, icon: btnIcon, label: Text(label));
+        ? FilledButton.tonalIcon(
+            onPressed: onPressed,
+            icon: btnIcon,
+            label: Text(label),
+          )
+        : OutlinedButton.icon(
+            onPressed: onPressed,
+            icon: btnIcon,
+            label: Text(label),
+          );
     return _tipButton(message: tooltip, child: child);
   }
 
@@ -972,7 +1261,10 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppThemeV2.caption.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: AppThemeV2.caption.copyWith(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 6),
           Wrap(spacing: 8, runSpacing: 8, children: children),
         ],
@@ -1000,7 +1292,14 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
           ),
           _actionBtn(
             tooltip: context.t('pay.linkPendingHint'),
-            onPressed: go(isCalc, () => _run('link_ded', () => api.payrollLinkDeductions(widget.payrollId), context.t('pay.deductionsLinked2'))),
+            onPressed: go(
+              isCalc,
+              () => _run(
+                'link_ded',
+                () => api.payrollLinkDeductions(widget.payrollId),
+                context.t('pay.deductionsLinked2'),
+              ),
+            ),
             icon: Icons.link,
             label: context.t('pay.linkDeductions'),
           ),
@@ -1013,10 +1312,12 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
           ),
           _actionBtn(
             tooltip: _payroll['odooSent'] == true
-                ? context.t('pay.sentLabel', {'name': _payroll['odooMoveName'] ?? ''})
+                ? context.t('pay.sentLabel', {
+                    'name': _payroll['odooMoveName'] ?? '',
+                  })
                 : _payroll['odooMoveId'] != null
-                    ? context.t('pay.linkExistingHint')
-                    : context.t('pay.createDraftHint'),
+                ? context.t('pay.linkExistingHint')
+                : context.t('pay.createDraftHint'),
             onPressed: go(
               (isCalc || isConfirmed) && _payroll['odooSent'] != true,
               _sendPayrollToOdoo,
@@ -1025,10 +1326,11 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             label: _payroll['odooSent'] == true
                 ? context.t('pay.sentToOdoo2')
                 : _payroll['odooMoveId'] != null
-                    ? context.t('pay.showInEntries')
-                    : context.t('pay.sendToOdoo'),
+                ? context.t('pay.showInEntries')
+                : context.t('pay.sendToOdoo'),
             filled: true,
-            loading: _loadingAction('odoo_preview') || _loadingAction('send_odoo'),
+            loading:
+                _loadingAction('odoo_preview') || _loadingAction('send_odoo'),
           ),
         ]),
         _actionSection(context.t('pay.step2'), [
@@ -1044,9 +1346,11 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             ),
           if (_fromPunchImport)
             _actionBtn(
-              tooltip:
-                  context.t('pay.reimportHint'),
-              onPressed: go(canEdit && (isDraft || isCalc), _reimportPunchReport),
+              tooltip: context.t('pay.reimportHint'),
+              onPressed: go(
+                canEdit && (isDraft || isCalc),
+                _reimportPunchReport,
+              ),
               icon: Icons.upload_file,
               label: context.t('pay.reimportReport'),
               loading: _loadingAction('reimport_punch'),
@@ -1151,23 +1455,36 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
           ),
           _actionBtn(
             tooltip: context.t('pay.pdfHint'),
-            onPressed: go(!isDraft, () => _downloadExport(
-              'export_pdf',
-              () => api.payrollPayslipPdfAll(widget.payrollId),
-              'payslips.pdf',
-            )),
+            onPressed: go(
+              !isDraft,
+              () => _downloadExport(
+                'export_pdf',
+                () => api.payrollPayslipPdfAll(widget.payrollId),
+                'payslips.pdf',
+              ),
+            ),
             icon: Icons.picture_as_pdf,
             label: context.t('pay.pdfPayslips'),
           ),
           _actionBtn(
             tooltip: context.t('pay.backToDraftHint'),
-            onPressed: go(isCalc, () => _run('back_draft', () => api.payrollBackToDraft(widget.payrollId), context.t('pay.backToDraft'))),
+            onPressed: go(
+              isCalc,
+              () => _run(
+                'back_draft',
+                () => api.payrollBackToDraft(widget.payrollId),
+                context.t('pay.backToDraft'),
+              ),
+            ),
             icon: Icons.undo,
             label: context.t('pay.draft'),
           ),
           _actionBtn(
             tooltip: context.t('pay.linkConfirmedHint'),
-            onPressed: go(isConfirmed, () => _runPayrollAction('link_ded_conf')),
+            onPressed: go(
+              isConfirmed,
+              () => _runPayrollAction('link_ded_conf'),
+            ),
             icon: Icons.link_off,
             label: context.t('pay.linkConfirmed'),
           ),
@@ -1177,7 +1494,11 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
   }
 
   Widget _tipButton({required String message, required Widget child}) {
-    return Tooltip(message: message, waitDuration: const Duration(milliseconds: 400), child: child);
+    return Tooltip(
+      message: message,
+      waitDuration: const Duration(milliseconds: 400),
+      child: child,
+    );
   }
 
   @override
@@ -1198,23 +1519,39 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             subtitle: [
               '${_payroll['dateFrom']} → ${_payroll['dateTo']}',
               if (_payroll['payablePeriodDays'] != null)
-                context.t('pay.actualDays', {'days': _fmtQty(_payroll['payablePeriodDays'])}),
+                context.t('pay.actualDays', {
+                  'days': _fmtQty(_payroll['payablePeriodDays']),
+                }),
               _payroll['payrollScope']?.toString() ?? '',
-              context.t('pay.employeeCount', {'count': _payroll['employeeCount'] ?? _lineTotal}),
-              if (_lineSearch.isNotEmpty) context.t('pay.searchResults', {'count': _lineTotal}),
-              if (_lines.isNotEmpty && _lines.length < _lineTotal) context.t('pay.showingOf', {'shown': _lines.length, 'total': _lineTotal}),
+              context.t('pay.employeeCount', {
+                'count': _payroll['employeeCount'] ?? _lineTotal,
+              }),
+              if (_lineSearch.isNotEmpty)
+                context.t('pay.searchResults', {'count': _lineTotal}),
+              if (_lines.isNotEmpty && _lines.length < _lineTotal)
+                context.t('pay.showingOf', {
+                  'shown': _lines.length,
+                  'total': _lineTotal,
+                }),
               _stateAr(state),
               if (_cycleIndex >= 0 && _cyclePayrolls.length > 1)
-                context.t('pay.sheetOf', {'index': _cycleIndex + 1, 'total': _cyclePayrolls.length}),
+                context.t('pay.sheetOf', {
+                  'index': _cycleIndex + 1,
+                  'total': _cyclePayrolls.length,
+                }),
             ].where((s) => s.isNotEmpty).join('  •  '),
             actions: [
               if (_cyclePayrolls.length > 1) ...[
                 Tooltip(
                   message: _cycleIndex > 0
-                      ? context.t('pay.prevSheet', {'label': _cycleLabel(_cyclePayrolls[_cycleIndex - 1])})
+                      ? context.t('pay.prevSheet', {
+                          'label': _cycleLabel(_cyclePayrolls[_cycleIndex - 1]),
+                        })
                       : context.t('pay.noPrevSheet'),
                   child: TextButton.icon(
-                    onPressed: _cycleIndex > 0 ? () => _goCycleSibling(-1) : null,
+                    onPressed: _cycleIndex > 0
+                        ? () => _goCycleSibling(-1)
+                        : null,
                     icon: const Icon(Icons.navigate_next, size: 18),
                     label: Text(context.t('pay.prev')),
                   ),
@@ -1231,12 +1568,16 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                   ),
                 ),
                 Tooltip(
-                  message: _cycleIndex >= 0 &&
+                  message:
+                      _cycleIndex >= 0 &&
                           _cycleIndex < _cyclePayrolls.length - 1
-                      ? context.t('pay.nextSheet', {'label': _cycleLabel(_cyclePayrolls[_cycleIndex + 1])})
+                      ? context.t('pay.nextSheet', {
+                          'label': _cycleLabel(_cyclePayrolls[_cycleIndex + 1]),
+                        })
                       : context.t('pay.noNextSheet'),
                   child: TextButton.icon(
-                    onPressed: _cycleIndex >= 0 &&
+                    onPressed:
+                        _cycleIndex >= 0 &&
                             _cycleIndex < _cyclePayrolls.length - 1
                         ? () => _goCycleSibling(1)
                         : null,
@@ -1245,7 +1586,10 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                   ),
                 ),
               ],
-              IconButton(onPressed: () => _load(reset: true), icon: const Icon(Icons.refresh)),
+              IconButton(
+                onPressed: () => _load(reset: true),
+                icon: const Icon(Icons.refresh),
+              ),
             ],
             onBack: () => context.go(AppRoutes.hrPayroll),
           ),
@@ -1260,31 +1604,47 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
           const SizedBox(height: 16),
           TextField(
             controller: _searchCtrl,
+            textInputAction: TextInputAction.search,
+            onSubmitted: _submitLineSearch,
             decoration: InputDecoration(
               hintText: context.t('pay.searchFull'),
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: _lineSearch.isNotEmpty
-                  ? IconButton(
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_lineSearch.isNotEmpty)
+                    IconButton(
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         _searchCtrl.clear();
-                        if (_lineSearch.isNotEmpty) {
-                          _lineSearch = '';
-                          _load(reset: true);
-                        }
+                        _submitLineSearch('');
                       },
-                    )
-                  : null,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  IconButton(
+                    tooltip: context.t('common.search'),
+                    icon: const Icon(Icons.search),
+                    onPressed: _submitLineSearch,
+                  ),
+                ],
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               isDense: true,
             ),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _totalCard(context.t('pay.totalEarnings'), _payroll['totalEarnings']),
+              _totalCard(
+                context.t('pay.totalEarnings'),
+                _payroll['totalEarnings'],
+              ),
               const SizedBox(width: 8),
-              _totalCard(context.t('pay.totalDeductions'), _payroll['totalDeductions']),
+              _totalCard(
+                context.t('pay.totalDeductions'),
+                _payroll['totalDeductions'],
+              ),
               const SizedBox(width: 8),
               _totalCard(context.t('pay.netSalaries'), _payroll['totalNet']),
               const SizedBox(width: 8),
@@ -1303,127 +1663,412 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                 if (_lineSearch.isNotEmpty && _lines.isEmpty && !_loading)
                   Padding(
                     padding: EdgeInsets.all(24),
-                    child: Text(context.t('pay.noSearchMatch'), style: TextStyle(color: AppColors.textSecondary)),
+                    child: Text(
+                      context.t('pay.noSearchMatch'),
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
                   ),
                 if (_lines.isNotEmpty || _loading)
                   SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: [
-                      DataColumn(label: Text(context.t('common.code'))),
-                      DataColumn(label: Text(context.t('payCol.employee'))),
-                      DataColumn(label: Text(context.t('payCol.department'))),
-                      DataColumn(label: Text(context.t('payCol.job'))),
-                      DataColumn(label: Text(context.t('payCol.branch'))),
-                      DataColumn(label: Text(context.t('payCol.basic'))),
-                      DataColumn(label: Text(context.t('payCol.actualDays'))),
-                      DataColumn(label: Text(context.t('payCol.overtime'))),
-                      DataColumn(label: Text(context.t('payCol.daysPay'))),
-                      DataColumn(label: Text(context.t('payCol.overtimeAmount'))),
-                      DataColumn(label: Text(context.t('payCol.lateDeduction'))),
-                      DataColumn(label: Text(context.t('payCol.earlyLeave'))),
-                      DataColumn(label: Text(context.t('payCol.punchDeduction'))),
-                      DataColumn(label: Text(context.t('payCol.absenceDeduction'))),
-                      DataColumn(label: Text(context.t('payCol.sickDeduction'))),
-                      DataColumn(label: Text(context.t('payCol.leaveDeduction'))),
-                      DataColumn(label: Text(context.t('payCol.insurance'))),
-                      DataColumn(label: Text(context.t('payCol.cheques'))),
-                      DataColumn(label: Text(context.t('payCol.manual'))),
-                      DataColumn(label: Text(context.t('payCol.penalty'))),
-                      DataColumn(label: Text(context.t('payCol.lateLeave'))),
-                      DataColumn(label: Text(context.t('payCol.attendanceDeduction'))),
-                      DataColumn(label: Text(context.t('payCol.hoursDiff'))),
-                      DataColumn(label: Text(context.t('payCol.advances'))),
-                      DataColumn(label: Text(context.t('payCol.earnings'))),
-                      DataColumn(label: Text(context.t('payCol.deductions'))),
-                      DataColumn(label: Text(context.t('payCol.net'))),
-                      if (_payroll['showEditComparison'] == true) DataColumn(label: Text(context.t('payCol.netDelta'))),
-                    ],
-                    rows: [
-                      if (_lines.isNotEmpty)
-                        DataRow(
-                          color: WidgetStateProperty.all(AppColors.muted.withValues(alpha: 0.5)),
-                          cells: [
-                            DataCell(Text(context.t('payCol.total'), style: TextStyle(fontWeight: FontWeight.w800))),
-                            const DataCell(Text('')),
-                            const DataCell(Text('')),
-                            const DataCell(Text('')),
-                            const DataCell(Text('')),
-                            DataCell(Text(_fmtMoney(_sumLines('basicSalary')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtQty(_sumLines('actualWorkingDays')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtQty(_sumLines('overtimeHours')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('workDaysSalary')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('overtimeAmount')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('lateDeduction')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('earlyDeduction')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_lines.fold(0.0, (s, l) => s + _lineNum(l, 'punchDeductionCheckin') + _lineNum(l, 'punchDeductionCheckout'))), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('absentDeduction')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('sickDeduction')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('leaveAbsenceDeductionValue')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('socialInsurance')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('deductionChecks')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('manualDebit')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('penaltyDeductionValue')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('lateCheckoutDeduction')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('attendanceDeduction')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtQty(_sumLines('hoursDifference')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_lines.fold(0.0, (s, l) => s + _lineNum(l, 'advanceShortTotal') + _lineNum(l, 'advanceLongTotal'))), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('totalEarnings')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('totalDeductions')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                            DataCell(Text(_fmtMoney(_sumLines('netSalary')), style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary))),
-                            if (_payroll['showEditComparison'] == true)
-                              DataCell(Text(_fmtMoney(_sumLines('editNetDelta')), style: const TextStyle(fontWeight: FontWeight.w700))),
-                          ],
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: [
+                        DataColumn(label: Text(context.t('common.code'))),
+                        DataColumn(label: Text(context.t('payCol.employee'))),
+                        DataColumn(label: Text(context.t('payCol.department'))),
+                        DataColumn(label: Text(context.t('payCol.job'))),
+                        DataColumn(label: Text(context.t('payCol.branch'))),
+                        DataColumn(label: Text(context.t('payCol.basic'))),
+                        DataColumn(label: Text(context.t('payCol.actualDays'))),
+                        DataColumn(label: Text(context.t('payCol.overtime'))),
+                        DataColumn(label: Text(context.t('payCol.daysPay'))),
+                        DataColumn(
+                          label: Text(context.t('payCol.overtimeAmount')),
                         ),
-                      for (final line in _lines)
-                        DataRow(
-                          color: WidgetStateProperty.resolveWith((states) {
-                            final empId = line['employeeId']?.toString() ?? '';
-                            if (empId.isNotEmpty && _duplicateEmployeeIds.contains(empId)) {
-                              return AppColors.warning.withValues(alpha: 0.14);
-                            }
-                            return null;
-                          }),
-                          cells: [
-                          DataCell(Text(line['employeeCode']?.toString() ?? '')),
-                          DataCell(Text(line['employeeName']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w500))),
-                          DataCell(Text(_lineText(line, 'departmentName'), style: const TextStyle(fontSize: 12))),
-                          DataCell(Text(_lineText(line, 'positionName'), style: const TextStyle(fontSize: 12))),
-                          DataCell(Text(_lineText(line, 'employeeLocation'), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary))),
-                          DataCell(Text(_fmtMoney(line['basicSalary']))),
-                          DataCell(Text(_fmtQty(line['actualWorkingDays']))),
-                          DataCell(Text(_fmtQty(line['overtimeHours']))),
-                          DataCell(Text(_fmtMoney(line['workDaysSalary']))),
-                          DataCell(Text(_fmtMoney(line['overtimeAmount']))),
-                          DataCell(Text(_fmtMoney(line['lateDeduction']))),
-                          DataCell(Text(_fmtMoney(line['earlyDeduction']))),
-                          DataCell(Text(_fmtMoney((line['punchDeductionCheckin'] as num? ?? 0) + (line['punchDeductionCheckout'] as num? ?? 0)))),
-                          DataCell(Text(_fmtMoney(line['absentDeduction']))),
-                          DataCell(Text(_fmtMoney(line['sickDeduction']))),
-                          DataCell(Text(_fmtMoney(line['leaveAbsenceDeductionValue']))),
-                          DataCell(Text(_fmtMoney(line['socialInsurance']))),
-                          DataCell(Text(_fmtMoney(line['deductionChecks']))),
-                          DataCell(Text(_fmtMoney(line['manualDebit']))),
-                          DataCell(Text(_fmtMoney(line['penaltyDeductionValue']))),
-                          DataCell(Text(_fmtMoney(line['lateCheckoutDeduction']))),
-                          DataCell(Text(_fmtMoney(line['attendanceDeduction']))),
-                          DataCell(Text(_fmtQty(line['hoursDifference']))),
-                          DataCell(Text(_fmtMoney((line['advanceShortTotal'] as num? ?? 0) + (line['advanceLongTotal'] as num? ?? 0)))),
-                          DataCell(Text(_fmtMoney(line['totalEarnings']))),
-                          DataCell(Text(_fmtMoney(line['totalDeductions']))),
-                          DataCell(Text(_fmtMoney(line['netSalary']), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                          if (_payroll['showEditComparison'] == true)
-                            DataCell(Text(_fmtMoney(line['editNetDelta']))),
-                          ],
-                          onSelectChanged: canEdit ? (_) => _editLine(line) : null,
+                        DataColumn(
+                          label: Text(context.t('payCol.lateDeduction')),
                         ),
-                    ],
+                        DataColumn(label: Text(context.t('payCol.earlyLeave'))),
+                        DataColumn(
+                          label: Text(context.t('payCol.punchDeduction')),
+                        ),
+                        DataColumn(
+                          label: Text(context.t('payCol.absenceDeduction')),
+                        ),
+                        DataColumn(
+                          label: Text(context.t('payCol.sickDeduction')),
+                        ),
+                        DataColumn(
+                          label: Text(context.t('payCol.leaveDeduction')),
+                        ),
+                        DataColumn(label: Text(context.t('payCol.insurance'))),
+                        DataColumn(label: Text(context.t('payCol.cheques'))),
+                        DataColumn(label: Text(context.t('payCol.manual'))),
+                        DataColumn(label: Text(context.t('payCol.penalty'))),
+                        DataColumn(label: Text(context.t('payCol.lateLeave'))),
+                        DataColumn(
+                          label: Text(context.t('payCol.attendanceDeduction')),
+                        ),
+                        DataColumn(label: Text(context.t('payCol.hoursDiff'))),
+                        DataColumn(label: Text(context.t('payCol.advances'))),
+                        DataColumn(label: Text(context.t('payCol.earnings'))),
+                        DataColumn(label: Text(context.t('payCol.deductions'))),
+                        DataColumn(label: Text(context.t('payCol.net'))),
+                        if (_payroll['showEditComparison'] == true)
+                          DataColumn(label: Text(context.t('payCol.netDelta'))),
+                      ],
+                      rows: [
+                        if (_lines.isNotEmpty)
+                          DataRow(
+                            color: WidgetStateProperty.all(
+                              AppColors.muted.withValues(alpha: 0.5),
+                            ),
+                            cells: [
+                              DataCell(
+                                Text(
+                                  context.t('payCol.total'),
+                                  style: TextStyle(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              const DataCell(Text('')),
+                              const DataCell(Text('')),
+                              const DataCell(Text('')),
+                              const DataCell(Text('')),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('basicSalary')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtQty(_sumLines('actualWorkingDays')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtQty(_sumLines('overtimeHours')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('workDaysSalary')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('overtimeAmount')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('lateDeduction')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('earlyDeduction')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(
+                                    _lines.fold(
+                                      0.0,
+                                      (s, l) =>
+                                          s +
+                                          _lineNum(l, 'punchDeductionCheckin') +
+                                          _lineNum(l, 'punchDeductionCheckout'),
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('absentDeduction')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('sickDeduction')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(
+                                    _sumLines('leaveAbsenceDeductionValue'),
+                                  ),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('socialInsurance')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('deductionChecks')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('manualDebit')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('penaltyDeductionValue')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('lateCheckoutDeduction')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('attendanceDeduction')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtQty(_sumLines('hoursDifference')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(
+                                    _lines.fold(
+                                      0.0,
+                                      (s, l) =>
+                                          s +
+                                          _lineNum(l, 'advanceShortTotal') +
+                                          _lineNum(l, 'advanceLongTotal'),
+                                    ),
+                                  ),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('totalEarnings')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('totalDeductions')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(_sumLines('netSalary')),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                              if (_payroll['showEditComparison'] == true)
+                                DataCell(
+                                  Text(
+                                    _fmtMoney(_sumLines('editNetDelta')),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        for (final line in _lines)
+                          DataRow(
+                            color: WidgetStateProperty.resolveWith((states) {
+                              final empId =
+                                  line['employeeId']?.toString() ?? '';
+                              if (empId.isNotEmpty &&
+                                  _duplicateEmployeeIds.contains(empId)) {
+                                return AppColors.warning.withValues(
+                                  alpha: 0.14,
+                                );
+                              }
+                              return null;
+                            }),
+                            cells: [
+                              DataCell(
+                                Text(line['employeeCode']?.toString() ?? ''),
+                              ),
+                              DataCell(
+                                Text(
+                                  line['employeeName']?.toString() ?? '',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _lineText(line, 'departmentName'),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _lineText(line, 'positionName'),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _lineText(line, 'employeeLocation'),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              DataCell(Text(_fmtMoney(line['basicSalary']))),
+                              DataCell(
+                                Text(_fmtQty(line['actualWorkingDays'])),
+                              ),
+                              DataCell(Text(_fmtQty(line['overtimeHours']))),
+                              DataCell(Text(_fmtMoney(line['workDaysSalary']))),
+                              DataCell(Text(_fmtMoney(line['overtimeAmount']))),
+                              DataCell(Text(_fmtMoney(line['lateDeduction']))),
+                              DataCell(Text(_fmtMoney(line['earlyDeduction']))),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(
+                                    (line['punchDeductionCheckin'] as num? ??
+                                            0) +
+                                        (line['punchDeductionCheckout']
+                                                as num? ??
+                                            0),
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(_fmtMoney(line['absentDeduction'])),
+                              ),
+                              DataCell(Text(_fmtMoney(line['sickDeduction']))),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(line['leaveAbsenceDeductionValue']),
+                                ),
+                              ),
+                              DataCell(
+                                Text(_fmtMoney(line['socialInsurance'])),
+                              ),
+                              DataCell(
+                                Text(_fmtMoney(line['deductionChecks'])),
+                              ),
+                              DataCell(Text(_fmtMoney(line['manualDebit']))),
+                              DataCell(
+                                Text(_fmtMoney(line['penaltyDeductionValue'])),
+                              ),
+                              DataCell(
+                                Text(_fmtMoney(line['lateCheckoutDeduction'])),
+                              ),
+                              DataCell(
+                                Text(_fmtMoney(line['attendanceDeduction'])),
+                              ),
+                              DataCell(Text(_fmtQty(line['hoursDifference']))),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(
+                                    (line['advanceShortTotal'] as num? ?? 0) +
+                                        (line['advanceLongTotal'] as num? ?? 0),
+                                  ),
+                                ),
+                              ),
+                              DataCell(Text(_fmtMoney(line['totalEarnings']))),
+                              DataCell(
+                                Text(_fmtMoney(line['totalDeductions'])),
+                              ),
+                              DataCell(
+                                Text(
+                                  _fmtMoney(line['netSalary']),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                              if (_payroll['showEditComparison'] == true)
+                                DataCell(Text(_fmtMoney(line['editNetDelta']))),
+                            ],
+                            onSelectChanged: canEdit
+                                ? (_) => _editLine(line)
+                                : null,
+                          ),
+                      ],
+                    ),
                   ),
-                ),
                 if (_loadingMoreLines)
                   const Padding(
                     padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ),
               ],
             ),
@@ -1442,8 +2087,21 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-              Text(formatMoney(value), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: highlight ? AppColors.primary : null)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Text(
+                formatMoney(value),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: highlight ? AppColors.primary : null,
+                ),
+              ),
             ],
           ),
         ),
@@ -1477,9 +2135,13 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     try {
       await api.payrollLineUpdate(line['id'], payload);
       await _load(reset: false);
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(context.t('pay.rowSaved'))));
+      if (mounted)
+        messenger.showSnackBar(
+          SnackBar(content: Text(context.t('pay.rowSaved'))),
+        );
     } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted)
+        messenger.showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 }
@@ -1502,7 +2164,8 @@ class _PayrollDuplicatesDialog extends StatefulWidget {
   final Future<void> Function() onExport;
 
   @override
-  State<_PayrollDuplicatesDialog> createState() => _PayrollDuplicatesDialogState();
+  State<_PayrollDuplicatesDialog> createState() =>
+      _PayrollDuplicatesDialogState();
 }
 
 class _PayrollDuplicatesDialogState extends State<_PayrollDuplicatesDialog> {
@@ -1518,7 +2181,11 @@ class _PayrollDuplicatesDialogState extends State<_PayrollDuplicatesDialog> {
   Future<void> _loadTargets() async {
     try {
       final t = await widget.loadPayrollTargets();
-      if (mounted) setState(() { _targets = t; _loadingTargets = false; });
+      if (mounted)
+        setState(() {
+          _targets = t;
+          _loadingTargets = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loadingTargets = false);
     }
@@ -1537,9 +2204,9 @@ class _PayrollDuplicatesDialogState extends State<_PayrollDuplicatesDialog> {
 
   Future<void> _pickMoveTarget(String lineId) async {
     if (_targets.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.t('pay.noTargetSheet'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.t('pay.noTargetSheet'))));
       return;
     }
     final target = await showDialog<String>(
@@ -1576,9 +2243,12 @@ class _PayrollDuplicatesDialogState extends State<_PayrollDuplicatesDialog> {
                   final row = widget.items[i];
                   final lineId = row['lineId']?.toString() ?? '';
                   final canDelete = row['duplicateType'] == 'in_payroll';
-                  final canMove = row['duplicateType'] == 'in_payroll' && !_loadingTargets;
+                  final canMove =
+                      row['duplicateType'] == 'in_payroll' && !_loadingTargets;
                   return ListTile(
-                    title: Text('${row['employeeCode']} — ${row['employeeName']}'),
+                    title: Text(
+                      '${row['employeeCode']} — ${row['employeeName']}',
+                    ),
                     subtitle: Text(
                       '${_typeLabel(row['duplicateType']?.toString())}\n${row['note'] ?? ''}',
                       style: const TextStyle(fontSize: 12),
@@ -1588,7 +2258,9 @@ class _PayrollDuplicatesDialogState extends State<_PayrollDuplicatesDialog> {
                       children: [
                         if (canMove)
                           TextButton(
-                            onPressed: lineId.isEmpty ? null : () => _pickMoveTarget(lineId),
+                            onPressed: lineId.isEmpty
+                                ? null
+                                : () => _pickMoveTarget(lineId),
                             child: Text(context.t('pay.move')),
                           ),
                         if (canDelete)
@@ -1616,7 +2288,10 @@ class _PayrollDuplicatesDialogState extends State<_PayrollDuplicatesDialog> {
             icon: Icon(Icons.download, size: 18),
             label: Text(context.t('pay.exportExcel')),
           ),
-        TextButton(onPressed: () => Navigator.pop(context), child: Text(context.t('common.close'))),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.t('common.close')),
+        ),
       ],
     );
   }
@@ -1638,7 +2313,9 @@ class _PayrollOverDeductedDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(title ?? context.t('pay.negativeWarning', {'count': items.length})),
+      title: Text(
+        title ?? context.t('pay.negativeWarning', {'count': items.length}),
+      ),
       content: SizedBox(
         width: 640,
         height: 360,
@@ -1692,7 +2369,10 @@ class _PayrollOverDeductedDialog extends StatelessWidget {
       ),
       actions: [
         if (confirmMode) ...[
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(context.t('common.cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.t('common.cancel')),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             child: Text(context.t('pay.continueConfirm')),
@@ -1759,14 +2439,19 @@ class _LocationTransferListState extends State<_LocationTransferList> {
                 title: Text('${row['employeeCode']} — ${row['employeeName']}'),
                 subtitle: Text(
                   '${row['currentLocation'] ?? '—'} → ${needs ? 'يحتاج نقل' : 'مطابق'}',
-                  style: TextStyle(fontSize: 12, color: needs ? null : Colors.grey),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: needs ? null : Colors.grey,
+                  ),
                 ),
               );
             },
           ),
         ),
         FilledButton(
-          onPressed: _selected.isEmpty ? null : () => widget.onApply(_selected.toList()),
+          onPressed: _selected.isEmpty
+              ? null
+              : () => widget.onApply(_selected.toList()),
           child: Text(context.t('pay.moveCount', {'count': _selected.length})),
         ),
       ],

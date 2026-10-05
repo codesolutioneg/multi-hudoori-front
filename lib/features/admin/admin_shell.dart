@@ -10,7 +10,6 @@ import '../../core/widgets/hudoori_logo.dart';
 import '../../core/widgets/language_toggle.dart';
 import '../../features/dashboard/widgets/dashboard_page_background.dart';
 import '../../l10n/l10n_extension.dart';
-import '../assistant/help_assistant_overlay.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 
@@ -31,6 +30,8 @@ class AdminNavItem {
 const _adminNavItemDefs = [
   (id: 'dashboard', key: 'admin.shell.dashboard', icon: Icons.admin_panel_settings_outlined, route: AppRoutes.adminDashboard),
   (id: 'companies', key: 'admin.companies', icon: Icons.apartment_outlined, route: AppRoutes.adminCompanies),
+  (id: 'sales_requests', key: 'admin.salesRequests', icon: Icons.request_quote_outlined, route: AppRoutes.adminSalesRequests),
+  (id: 'plans', key: 'admin.plans', icon: Icons.local_offer_outlined, route: AppRoutes.adminPlans),
   (id: 'users', key: 'admin.users', icon: Icons.people_outline_rounded, route: AppRoutes.adminUsers),
   (id: 'create', key: 'admin.createUser', icon: Icons.person_add_alt_1_outlined, route: AppRoutes.adminCreateUser),
   (id: 'audit_access', key: 'admin.auditAccess', icon: Icons.history_edu_outlined, route: AppRoutes.adminAuditAccess),
@@ -84,7 +85,7 @@ class _AdminShellState extends State<AdminShell> {
         ],
       ),
             ),
-            if (auth.canViewAssistant) const HelpAssistantOverlay(),
+            // Help assistant FAB hidden per product request (2026-09-15).
           ],
         );
       },

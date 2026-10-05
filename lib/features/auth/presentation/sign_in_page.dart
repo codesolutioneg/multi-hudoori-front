@@ -16,9 +16,21 @@ import '../../../l10n/l10n_extension.dart';
 import '../auth_cubit.dart';
 import '../auth_state.dart';
 import 'login_validators.dart';
+import 'demo_prefill.dart';
 
 class SignInPage extends StatefulWidget {
-  const SignInPage({super.key});
+  const SignInPage({
+    super.key,
+    this.prefillCompanyCode,
+    this.prefillLogin,
+    this.prefillPassword,
+    this.fromDemo = false,
+  });
+
+  final String? prefillCompanyCode;
+  final String? prefillLogin;
+  final String? prefillPassword;
+  final bool fromDemo;
 
   @override
   State<SignInPage> createState() => _SignInPageState();
@@ -37,11 +49,53 @@ class _SignInPageState extends State<SignInPage> {
   @override
   void initState() {
     super.initState();
+    _applyPrefill();
     _initApiUrl();
     _restoreCompanyCode();
   }
 
+  void _applyPrefill() {
+    const demoCompany = 'demo';
+    const demoLogin = 'hr@demo.test';
+    const demoPassword = 'Demo@123#';
+
+    final stored = readDemoPrefillFromBrowser();
+    final company = (widget.prefillCompanyCode?.trim().isNotEmpty == true)
+        ? widget.prefillCompanyCode!.trim()
+        : (stored?['companyCode']?.trim().isNotEmpty == true
+            ? stored!['companyCode']!.trim()
+            : null);
+    final login = (widget.prefillLogin?.trim().isNotEmpty == true)
+        ? widget.prefillLogin!.trim()
+        : (stored?['login']?.trim().isNotEmpty == true
+            ? stored!['login']!.trim()
+            : null);
+    final password = (widget.prefillPassword?.isNotEmpty == true)
+        ? widget.prefillPassword!
+        : (stored?['password']?.isNotEmpty == true
+            ? stored!['password']!
+            : null);
+
+    final isDemo = widget.fromDemo ||
+        stored != null ||
+        company == demoCompany;
+
+    if (isDemo) {
+      _companyCtrl.text = company ?? demoCompany;
+      _loginCtrl.text = login ?? demoLogin;
+      _passCtrl.text = password ?? demoPassword;
+      clearDemoPrefillInBrowser();
+      return;
+    }
+
+    if (company != null) _companyCtrl.text = company;
+    if (login != null) _loginCtrl.text = login;
+    if (password != null) _passCtrl.text = password;
+    if (stored != null) clearDemoPrefillInBrowser();
+  }
+
   Future<void> _restoreCompanyCode() async {
+    if (_companyCtrl.text.trim().isNotEmpty) return;
     final code = await session.getCompanyCode();
     if (code != null && code.isNotEmpty && mounted) {
       _companyCtrl.text = code;

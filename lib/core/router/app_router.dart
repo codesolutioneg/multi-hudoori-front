@@ -43,18 +43,25 @@ import '../../features/admin/admin_companies_page.dart';
 import '../../features/admin/admin_create_user_page.dart';
 import '../../features/admin/admin_dashboard_page.dart';
 import '../../features/admin/admin_audit_access_page.dart';
+import '../../features/admin/admin_plans_page.dart';
+import '../../features/admin/admin_sales_requests_page.dart';
 import '../../features/admin/admin_shell.dart';
 import '../../features/admin/admin_users_page.dart';
 import '../../features/audit/audit_log_page.dart';
+import '../../features/common/access_denied_page.dart';
 import '../../features/shell/biotime_shell.dart';
+import '../utils/feature_entitlements.dart';
 
 abstract final class AppRoutes {
   static const splash = '/splash';
   static const signIn = '/sign-in';
   static const forgotPassword = '/forgot-password';
   static const resetPassword = '/reset-password';
+  static const accessDenied = '/access-denied';
   static const adminDashboard = '/admin/dashboard';
   static const adminCompanies = '/admin/companies';
+  static const adminSalesRequests = '/admin/sales-requests';
+  static const adminPlans = '/admin/plans';
   static const adminUsers = '/admin/users';
   static const adminCreateUser = '/admin/users/create';
   static const adminAuditAccess = '/admin/audit-access';
@@ -93,6 +100,10 @@ abstract final class AppRoutes {
   static const hrOrgChart = '/org-chart';
 
   static String hrEmployeeDetail(String id) => '/hr/employees/$id';
+
+  static String accessDeniedFeature(String key) =>
+      '$accessDenied?reason=feature&key=${Uri.encodeComponent(key)}';
+  static String accessDeniedRole() => '$accessDenied?reason=role';
 }
 
 GoRouter createRouter(AuthCubit auth) {
@@ -121,10 +132,16 @@ GoRouter createRouter(AuthCubit auth) {
 
       if (boot) return location == AppRoutes.splash ? null : AppRoutes.splash;
       if (location == AppRoutes.splash) {
-        if (!loggedIn) return AppRoutes.signIn;
+        if (!loggedIn) {
+          final q = state.uri.query;
+          return q.isEmpty ? AppRoutes.signIn : '${AppRoutes.signIn}?$q';
+        }
         return adminHome;
       }
-      if (!loggedIn && !isAuth) return AppRoutes.signIn;
+      if (!loggedIn && !isAuth) {
+        final q = state.uri.query;
+        return q.isEmpty ? AppRoutes.signIn : '${AppRoutes.signIn}?$q';
+      }
       if (loggedIn && isAuth) {
         return adminHome;
       }
@@ -141,13 +158,16 @@ GoRouter createRouter(AuthCubit auth) {
       }
       if (loggedIn && !isPlatformAdmin && isAdminRoute)
         return AppRoutes.dashboard;
+      if (loggedIn && location == AppRoutes.accessDenied) {
+        return null;
+      }
       if (loggedIn &&
           location == AppRoutes.hrSettings &&
           !s.roles.isHrManager) {
-        return AppRoutes.hrDashboard;
+        return AppRoutes.accessDeniedRole();
       }
       if (loggedIn && location == AppRoutes.hrAudit && !s.canViewAudit) {
-        return s.roles.isHrUser ? AppRoutes.hrDashboard : AppRoutes.dashboard;
+        return AppRoutes.accessDeniedRole();
       }
       // The branch queue belongs to branch managers. HR grants requests from the
       // «طلبات الفروع» tab in «السلف», so send them there instead.
@@ -162,7 +182,7 @@ GoRouter createRouter(AuthCubit auth) {
           (location == AppRoutes.orgChart || location == '/hr/org-chart') &&
           !s.roles.isHrManager &&
           !s.isPlatformAdmin) {
-        return s.roles.isHrUser ? AppRoutes.hrDashboard : AppRoutes.dashboard;
+        return AppRoutes.accessDeniedRole();
       }
       // Pure EMPLOYEE: attendance + schedule only (no requests/payslip writes or views).
       final isPureEmployee = s.roles.isEmployee &&
@@ -172,13 +192,28 @@ GoRouter createRouter(AuthCubit auth) {
       if (loggedIn &&
           isPureEmployee &&
           (location == AppRoutes.requests || location == AppRoutes.myPayroll)) {
-        return AppRoutes.dashboard;
+        return AppRoutes.accessDeniedRole();
+      }
+      // Plan entitlements: blocked modules show a clear page instead of a blank API error.
+      if (loggedIn && !isAdminRoute) {
+        final feat = featureKeyForRoute(location);
+        if (feat != null && !isFeatureEnabled(s, feat)) {
+          return AppRoutes.accessDeniedFeature(feat);
+        }
       }
       return null;
     },
     routes: [
       GoRoute(path: AppRoutes.splash, builder: (_, __) => const SplashPage()),
-      GoRoute(path: AppRoutes.signIn, builder: (_, __) => const SignInPage()),
+      GoRoute(
+        path: AppRoutes.signIn,
+        builder: (context, state) => SignInPage(
+          prefillCompanyCode: state.uri.queryParameters['companyCode'],
+          prefillLogin: state.uri.queryParameters['login'],
+          prefillPassword: state.uri.queryParameters['password'],
+          fromDemo: state.uri.queryParameters['demo'] == '1',
+        ),
+      ),
       GoRoute(
         path: AppRoutes.forgotPassword,
         builder: (_, __) => const ForgotPasswordPage(),
@@ -201,6 +236,16 @@ GoRouter createRouter(AuthCubit auth) {
             path: AppRoutes.adminCompanies,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: AdminCompaniesPage()),
+          ),
+          GoRoute(
+            path: AppRoutes.adminSalesRequests,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: AdminSalesRequestsPage()),
+          ),
+          GoRoute(
+            path: AppRoutes.adminPlans,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: AdminPlansPage()),
           ),
           GoRoute(
             path: AppRoutes.adminUsers,
@@ -244,6 +289,15 @@ GoRouter createRouter(AuthCubit auth) {
             path: AppRoutes.dashboard,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: DashboardPageV2()),
+          ),
+          GoRoute(
+            path: AppRoutes.accessDenied,
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: AccessDeniedPage(
+                reason: state.uri.queryParameters['reason'],
+                featureKey: state.uri.queryParameters['key'],
+              ),
+            ),
           ),
           GoRoute(
             path: AppRoutes.mySchedule,

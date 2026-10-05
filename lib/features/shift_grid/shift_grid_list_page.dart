@@ -14,11 +14,12 @@ import '../../core/utils/file_download.dart';
 import '../../core/widgets/glass_card.dart';
 import '../../core/widgets/list_picker_field.dart';
 import '../../core/widgets/searchable_select_field.dart';
+import 'shift_grid_helpers.dart';
 import 'shift_grid_merge_dialog.dart';
+import 'monthly_reports_dialog.dart';
 import '../../core/widgets/status_badge.dart';
 import '../auth/auth_cubit.dart';
 import '../../l10n/l10n_extension.dart';
-import 'shift_grid_helpers.dart';
 
 class ShiftGridListPage extends StatefulWidget {
   const ShiftGridListPage({super.key});
@@ -32,6 +33,7 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
 
   List<Map<String, dynamic>> _items = [];
   List<Map<String, dynamic>> _locations = [];
+
   /// Empty set = show all locations.
   final Set<String> _filterLocationIds = {};
   final Set<String> _selectedGridIds = {};
@@ -41,9 +43,9 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
   bool _exporting = false;
   int _offset = 0;
   final ScrollController _scrollCtrl = ScrollController();
-  /// Period keys currently expanded in the grouped list (newest open by default).
+
+  /// Period keys currently expanded in the grouped list (all collapsed by default).
   final Set<String> _expandedPeriods = {};
-  bool _didInitExpanded = false;
 
   List<Map<String, dynamic>> get _visibleItems {
     if (_filterLocationIds.isEmpty) return _items;
@@ -127,14 +129,17 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
           _hasMore = page.hasMore;
           _loading = false;
           if (reset) {
-            _didInitExpanded = false;
             _expandedPeriods.clear();
             _selectedGridIds.clear();
           }
+          _selectMergedGridsIntoSelection();
         });
       }
       // Period expand/list should see every grid — keep paging until done.
       await _ensureAllLoaded();
+      if (mounted) {
+        setState(_selectMergedGridsIntoSelection);
+      }
     } catch (e) {
       if (mounted) setState(() => _loading = false);
       _snack(e.toString());
@@ -162,6 +167,7 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
           _offset += page.items.length;
           _hasMore = page.hasMore;
           _loadingMore = false;
+          _selectMergedGridsIntoSelection();
         });
       }
     } catch (e) {
@@ -185,6 +191,14 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
       context,
     ).showSnackBar(SnackBar(content: Text(context.t('grid.mergeDone'))));
     await _load(reset: true);
+  }
+
+  Future<void> _openMonthlyReports() async {
+    await showDialog<bool>(
+      context: context,
+      builder: (_) => const MonthlyReportsDialog(),
+    );
+    if (mounted) await _load(reset: true);
   }
 
   Future<void> _openCreate() async {
@@ -252,10 +266,9 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
           : await api.shiftGridExportXlsxBulk(gridIds: gridIds);
 
       final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
-      final filename = r['filename']?.toString() ??
-          (byDepartment
-              ? 'shift_grids_by_department.zip'
-              : 'shift_grids.zip');
+      final filename =
+          r['filename']?.toString() ??
+          (byDepartment ? 'shift_grids_by_department.zip' : 'shift_grids.zip');
       if (base64.isEmpty) throw Exception(context.t('common.emptyFile'));
       downloadBase64File(
         base64,
@@ -297,7 +310,19 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
     });
   }
 
-  void _selectPeriodGrids(List<Map<String, dynamic>> grids, {required bool select}) {
+  /// Monthly merge products stay pre-checked for bulk Excel export.
+  void _selectMergedGridsIntoSelection() {
+    for (final g in _items) {
+      if (g['isMergedGrid'] != true) continue;
+      final id = g['id']?.toString() ?? '';
+      if (id.isNotEmpty) _selectedGridIds.add(id);
+    }
+  }
+
+  void _selectPeriodGrids(
+    List<Map<String, dynamic>> grids, {
+    required bool select,
+  }) {
     setState(() {
       for (final g in grids) {
         final id = g['id']?.toString() ?? '';
@@ -438,6 +463,22 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
                   icon: const Icon(Icons.account_tree_outlined, size: 18),
                   label: Text(context.t('grid.newAllLocations')),
                 ),
+                const Gap(8),
+                OutlinedButton.icon(
+                  onPressed: _openMonthlyReports,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppThemeV2.primary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.summarize_outlined, size: 18),
+                  label: Text(context.t('grid.monthlyReports.button')),
+                ),
               ],
             ],
           ),
@@ -552,7 +593,9 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
               runSpacing: 6,
               children: [
                 for (final l in _locations)
-                  if (_filterLocationIds.contains(EntityId.parse(l['id']) ?? ''))
+                  if (_filterLocationIds.contains(
+                    EntityId.parse(l['id']) ?? '',
+                  ))
                     InputChip(
                       label: Text(
                         l['name']?.toString() ?? '',
@@ -563,7 +606,6 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
                           _filterLocationIds.remove(
                             EntityId.parse(l['id']) ?? '',
                           );
-                          _didInitExpanded = false;
                           _expandedPeriods.clear();
                         });
                       },
@@ -572,7 +614,6 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
                   onPressed: () {
                     setState(() {
                       _filterLocationIds.clear();
-                      _didInitExpanded = false;
                       _expandedPeriods.clear();
                     });
                   },
@@ -653,7 +694,9 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
                   child: Text(
                     draft.isEmpty
                         ? context.t('shiftGrid.showAll')
-                        : context.t('shiftGrid.applyCount', {'count': draft.length}),
+                        : context.t('shiftGrid.applyCount', {
+                            'count': draft.length,
+                          }),
                   ),
                 ),
               ],
@@ -681,7 +724,6 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
           return locId.isNotEmpty && !_filterLocationIds.contains(locId);
         });
       }
-      _didInitExpanded = false;
       _expandedPeriods.clear();
     });
   }
@@ -740,12 +782,12 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
                 icon: const Icon(Icons.add_rounded),
                 label: Text(context.t('grid.create')),
               ),
-              const Gap(8),
-              OutlinedButton.icon(
-                onPressed: _openCreateAllLocations,
-                icon: const Icon(Icons.account_tree_outlined),
-                label: Text(context.t('grid.newAllLocations')),
-              ),
+            const Gap(8),
+            OutlinedButton.icon(
+              onPressed: _openCreateAllLocations,
+              icon: const Icon(Icons.account_tree_outlined),
+              label: Text(context.t('grid.newAllLocations')),
+            ),
           ],
         ),
       ),
@@ -754,82 +796,75 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
 
   Widget _buildGroupedList() {
     final groups = groupShiftGridsByPeriod(_visibleItems);
-    if (!_didInitExpanded && groups.isNotEmpty) {
-      // Expand the newest period on first load (after this frame).
-      final firstKey = groups.first.key;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _didInitExpanded) return;
-        setState(() {
-          _expandedPeriods.add(firstKey);
-          _didInitExpanded = true;
-        });
-      });
-    }
     return Column(
       children: [
         for (var gi = 0; gi < groups.length; gi++) ...[
           _ExpandablePeriodSection(
-            label: groups[gi].key,
-            count: groups[gi].value.length,
-            expanded: _expandedPeriods.contains(groups[gi].key),
-            selectedInPeriod: groups[gi].value
-                .where(
-                  (g) => _selectedGridIds.contains(g['id']?.toString() ?? ''),
-                )
-                .length,
-            onSelectAll: () =>
-                _selectPeriodGrids(groups[gi].value, select: true),
-            onClearPeriod: () =>
-                _selectPeriodGrids(groups[gi].value, select: false),
-            onToggle: () async {
-              final key = groups[gi].key;
-              final opening = !_expandedPeriods.contains(key);
-              setState(() {
-                if (opening) {
-                  _expandedPeriods.add(key);
-                } else {
-                  _expandedPeriods.remove(key);
-                }
-              });
-              if (opening) await _ensureAllLoaded();
-            },
-            child: GlassCard(
-              animated: false,
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  for (var i = 0; i < groups[gi].value.length; i++) ...[
-                    if (i > 0)
-                      Divider(
-                        height: 1,
-                        color: AppThemeV2.border.withValues(alpha: 0.6),
-                      ),
-                    _GridListTile(
-                      item: groups[gi].value[i],
-                      stateTone: _stateTone(
-                        groups[gi].value[i]['state']?.toString() ?? '',
-                      ),
-                      index: i,
-                      selected: _selectedGridIds.contains(
-                        groups[gi].value[i]['id']?.toString() ?? '',
-                      ),
-                      onSelectedChanged: (v) {
-                        final id =
-                            groups[gi].value[i]['id']?.toString() ?? '';
-                        _toggleGridSelected(id, v);
-                      },
-                      onTap: () {
-                        final id = groups[gi].value[i]['id'];
-                        if (id != null) {
-                          context.go('${AppRoutes.hrShiftGrid}/$id');
-                        }
-                      },
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          )
+                label: groups[gi].key,
+                count: groups[gi].value.length,
+                expanded: _expandedPeriods.contains(groups[gi].key),
+                hasMerged: groups[gi].value.any(
+                  (g) => g['isMergedGrid'] == true,
+                ),
+                selectedInPeriod: groups[gi].value
+                    .where(
+                      (g) =>
+                          _selectedGridIds.contains(g['id']?.toString() ?? ''),
+                    )
+                    .length,
+                onSelectAll: () =>
+                    _selectPeriodGrids(groups[gi].value, select: true),
+                onClearPeriod: () =>
+                    _selectPeriodGrids(groups[gi].value, select: false),
+                onToggle: () async {
+                  final key = groups[gi].key;
+                  final opening = !_expandedPeriods.contains(key);
+                  setState(() {
+                    if (opening) {
+                      _expandedPeriods.add(key);
+                    } else {
+                      _expandedPeriods.remove(key);
+                    }
+                  });
+                  if (opening) await _ensureAllLoaded();
+                },
+                child: GlassCard(
+                  animated: false,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < groups[gi].value.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 1,
+                            color: AppThemeV2.border.withValues(alpha: 0.6),
+                          ),
+                        _GridListTile(
+                          item: groups[gi].value[i],
+                          stateTone: _stateTone(
+                            groups[gi].value[i]['state']?.toString() ?? '',
+                          ),
+                          index: i,
+                          selected: _selectedGridIds.contains(
+                            groups[gi].value[i]['id']?.toString() ?? '',
+                          ),
+                          onSelectedChanged: (v) {
+                            final id =
+                                groups[gi].value[i]['id']?.toString() ?? '';
+                            _toggleGridSelected(id, v);
+                          },
+                          onTap: () {
+                            final id = groups[gi].value[i]['id'];
+                            if (id != null) {
+                              context.go('${AppRoutes.hrShiftGrid}/$id');
+                            }
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              )
               .animate(delay: Duration(milliseconds: gi * 80))
               .fadeIn(duration: 300.ms)
               .slideX(begin: 0.05, end: 0),
@@ -857,6 +892,7 @@ class _ExpandablePeriodSection extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     required this.child,
+    this.hasMerged = false,
     this.selectedInPeriod = 0,
     this.onSelectAll,
     this.onClearPeriod,
@@ -865,6 +901,7 @@ class _ExpandablePeriodSection extends StatelessWidget {
   final String label;
   final int count;
   final bool expanded;
+  final bool hasMerged;
   final VoidCallback onToggle;
   final Widget child;
   final int selectedInPeriod;
@@ -909,12 +946,54 @@ class _ExpandablePeriodSection extends StatelessWidget {
                   ),
                   const Gap(10),
                   Expanded(
-                    child: Text(
-                      label,
-                      style: AppThemeV2.body.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppThemeV2.primary,
-                      ),
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: AppThemeV2.body.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppThemeV2.primary,
+                            ),
+                          ),
+                        ),
+                        if (hasMerged) ...[
+                          const Gap(10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppThemeV2.warning.withValues(
+                                  alpha: 0.45,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.merge_type_outlined,
+                                  size: 14,
+                                  color: AppThemeV2.warning,
+                                ),
+                                const Gap(4),
+                                Text(
+                                  context.t('shiftGrid.mergedPeriod'),
+                                  style: AppThemeV2.caption.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppThemeV2.warning,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   if (onSelectAll != null) ...[
@@ -940,7 +1019,10 @@ class _ExpandablePeriodSection extends StatelessWidget {
                     ),
                     child: Text(
                       selectedInPeriod > 0
-                          ? context.t('shiftGrid.gridsCountSelected', {'count': count, 'selected': selectedInPeriod})
+                          ? context.t('shiftGrid.gridsCountSelected', {
+                              'count': count,
+                              'selected': selectedInPeriod,
+                            })
                           : context.t('shiftGrid.gridsCount', {'count': count}),
                       style: AppThemeV2.caption.copyWith(
                         fontWeight: FontWeight.w600,
@@ -997,6 +1079,7 @@ class _GridListTile extends StatelessWidget {
     final employees = item['employeeCount'] ?? item['lineCount'] ?? 0;
     final days = item['daysCount'] ?? 0;
     final name = item['name']?.toString() ?? tr('shiftGrid.gridWord');
+    final isMerged = item['isMergedGrid'] == true;
 
     final meta = [
       if (location.isNotEmpty) location,
@@ -1006,7 +1089,9 @@ class _GridListTile extends StatelessWidget {
     ];
 
     return Material(
-          color: Colors.transparent,
+          color: isMerged
+              ? AppThemeV2.primary.withValues(alpha: 0.07)
+              : Colors.transparent,
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(AppThemeV2.cardRadius),
@@ -1014,21 +1099,26 @@ class _GridListTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  Checkbox(
-                    value: selected,
-                    onChanged: onSelectedChanged,
-                  ),
+                  Checkbox(value: selected, onChanged: onSelectedChanged),
                   const Gap(4),
                   Container(
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: AppThemeV2.surfaceElevated,
+                      color: isMerged
+                          ? AppThemeV2.primary.withValues(alpha: 0.12)
+                          : AppThemeV2.surfaceElevated,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppThemeV2.border),
+                      border: Border.all(
+                        color: isMerged
+                            ? AppThemeV2.primary.withValues(alpha: 0.35)
+                            : AppThemeV2.border,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.calendar_month_outlined,
+                    child: Icon(
+                      isMerged
+                          ? Icons.merge_type_outlined
+                          : Icons.calendar_month_outlined,
                       size: 22,
                       color: AppThemeV2.primary,
                     ),
@@ -1072,7 +1162,7 @@ class _GridListTile extends StatelessWidget {
                     label: stateLabel(item['state']?.toString() ?? ''),
                     tone: stateTone,
                   ),
-                  if (item['isMergedGrid'] == true) ...[
+                  if (isMerged) ...[
                     const Gap(6),
                     StatusBadge(
                       label: context.t('grid.mergeBadgeMonthly'),
@@ -1323,9 +1413,9 @@ class _CreateShiftGridDialogState extends State<_CreateShiftGridDialog> {
   Future<void> _save() async {
     if (_selectionMode == _ShiftGridSelectionMode.device) {
       if (_deviceId == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(context.t('shiftGrid.pickDevice'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.t('shiftGrid.pickDevice'))),
+        );
         return;
       }
     } else {
@@ -1520,7 +1610,11 @@ class _CreateShiftGridDialogState extends State<_CreateShiftGridDialog> {
                               foregroundColor: AppThemeV2.primary,
                               side: const BorderSide(color: AppThemeV2.border),
                             ),
-                            child: Text(context.t('common.fromLabel', {'date': _fmt(_from)})),
+                            child: Text(
+                              context.t('common.fromLabel', {
+                                'date': _fmt(_from),
+                              }),
+                            ),
                           ),
                         ),
                         const Gap(8),
@@ -1531,7 +1625,9 @@ class _CreateShiftGridDialogState extends State<_CreateShiftGridDialog> {
                               foregroundColor: AppThemeV2.primary,
                               side: const BorderSide(color: AppThemeV2.border),
                             ),
-                            child: Text(context.t('common.toLabel', {'date': _fmt(_to)})),
+                            child: Text(
+                              context.t('common.toLabel', {'date': _fmt(_to)}),
+                            ),
                           ),
                         ),
                       ],
@@ -1605,7 +1701,10 @@ class _CreateShiftGridDialogState extends State<_CreateShiftGridDialog> {
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
-                            context.t('shiftGrid.ofTotal', {'shown': _filteredEmployees.length, 'total': _employees.length}),
+                            context.t('shiftGrid.ofTotal', {
+                              'shown': _filteredEmployees.length,
+                              'total': _employees.length,
+                            }),
                             style: AppThemeV2.caption,
                           ),
                         ),
@@ -1627,7 +1726,10 @@ class _CreateShiftGridDialogState extends State<_CreateShiftGridDialog> {
                         style: AppThemeV2.caption,
                       )
                     else if (_filteredEmployees.isEmpty)
-                      Text(context.t('shiftGrid.noSearchResults'), style: AppThemeV2.caption)
+                      Text(
+                        context.t('shiftGrid.noSearchResults'),
+                        style: AppThemeV2.caption,
+                      )
                     else
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxHeight: 220),

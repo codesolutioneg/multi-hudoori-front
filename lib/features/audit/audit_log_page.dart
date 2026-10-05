@@ -117,6 +117,15 @@ class _AuditLogPageState extends State<AuditLogPage> {
     }
   }
 
+  String _entityLabel(Map<String, dynamic> d) {
+    final label = d['entityLabel']?.toString().trim() ?? '';
+    if (label.isNotEmpty &&
+        !RegExp(r'^c[a-z0-9]{20,}$', caseSensitive: false).hasMatch(label)) {
+      return label;
+    }
+    return '—';
+  }
+
   String _fieldLabel(Map<String, dynamic> d) {
     final labeled = d['fieldLabel']?.toString();
     if (labeled != null && labeled.isNotEmpty) return labeled;
@@ -306,13 +315,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
                                 for (final d in diffs)
                                   DataRow(
                                     cells: [
-                                      DataCell(
-                                        Text(
-                                          d['entityLabel']?.toString() ??
-                                              d['entityId']?.toString() ??
-                                              '—',
-                                        ),
-                                      ),
+                                      DataCell(Text(_entityLabel(d))),
                                       DataCell(Text(_fieldLabel(d))),
                                       DataCell(Text(_displayValue(d, after: false))),
                                       DataCell(Text(_displayValue(d, after: true))),
@@ -382,13 +385,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
           for (final d in diffs.take(50))
             DataRow(
               cells: [
-                DataCell(
-                  Text(
-                    d['entityLabel']?.toString() ??
-                        d['entityId']?.toString() ??
-                        '—',
-                  ),
-                ),
+                DataCell(Text(_entityLabel(d))),
                 DataCell(Text(_fieldLabel(d))),
                 DataCell(Text(_displayValue(d, after: false))),
                 DataCell(Text(_displayValue(d, after: true))),

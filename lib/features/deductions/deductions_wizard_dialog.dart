@@ -156,6 +156,27 @@ class _DeductionsWizardDialogState extends State<DeductionsWizardDialog> {
     _selectPeriod(formatIsoDate(ref));
   }
 
+  Future<void> _pickDeductionDate() async {
+    if (_busy || _periodFrom.isEmpty || _periodTo.isEmpty) return;
+    final first = parseIsoDate(_periodFrom);
+    final last = parseIsoDate(_periodTo);
+    if (first == null || last == null) return;
+    final current = parseIsoDate(_deductionDate.text) ?? last;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current.isBefore(first) || current.isAfter(last)
+          ? last
+          : current,
+      firstDate: first,
+      lastDate: last,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _deductionDate.text = formatIsoDate(picked);
+      _distributeLines = [];
+    });
+  }
+
   @override
   void dispose() {
     _dateFrom.dispose();
@@ -240,11 +261,10 @@ class _DeductionsWizardDialogState extends State<DeductionsWizardDialog> {
         TextField(
           controller: _deductionDate,
           readOnly: true,
+          onTap: _pickDeductionDate,
           decoration: InputDecoration(
             labelText: context.t('wiz.deductionDate'),
-            helperText: _periodTo.isEmpty
-                ? context.t('wiz.autoDate')
-                : context.t('wiz.autoDateWith', {'date': _periodTo}),
+            helperText: context.t('wiz.chooseDateWithinPeriod'),
             suffixIcon: const Icon(Icons.event_outlined, size: 18),
           ),
         ),
@@ -649,6 +669,8 @@ class _DeductionsWizardDialogState extends State<DeductionsWizardDialog> {
             },
         ],
         date: _deductionDate.text.trim(),
+        dateFrom: from,
+        dateTo: to,
       );
       if (!mounted) return;
       setState(() => _status = result['message']?.toString() ?? context.t('common.imported'));

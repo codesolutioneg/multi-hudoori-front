@@ -22,18 +22,35 @@ String friendlyApiErrorL10n(AppLocalizations l10n, Object error) {
         return t('errors.sessionExpired');
       case 'ACCESS_DENIED':
         return t('errors.accessDenied');
+      case 'FEATURE_DISABLED':
+        final msg = error.message.trim();
+        if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;
+        return t('errors.featureDisabled');
+      case 'COMPANY_CONTEXT_REQUIRED':
+        return t('errors.selectCompanyFirst');
+      case 'EMPLOYEE_QUOTA_EXCEEDED':
+      case 'USER_QUOTA_EXCEEDED':
+        final msg = error.message.trim();
+        if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;
+        return t(error.code == 'USER_QUOTA_EXCEEDED' ? 'errors.userQuota' : 'errors.employeeQuota');
       default:
+        if (error.code != null && error.code!.startsWith('ODOO_')) {
+          final msg = error.message.trim();
+          if (msg.isNotEmpty) return msg;
+        }
         if (error.message.startsWith('HTTP ')) {
           final code = error.message.replaceFirst('HTTP ', '').trim();
           return t('errors.http', {'code': code});
         }
         final msg = error.message.trim();
+        if (_isBioTimeUnavailable(msg)) return t('errors.biotimeUnavailable');
         if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;
         return t('errors.server');
     }
   }
 
   final raw = error.toString();
+  if (_isBioTimeUnavailable(raw)) return t('errors.biotimeUnavailable');
   if (_isNetworkFailure(raw)) return t('errors.network');
   if (raw.contains('TimeoutException')) return t('errors.timeout');
   if (_looksTechnical(raw)) return t('errors.generic');
@@ -51,6 +68,16 @@ bool _isNetworkFailure(String raw) {
       lower.contains('handshakeexception');
 }
 
+bool _isBioTimeUnavailable(String raw) {
+  final lower = raw.toLowerCase();
+  return lower.contains('invalid url') ||
+      lower.contains('biotime server') ||
+      lower.contains('server url is not configured') ||
+      lower.contains('configuration not found') ||
+      lower.contains('econnrefused') ||
+      lower.contains('تعذر الاتصال بسيرفر البصمة');
+}
+
 bool _looksTechnical(String raw) {
   final lower = raw.toLowerCase();
   return lower.contains('exception') ||
@@ -58,5 +85,6 @@ bool _looksTechnical(String raw) {
       lower.contains('uri=') ||
       lower.contains('http://') ||
       lower.contains('https://') ||
+      lower.contains('invalid url') ||
       lower.startsWith('instance of ');
 }

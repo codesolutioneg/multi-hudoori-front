@@ -1335,7 +1335,7 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
         : (_grid['deviceName']?.toString().isNotEmpty == true
               ? context.t('grid.fingerprint', {'name': _grid['deviceName']})
               : '');
-    // Sticky: رقم + كود + اسم. Scrollable: وظيفة + أيام.
+    // Sticky: رقم + كود + اسم + تاريخ التعيين. Scrollable: وظيفة + أيام.
     final scrollWidth = _kColJob + _dates.length * _kColDate;
     final visibleRows = _buildVisibleFlatRows();
     final visibleEmpCount = visibleRows.where((r) => !r.isHeader).length;
@@ -1767,11 +1767,13 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
 
 const double _kColNum = 40;
 const double _kColCode = 56;
-const double _kColName = 280;
+const double _kColName = 220;
+const double _kColHiring = 88;
 const double _kColJob = 90;
 const double _kColDate = 70;
-/// رقم + كود + اسم — ثابتة جنب الشاشة أثناء السكرول الأفقي.
-const double _kStickyColsWidth = _kColNum + _kColCode + _kColName;
+/// رقم + كود + اسم + تاريخ التعيين — ثابتة جنب الشاشة أثناء السكرول الأفقي.
+const double _kStickyColsWidth =
+    _kColNum + _kColCode + _kColName + _kColHiring;
 
 class _FlatGridRow {
   _FlatGridRow.header(this.jobTitle) : employee = null, rowNum = 0;
@@ -1968,6 +1970,18 @@ class _GridEmployeeRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                SizedBox(
+                  width: _kColHiring,
+                  child: Text(
+                    _hiringDateText(emp),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2005,6 +2019,14 @@ class _GridEmployeeRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _hiringDateText(Map<String, dynamic> emp) {
+  final raw = emp['hiring_date'] ?? emp['hiringDate'];
+  if (raw == null) return '';
+  final s = raw.toString().trim();
+  if (s.isEmpty) return '';
+  return s.length >= 10 ? s.substring(0, 10) : s;
 }
 
 Widget _gridCellWidget(
@@ -2558,6 +2580,7 @@ class _StickyGridHeaderDelegate extends SliverPersistentHeaderDelegate {
                 _hdr(context.t('grid.numberColumn'), width: _kColNum, light: true),
                 _hdr(context.t('common.code'), width: _kColCode, light: true),
                 _hdr(context.t('common.name'), width: _kColName, light: true),
+                _hdr(context.t('employees.field.hiringDate'), width: _kColHiring, light: true),
               ],
             ),
           ),

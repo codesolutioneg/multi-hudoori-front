@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,11 +7,15 @@ import '../../core/di/injection.dart';
 import '../../core/layout/app_page_scaffold.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
+import '../../core/utils/api_error_message.dart';
 import '../../core/widgets/hr_local_data_info.dart';
 import '../../core/widgets/page_header.dart';
 import '../../features/dashboard/widgets/dashboard_quick_actions.dart';
 import '../../features/dashboard/widgets/dashboard_stat_card_v2.dart';
 import '../../l10n/l10n_extension.dart';
+import '../auth/auth_cubit.dart';
+import '../auth/auth_state.dart';
+import 'widgets/company_stats_section.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -21,6 +26,8 @@ class AdminDashboardPage extends StatefulWidget {
 
 class _AdminDashboardPageState extends State<AdminDashboardPage> {
   List<Map<String, dynamic>> _users = [];
+  CompanyStats? _stats;
+  String? _statsError;
   bool _loading = true;
 
   @override
@@ -31,12 +38,27 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    try {
-      final users = await api.adminUsersList();
-      if (mounted) setState(() { _users = users; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    final companyId = context.read<AuthCubit>().state.activeCompanyId;
+    CompanyStats? stats;
+    String? statsError;
+    if (companyId != null && companyId.isNotEmpty) {
+      try {
+        stats = CompanyStats.fromJson(await api.adminCompanyStats(companyId));
+      } catch (e) {
+        if (mounted) statsError = friendlyApiError(context, e);
+      }
     }
+    List<Map<String, dynamic>> users = [];
+    try {
+      users = await api.adminUsersList();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _users = users;
+      _stats = stats;
+      _statsError = statsError;
+      _loading = false;
+    });
   }
 
   int _countRole(String role) => _users.where((u) => u['role']?.toString() == role).length;
@@ -47,6 +69,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocListener<AuthCubit, AuthState>(
+      listenWhen: (a, b) => a.activeCompanyId != b.activeCompanyId,
+      listener: (_, __) => _load(),
+      child: _buildPage(context),
+    );
+  }
+
+  Widget _buildPage(BuildContext context) {
+    final companyName = context.watch<AuthCubit>().state.activeCompanyName;
     return AppPageScaffold(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -67,6 +98,16 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           if (_loading)
             const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator()))
           else ...[
+            if (_stats != null)
+              CompanyStatsSection(stats: _stats!, companyName: companyName)
+            else
+              Text(
+                _statsError ?? context.t('admin.stats.selectCompany'),
+                style: AppThemeV2.caption,
+              ),
+            const Gap(28),
+            Text(context.t('admin.stats.accountsTitle'), style: AppThemeV2.headline.copyWith(fontSize: 18)),
+            const Gap(14),
             LayoutBuilder(
               builder: (context, c) {
                 final cols = c.maxWidth >= 1000 ? 4 : (c.maxWidth >= 600 ? 2 : 1);

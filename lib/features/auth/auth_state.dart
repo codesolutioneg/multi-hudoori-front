@@ -140,6 +140,17 @@ class AuthState extends Equatable {
   bool get canDeleteEmployee =>
       isPlatformAdmin || roles.isPlatformAdmin || features.employeeDelete;
 
+  /// Plan entitlement — see [isFeatureEnabled] / menus fallback in
+  /// `feature_entitlements.dart`. Prefer that helper for UI visibility.
+  bool hasEntitlement(String featureKey) {
+    if (isPlatformAdmin || roles.isPlatformAdmin) return true;
+    final map = features.entitlements;
+    if (map.isNotEmpty) return map[featureKey] == true;
+    // Empty entitlements: defer to caller using menus fallback via
+    // `isFeatureEnabled`. Treat as allowed only when nothing is loaded yet.
+    return menus.isEmpty;
+  }
+
   /// Branch managers and location-scoped HR users — not global HR roles.
   bool get isLocationScoped {
     if (roles.isHrManager || roles.isHrSupervisor || roles.isPlatformAdmin) return false;
@@ -212,23 +223,37 @@ class AuthFeatures extends Equatable {
     this.helpAssistant = false,
     this.employeeDelete = false,
     this.mobileLocationPunch = false,
+    this.entitlements = const {},
   });
 
   final bool auditLog;
   final bool helpAssistant;
   final bool employeeDelete;
   final bool mobileLocationPunch;
+  /// Enabled product keys from company plan snapshot (`key → true`).
+  final Map<String, bool> entitlements;
 
   factory AuthFeatures.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const AuthFeatures();
+    final rawEnt = json['entitlements'];
+    final entitlements = <String, bool>{};
+    if (rawEnt is Map) {
+      for (final e in rawEnt.entries) {
+        final k = e.key.toString();
+        if (k.isEmpty) continue;
+        entitlements[k] = e.value == true;
+      }
+    }
     return AuthFeatures(
       auditLog: json['auditLog'] == true,
       helpAssistant: json['helpAssistant'] == true,
       employeeDelete: json['employeeDelete'] == true,
       mobileLocationPunch: json['mobileLocationPunch'] == true,
+      entitlements: entitlements,
     );
   }
 
   @override
-  List<Object?> get props => [auditLog, helpAssistant, employeeDelete, mobileLocationPunch];
+  List<Object?> get props =>
+      [auditLog, helpAssistant, employeeDelete, mobileLocationPunch, entitlements];
 }

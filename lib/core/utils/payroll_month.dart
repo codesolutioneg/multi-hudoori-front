@@ -30,3 +30,35 @@ DateTime? parseIsoDate(String? raw) {
   if (text.length < 10) return null;
   return DateTime.tryParse(text.substring(0, 10));
 }
+
+String payrollCycleMonthName(DateTime periodEnd, String languageCode) {
+  const ar = [
+    'يناير',
+    'فبراير',
+    'مارس',
+    'أبريل',
+    'مايو',
+    'يونيو',
+    'يوليو',
+    'أغسطس',
+    'سبتمبر',
+    'أكتوبر',
+    'نوفمبر',
+    'ديسمبر',
+  ];
+  const en = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return (languageCode == 'ar' ? ar : en)[periodEnd.month - 1];
+}

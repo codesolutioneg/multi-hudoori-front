@@ -51,6 +51,7 @@ class _DeductionsPageState extends State<DeductionsPage> {
   String? _importMessage;
   List<Map<String, dynamic>> _importSkipped = [];
   int _payrollMonthStartDay = 26;
+  final Set<String> _selectedIds = {};
 
   Map<String, String> get _typeLabels => {
         for (final t in _types) t['value']?.toString() ?? '': t['label']?.toString() ?? '',
@@ -134,6 +135,13 @@ class _DeductionsPageState extends State<DeductionsPage> {
           _items = page.items;
           _total = page.total;
           _loading = false;
+          // Drop selection for rows no longer in the list (or no longer pending).
+          final pendingIds = page.items
+              .where((i) => i['state']?.toString() == 'pending')
+              .map((i) => i['id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toSet();
+          _selectedIds.removeWhere((id) => !pendingIds.contains(id));
         });
       }
     } catch (e) {
@@ -164,6 +172,139 @@ class _DeductionsPageState extends State<DeductionsPage> {
   }
 
   String _typeLabel(String code) => _typeLabels[code] ?? code;
+
+  List<Map<String, dynamic>> _pendingInView() => _filteredItems()
+      .where((i) => i['state']?.toString() == 'pending')
+      .toList();
+
+  void _toggleSelected(String id, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedIds.add(id);
+      } else {
+        _selectedIds.remove(id);
+      }
+    });
+  }
+
+  void _selectAllPendingInView() {
+    setState(() {
+      for (final item in _pendingInView()) {
+        final id = item['id']?.toString();
+        if (id != null && id.isNotEmpty) _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _clearSelection() => setState(() => _selectedIds.clear());
+
+  Future<void> _deleteSelected() async {
+    final selected = _filteredItems()
+        .where((i) => _selectedIds.contains(i['id']?.toString()))
+        .where((i) => i['state']?.toString() == 'pending')
+        .toList();
+    if (selected.isEmpty) return;
+
+    final total = selected.fold<double>(
+      0,
+      (s, i) => s + ((i['amount'] as num?)?.toDouble() ?? 0),
+    );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.t('ded.deleteSelectedTitle')),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                context.t('ded.deleteSelectedBody', {
+                  'count': selected.length,
+                  'amount': formatMoney(total),
+                }),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: selected.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final d = selected[i];
+                    final ref = d['reference']?.toString() ?? '';
+                    final type = d['deductionTypeLabel']?.toString() ??
+                        _typeLabel(d['deductionType']?.toString() ?? '');
+                    final branch = d['locationName']?.toString() ?? '';
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        d['employeeName']?.toString() ?? '—',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        [
+                          if ((d['employeeCode']?.toString() ?? '').isNotEmpty)
+                            context.t('common.codeValue', {
+                              'code': d['employeeCode'],
+                            }),
+                          if (ref.isNotEmpty) ref,
+                          type,
+                          if (branch.isNotEmpty) branch,
+                        ].join('  •  '),
+                      ),
+                      trailing: Text(
+                        formatMoney(d['amount']),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(context.t('common.no')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(context.t('ded.deleteSelected')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      final ids = selected
+          .map((i) => i['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      final result = await api.deductionDeleteBulk(ids);
+      if (!mounted) return;
+      final deleted = (result['deleted'] as num?)?.toInt() ?? ids.length;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t('ded.deletedBulk', {'count': deleted})),
+        ),
+      );
+      _selectedIds.clear();
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
 
   Future<void> _add() async {
     if (!mounted) return;
@@ -530,7 +671,10 @@ class _DeductionsPageState extends State<DeductionsPage> {
                 label: Text(context.t('common.all')),
                 selected: _stateFilter == null,
                 onSelected: (_) {
-                  setState(() => _stateFilter = null);
+                  setState(() {
+                    _stateFilter = null;
+                    _selectedIds.clear();
+                  });
                   _load();
                 },
               ),
@@ -538,7 +682,10 @@ class _DeductionsPageState extends State<DeductionsPage> {
                 label: Text(context.t('ded.state.pending')),
                 selected: _stateFilter == 'pending',
                 onSelected: (_) {
-                  setState(() => _stateFilter = 'pending');
+                  setState(() {
+                    _stateFilter = 'pending';
+                    _selectedIds.clear();
+                  });
                   _load();
                 },
               ),
@@ -546,7 +693,10 @@ class _DeductionsPageState extends State<DeductionsPage> {
                 label: Text(context.t('ded.state.applied')),
                 selected: _stateFilter == 'applied',
                 onSelected: (_) {
-                  setState(() => _stateFilter = 'applied');
+                  setState(() {
+                    _stateFilter = 'applied';
+                    _selectedIds.clear();
+                  });
                   _load();
                 },
               ),
@@ -562,7 +712,10 @@ class _DeductionsPageState extends State<DeductionsPage> {
                       for (final location in locations)
                         DropdownMenuItem(value: location, child: Text(location)),
                     ],
-                    onChanged: (value) => setState(() => _locationFilter = value),
+                    onChanged: (value) => setState(() {
+                      _locationFilter = value;
+                      _selectedIds.clear();
+                    }),
                   ),
                 ),
               if (_types.isNotEmpty)
@@ -578,12 +731,50 @@ class _DeductionsPageState extends State<DeductionsPage> {
                       ),
                   ],
                   onSelected: (v) {
-                    setState(() => _typeFilter = v);
+                    setState(() {
+                      _typeFilter = v;
+                      _selectedIds.clear();
+                    });
                     _load();
                   },
                 ),
             ],
           ),
+          if (_pendingInView().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (_selectedIds.isNotEmpty)
+                  Text(
+                    context.t('ded.selectedCount', {'count': _selectedIds.length}),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: _selectAllPendingInView,
+                  icon: const Icon(Icons.select_all, size: 18),
+                  label: Text(context.t('ded.selectAllPending')),
+                ),
+                if (_selectedIds.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: _clearSelection,
+                    icon: const Icon(Icons.deselect, size: 18),
+                    label: Text(context.t('ded.clearSelection')),
+                  ),
+                if (_selectedIds.isNotEmpty)
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.danger,
+                    ),
+                    onPressed: _deleteSelected,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: Text(context.t('ded.deleteSelected')),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           Expanded(
             child: _loading
@@ -600,6 +791,8 @@ class _DeductionsPageState extends State<DeductionsPage> {
                         typeLabel: _typeLabel,
                         stateAr: _stateAr,
                         stateTag: _tag,
+                        selectedIds: _selectedIds,
+                        onToggleSelected: _toggleSelected,
                         onTapItem: _showDeductionDetail,
                         onAdd: _add,
                         emptyActionLabel: context.t('deductions.new'),
@@ -618,6 +811,8 @@ class _DeductionGroupedList extends StatefulWidget {
     required this.typeLabel,
     required this.stateAr,
     required this.stateTag,
+    required this.selectedIds,
+    required this.onToggleSelected,
     required this.onTapItem,
     required this.onAdd,
     required this.emptyActionLabel,
@@ -628,6 +823,8 @@ class _DeductionGroupedList extends StatefulWidget {
   final String Function(String) typeLabel;
   final String Function(String) stateAr;
   final StatusTagType Function(String) stateTag;
+  final Set<String> selectedIds;
+  final void Function(String id, bool selected) onToggleSelected;
   final void Function(Map<String, dynamic>) onTapItem;
   final VoidCallback onAdd;
   final String emptyActionLabel;
@@ -832,9 +1029,20 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
 
   Widget _employeeTile(Map<String, dynamic> d) {
     final ref = d['reference']?.toString();
+    final id = d['id']?.toString() ?? '';
+    final isPending = d['state']?.toString() == 'pending';
+    final selected = id.isNotEmpty && widget.selectedIds.contains(id);
     return ListTile(
       dense: true,
       onTap: () => widget.onTapItem(d),
+      leading: isPending
+          ? Checkbox(
+              value: selected,
+              onChanged: id.isEmpty
+                  ? null
+                  : (v) => widget.onToggleSelected(id, v == true),
+            )
+          : const SizedBox(width: 40),
       title: Text(
         d['employeeName']?.toString() ?? '—',
         style: const TextStyle(fontWeight: FontWeight.w600),

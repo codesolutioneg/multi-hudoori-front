@@ -5,6 +5,7 @@ import '../../core/di/injection.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme_v2.dart';
+import '../../core/utils/api_error_message.dart';
 import '../../core/utils/entity_id.dart';
 import '../../core/utils/file_download.dart';
 import '../../core/utils/money_format.dart';
@@ -347,41 +348,69 @@ class _ReportsPageState extends State<ReportsPage> {
   /// The punch report reads stored punches, so the period is pulled from BioTime
   /// first when no recent sync covered it. The pull is a job with its own progress
   /// dialog: a month of punches takes minutes, longer than a request may last.
+  /// If BioTime is unreachable, we skip sync and continue from local DB punches.
   Future<void> _syncPunchesIfNeeded() async {
     if (_report != HrReport.punchSummary) return;
     final locationId = _locationId;
     if (locationId == null || locationId.isEmpty) return;
-    final jobId = await api.reportPunchSyncStart(
-      dateFrom: _iso(_dateFrom),
-      dateTo: _iso(_dateTo),
-      locationId: locationId,
-    );
-    if (jobId == null || !mounted) return;
-
-    final dialogState = ValueNotifier(
-      SyncDialogState(
-        title: context.t('reports.punchSyncTitle'),
-        message: context.t('reports.punchSyncMessage'),
-      ),
-    );
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => SyncProgressDialog(stateListenable: dialogState),
-    );
     try {
-      await api.reportPunchSyncWait(
-        jobId,
-        onProgress: (message, {int? progress}) {
-          dialogState.value = dialogState.value.copyWith(
-            message: message.isNotEmpty ? message : dialogState.value.message,
-            progress: progress,
-          );
-        },
+      final start = await api.reportPunchSyncStart(
+        dateFrom: _iso(_dateFrom),
+        dateTo: _iso(_dateTo),
+        locationId: locationId,
       );
-    } finally {
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-      dialogState.dispose();
+      if (!mounted) return;
+      if (start.usedLocal) {
+        final msg = (start.message != null && start.message!.trim().isNotEmpty)
+            ? start.message!
+            : context.t('reports.punchSyncUsedLocal');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        return;
+      }
+      final jobId = start.jobId;
+      if (jobId == null) return;
+
+      final dialogState = ValueNotifier(
+        SyncDialogState(
+          title: context.t('reports.punchSyncTitle'),
+          message: context.t('reports.punchSyncMessage'),
+        ),
+      );
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => SyncProgressDialog(stateListenable: dialogState),
+      );
+      try {
+        final st = await api.reportPunchSyncWait(
+          jobId,
+          onProgress: (message, {int? progress}) {
+            dialogState.value = dialogState.value.copyWith(
+              message: message.isNotEmpty ? message : dialogState.value.message,
+              progress: progress,
+            );
+          },
+        );
+        if (!mounted) return;
+        final doneMsg = st['message']?.toString() ?? '';
+        if (doneMsg.contains('المخزّنة') || doneMsg.toLowerCase().contains('biotime')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(doneMsg.isNotEmpty ? doneMsg : context.t('reports.punchSyncUsedLocal'))),
+          );
+        }
+      } finally {
+        if (mounted) Navigator.of(context, rootNavigator: true).pop();
+        dialogState.dispose();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${friendlyApiError(context, e)}\n${context.t('reports.punchSyncUsedLocal')}',
+          ),
+        ),
+      );
     }
   }
 
@@ -407,7 +436,7 @@ class _ReportsPageState extends State<ReportsPage> {
         _loading = false;
         _hasRun = true;
         _rows = [];
-        _error = e.toString();
+        _error = friendlyApiError(context, e);
       });
     }
   }
@@ -438,7 +467,9 @@ class _ReportsPageState extends State<ReportsPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _exporting = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(context, e))),
+      );
     }
   }
 

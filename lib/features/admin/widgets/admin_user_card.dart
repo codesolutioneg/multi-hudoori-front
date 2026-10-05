@@ -13,6 +13,7 @@ class AdminUserCard extends StatefulWidget {
     required this.user,
     required this.onCopyLogin,
     this.onCopyPassword,
+    this.onResendEmail,
     this.onDeactivate,
     this.onTap,
   });
@@ -20,6 +21,7 @@ class AdminUserCard extends StatefulWidget {
   final Map<String, dynamic> user;
   final VoidCallback onCopyLogin;
   final VoidCallback? onCopyPassword;
+  final VoidCallback? onResendEmail;
   final VoidCallback? onDeactivate;
   final VoidCallback? onTap;
 
@@ -140,6 +142,17 @@ class _AdminUserCardState extends State<AdminUserCard> {
                       Text(
                         context.t('admin.createdAt', {'date': _createdAt}),
                         style: AppThemeV2.caption,
+                      ),
+                    ],
+                    if (widget.onResendEmail != null) ...[
+                      const Gap(10),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: OutlinedButton.icon(
+                          onPressed: widget.onResendEmail,
+                          icon: const Icon(Icons.mark_email_unread_outlined, size: 18),
+                          label: Text(context.t('admin.resendEmail')),
+                        ),
                       ),
                     ],
                   ],
