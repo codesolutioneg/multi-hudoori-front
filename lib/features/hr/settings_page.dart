@@ -11,7 +11,7 @@ import '../../core/di/injection.dart';
 import '../../core/layout/app_page_scaffold.dart';
 import '../../core/utils/app_log.dart';
 import '../../core/utils/feature_entitlements.dart';
-import '../../core/utils/file_pick_web.dart';
+import '../../core/utils/file_pick.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/alert_banner.dart';
 import '../../core/widgets/async_checkbox_tile.dart';

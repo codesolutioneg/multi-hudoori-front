@@ -75,10 +75,15 @@ List<NavItem> navItemsFromMenus(BuildContext context, List<BioTimeMenuItem> menu
       .map((m) => NavItem(l10n.menuLabel(m.id), menuIconFor(m.icon), m.route))
       .toList();
 
-  if (!kIsWeb && filtered.isEmpty) {
+  if (!kIsWeb && filtered.length < 2) {
     // HR/admin accounts often only receive /hr menus — after filtering
-    // nothing would remain and bottom nav / drawer would disappear.
-    return defaultMobileEmployeeNav(context);
+    // too few would remain, and NavigationBar requires >= 2 destinations.
+    final defaults = defaultMobileEmployeeNav(context);
+    final defaultRoutes = defaults.map((e) => e.route).toSet();
+    return [
+      ...defaults,
+      ...filtered.where((e) => !defaultRoutes.contains(e.route)),
+    ];
   }
 
   if (filtered.isEmpty) {

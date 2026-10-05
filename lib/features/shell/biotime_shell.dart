@@ -512,7 +512,7 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = navItems.take(4).toList();
-    if (items.isEmpty) return const SizedBox.shrink();
+    if (items.length < 2) return const SizedBox.shrink();
     var index = 0;
     for (var i = 0; i < items.length; i++) {
       if (location.startsWith(items[i].route)) index = i;
