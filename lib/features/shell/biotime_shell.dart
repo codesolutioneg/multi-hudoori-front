@@ -51,6 +51,7 @@ class _BioTimeShellState extends State<BioTimeShell> {
           backgroundColor: AppThemeV2.background,
           drawer: mobile
               ? Drawer(
+                  width: MediaQuery.sizeOf(context).width * 0.86,
                   child: _Sidebar(
                     location: location,
                     navItems: navItems,
@@ -58,9 +59,7 @@ class _BioTimeShellState extends State<BioTimeShell> {
                   ),
                 )
               : null,
-          bottomNavigationBar: mobile
-              ? _BottomNav(location: location, navItems: navItems)
-              : null,
+          // Mobile uses the same drawer menu as the web sidebar — no bottom bar.
           body: Row(
             children: [
               if (!mobile)
@@ -77,13 +76,15 @@ class _BioTimeShellState extends State<BioTimeShell> {
                           ? () => _scaffoldKey.currentState?.openDrawer()
                           : null,
                       userName: auth.user?.name ?? auth.employeeName,
-                      userRole: l10n.roleLabel(
-                        isSystemAdmin: auth.roles.isSystemAdmin,
-                        isHrManager: auth.roles.isHrManager,
-                        isHrSupervisor: auth.roles.isHrSupervisor,
-                        isBranchManager: auth.roles.isBranchManager,
-                        isEmployee: auth.roles.isEmployee,
-                      ),
+                      userRole: auth.isPlatformAdmin
+                          ? l10n.t('role.platformAdmin')
+                          : l10n.roleLabel(
+                              isSystemAdmin: auth.roles.isSystemAdmin,
+                              isHrManager: auth.roles.isHrManager,
+                              isHrSupervisor: auth.roles.isHrSupervisor,
+                              isBranchManager: auth.roles.isBranchManager,
+                              isEmployee: auth.roles.isEmployee,
+                            ),
                       showNotifications:
                           auth.roles.isHrStaff || auth.roles.isBranchManager,
                     ),
@@ -500,45 +501,6 @@ class _TopBarState extends State<_TopBar> {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.location, required this.navItems});
-  final String location;
-  final List<NavItem> navItems;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = navItems.take(4).toList();
-    if (items.length < 2) return const SizedBox.shrink();
-    var index = 0;
-    for (var i = 0; i < items.length; i++) {
-      if (location.startsWith(items[i].route)) index = i;
-    }
-    return NavigationBar(
-      backgroundColor: AppThemeV2.surface,
-      indicatorColor: AppThemeV2.primarySoft,
-      selectedIndex: index,
-      onDestinationSelected: (i) {
-        final route = items[i].route;
-        final auth = context.read<AuthCubit>().state;
-        if (!isRouteEntitled(auth, route)) {
-          final feat = featureKeyForRoute(route);
-          context.go(
-            feat != null
-                ? AppRoutes.accessDeniedFeature(feat)
-                : AppRoutes.accessDeniedRole(),
-          );
-          return;
-        }
-        context.go(route);
-      },
-      destinations: [
-        for (final item in items)
-          NavigationDestination(icon: Icon(item.icon), label: item.label),
-      ],
     );
   }
 }

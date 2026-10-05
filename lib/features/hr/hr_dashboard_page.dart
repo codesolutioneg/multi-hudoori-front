@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gap/gap.dart';
 
@@ -6,7 +7,9 @@ import '../../core/di/injection.dart';
 import '../../core/layout/app_page_scaffold.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
+import '../../core/utils/feature_entitlements.dart';
 import '../../core/widgets/page_header.dart';
+import '../../features/auth/auth_cubit.dart';
 import '../../features/dashboard/widgets/dashboard_quick_actions.dart';
 import '../../features/dashboard/widgets/dashboard_stat_card_v2.dart';
 import '../../l10n/l10n_extension.dart';
@@ -44,6 +47,49 @@ class _HrDashboardPageState extends State<HrDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthCubit>().state;
+    final statCards = <({
+      String title,
+      String? subtitle,
+      int value,
+      IconData icon,
+      StatToneV2 tone,
+      String route,
+    })>[
+      (
+        title: context.t('employees.title'),
+        subtitle: context.t('stat.activeEmployeesSub'),
+        value: (_stats['employeesCount'] ?? _stats['employees'] ?? 0) as int,
+        icon: Icons.people_outline_rounded,
+        tone: StatToneV2.primary,
+        route: AppRoutes.hrEmployees,
+      ),
+      (
+        title: context.t('stat.attendanceToday'),
+        subtitle: null,
+        value: (_stats['attendanceToday'] ?? 0) as int,
+        icon: Icons.fact_check_outlined,
+        tone: StatToneV2.success,
+        route: AppRoutes.hrAttendance,
+      ),
+      (
+        title: context.t('stat.pendingRequests'),
+        subtitle: null,
+        value: (_stats['pendingRequests'] ?? 0) as int,
+        icon: Icons.pending_actions_outlined,
+        tone: StatToneV2.info,
+        route: AppRoutes.requests,
+      ),
+      (
+        title: context.t('stat.payrollsDraft'),
+        subtitle: null,
+        value: (_stats['payrollsDraft'] ?? 0) as int,
+        icon: Icons.payments_outlined,
+        tone: StatToneV2.warning,
+        route: AppRoutes.hrPayroll,
+      ),
+    ].where((c) => isRouteEntitled(auth, c.route)).toList();
+
     return AppPageScaffold(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -64,54 +110,44 @@ class _HrDashboardPageState extends State<HrDashboardPage> {
               ),
             )
           else ...[
-            LayoutBuilder(
-              builder: (context, c) {
-                final cols = c.maxWidth >= 1000
-                    ? 4
-                    : (c.maxWidth >= 600 ? 2 : 1);
-                return GridView.count(
-                  crossAxisCount: cols,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: cols == 1 ? 2.4 : 1.55,
-                  children: [
-                    DashboardStatCardV2(
-                      title: context.t('employees.title'),
-                      subtitle: context.t('stat.activeEmployeesSub'),
-                      value:
-                          (_stats['employeesCount'] ?? _stats['employees'] ?? 0)
-                              as int,
-                      icon: Icons.people_outline_rounded,
-                      tone: StatToneV2.primary,
-                      onTap: () => context.go(AppRoutes.hrEmployees),
-                    ),
-                    DashboardStatCardV2(
-                      title: context.t('stat.attendanceToday'),
-                      value: (_stats['attendanceToday'] ?? 0) as int,
-                      icon: Icons.fact_check_outlined,
-                      tone: StatToneV2.success,
-                      onTap: () => context.go(AppRoutes.hrAttendance),
-                    ),
-                    DashboardStatCardV2(
-                      title: context.t('stat.pendingRequests'),
-                      value: (_stats['pendingRequests'] ?? 0) as int,
-                      icon: Icons.pending_actions_outlined,
-                      tone: StatToneV2.info,
-                      onTap: () => context.go(AppRoutes.requests),
-                    ),
-                    DashboardStatCardV2(
-                      title: context.t('stat.payrollsDraft'),
-                      value: (_stats['payrollsDraft'] ?? 0) as int,
-                      icon: Icons.payments_outlined,
-                      tone: StatToneV2.warning,
-                      onTap: () => context.go(AppRoutes.hrPayroll),
-                    ),
-                  ],
-                );
-              },
-            ),
+            if (statCards.isNotEmpty)
+              LayoutBuilder(
+                builder: (context, c) {
+                  final cols = c.maxWidth >= 1000
+                      ? 4
+                      : (c.maxWidth >= 600 ? 2 : 1);
+                  return GridView.count(
+                    crossAxisCount: cols.clamp(1, statCards.length),
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: cols == 1 ? 2.4 : 1.55,
+                    children: [
+                      for (final card in statCards)
+                        DashboardStatCardV2(
+                          title: card.title,
+                          subtitle: card.subtitle,
+                          value: card.value,
+                          icon: card.icon,
+                          tone: card.tone,
+                          onTap: () {
+                            if (!isRouteEntitled(auth, card.route)) {
+                              final feat = featureKeyForRoute(card.route);
+                              context.go(
+                                feat != null
+                                    ? AppRoutes.accessDeniedFeature(feat)
+                                    : AppRoutes.accessDeniedRole(),
+                              );
+                              return;
+                            }
+                            context.go(card.route);
+                          },
+                        ),
+                    ],
+                  );
+                },
+              ),
             const Gap(28),
             Text(
               context.t('hrDash.shortcuts'),

@@ -1429,6 +1429,7 @@ abstract final class AppStrings {
     'role.branchManager': 'مدير الفرع',
     'role.employee': 'موظف',
     'role.user': 'مستخدم',
+    'role.platformAdmin': 'مدير المنصة',
 
     // Dashboard
     'dash.statsLoadError': 'تعذر تحميل الإحصائيات',
@@ -2863,6 +2864,11 @@ abstract final class AppStrings {
         'إذا كنت تحتاج هذه الشاشة، اطلب من مدير المنصة تفعيلها من ميزات الشركة أو ترقية الباقة.',
     'errors.accessDeniedHint':
         'يمكنك العودة للرئيسية أو التواصل مع مدير النظام لمنحك الصلاحية المناسبة.',
+    'errors.webOnlyTitle': 'استخدم نسخة الويب',
+    'errors.webOnlyBody':
+        'لوحة مدير المنصة متاحة من متصفح الويب فقط، وليست على تطبيق الموبايل.',
+    'errors.webOnlyHint':
+        'افتح https://hr.hudoori.code-solution.org من الكمبيوتر لإدارة الشركات والباقات.',
     'errors.selectCompanyFirst': 'اختر شركة من القائمة أعلى الصفحة أولاً.',
     'errors.backHome': 'العودة للرئيسية',
     'errors.employeeQuota': 'وصلت الشركة للحد الأقصى للموظفين في الاشتراك. الأرشفة لا تحرّر مقعداً — راجع مدير المنصة.',
@@ -4358,6 +4364,7 @@ abstract final class AppStrings {
     'role.branchManager': 'Branch Manager',
     'role.employee': 'Employee',
     'role.user': 'User',
+    'role.platformAdmin': 'Platform Admin',
 
     // Dashboard
     'dash.statsLoadError': 'Could not load statistics',
@@ -5827,6 +5834,11 @@ abstract final class AppStrings {
         'If you need this screen, ask the platform admin to enable it on the company features or upgrade the plan.',
     'errors.accessDeniedHint':
         'You can go back home or ask your system admin for the right permission.',
+    'errors.webOnlyTitle': 'Use the web dashboard',
+    'errors.webOnlyBody':
+        'The platform admin console is available in the web browser only, not in the mobile app.',
+    'errors.webOnlyHint':
+        'Open https://hr.hudoori.code-solution.org on a computer to manage companies and plans.',
     'errors.selectCompanyFirst': 'Select a company from the top bar first.',
     'errors.backHome': 'Back to home',
     'errors.employeeQuota': 'The company reached its employee limit. Archiving does not free a seat — contact the platform admin.',
