@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../core/router/app_router.dart';
@@ -34,33 +33,12 @@ IconData menuIconFor(String icon) => switch (icon) {
       _ => Icons.dashboard_outlined,
     };
 
-/// Default employee self-service destinations for native iOS/Android.
-List<NavItem> defaultMobileEmployeeNav(BuildContext context) {
-  final l10n = AppLocalizations.of(context);
-  return [
-    NavItem(l10n.menuLabel('dashboard'), Icons.dashboard_outlined, AppRoutes.dashboard),
-    NavItem(l10n.menuLabel('my_schedule'), Icons.calendar_month_outlined, AppRoutes.mySchedule),
-    NavItem(l10n.menuLabel('my_attendance'), Icons.schedule_outlined, AppRoutes.myAttendance),
-    NavItem(
-      l10n.menuLabel('my_advance_request'),
-      Icons.request_quote_outlined,
-      AppRoutes.myAdvanceRequest,
-    ),
-  ];
-}
-
-bool _isMobileSelfServiceRoute(String route) =>
-    !route.startsWith('/hr') && !route.startsWith('/admin');
-
+/// Same menu pipeline for web and mobile — role + entitlements come from `/me`.
 List<NavItem> navItemsFromMenus(BuildContext context, List<BioTimeMenuItem> menus) {
   final l10n = AppLocalizations.of(context);
 
   if (menus.isEmpty) {
-    // Web keeps a single Home fallback; mobile always gets the full
-    // employee self-service set so bottom nav / drawer are usable.
-    return kIsWeb
-        ? [NavItem(l10n.home, Icons.dashboard_outlined, AppRoutes.dashboard)]
-        : defaultMobileEmployeeNav(context);
+    return [NavItem(l10n.home, Icons.dashboard_outlined, AppRoutes.dashboard)];
   }
 
   final filtered = menus
@@ -69,17 +47,10 @@ List<NavItem> navItemsFromMenus(BuildContext context, List<BioTimeMenuItem> menu
           !m.route.startsWith('/hr/shift-assignments') &&
           m.id != 'overtime' &&
           !m.route.startsWith('/hr/overtime') &&
-          // Mobile is employee self-service only: hide HR + admin menus.
-          // Web dashboard keeps the full set.
-          (kIsWeb || _isMobileSelfServiceRoute(m.route)))
+          // Super Admin shell is web-only; never surface /admin in the mobile drawer.
+          !m.route.startsWith('/admin'))
       .map((m) => NavItem(l10n.menuLabel(m.id), menuIconFor(m.icon), m.route))
       .toList();
-
-  if (!kIsWeb && filtered.isEmpty) {
-    // HR/admin accounts often only receive /hr menus — after filtering
-    // nothing would remain and bottom nav / drawer would disappear.
-    return defaultMobileEmployeeNav(context);
-  }
 
   if (filtered.isEmpty) {
     return [NavItem(l10n.home, Icons.dashboard_outlined, AppRoutes.dashboard)];

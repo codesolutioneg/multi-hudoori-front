@@ -61,7 +61,7 @@ During the build, the workflow sets:
 
 This repository **is** the `biotime_app` Flutter project and is the single source of truth for **both** the web dashboard and the iOS/Android app (one codebase, three targets). The `biotime_app` copies inside the `jouma/` and `V19/` repos are stale — do not build from them.
 
-**Scope:** on mobile (`!kIsWeb`) the app is **employee self-service only** — HR-management (`/hr/*`) and platform-admin (`/admin/*`) screens are hidden from the nav and blocked in the router; the full set remains on the web dashboard. Gating lives in `lib/features/shell/shell_nav.dart` and `lib/core/router/app_router.dart`.
+**Scope:** on mobile (`!kIsWeb`) the app mirrors the **same HR/employee dashboard** as web (drawer menu from `/me`, entitlement filtering, `/hr/*` routes). Navigation is **drawer-only** (no bottom bar). **Platform Admin** (`/admin/*`) stays **web-only** with a clear in-app message. Gating lives in `lib/features/shell/shell_nav.dart` and `lib/core/router/app_router.dart`.
 
 ### TODO
 - [ ] Build & release **Android** (needs Android SDK) and **iOS** (needs macOS + Xcode) from this repo.

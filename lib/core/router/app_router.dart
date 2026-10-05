@@ -60,6 +60,9 @@ abstract final class AppRoutes {
   static const accessDenied = '/access-denied';
   static const adminDashboard = '/admin/dashboard';
   static const adminCompanies = '/admin/companies';
+
+  /// Platform Admin on native mobile — Super Admin console is web-only.
+  static String accessDeniedWebOnly() => '$accessDenied?reason=web_only';
   static const adminSalesRequests = '/admin/sales-requests';
   static const adminPlans = '/admin/plans';
   static const adminUsers = '/admin/users';
@@ -122,13 +125,21 @@ GoRouter createRouter(AuthCubit auth) {
           location == AppRoutes.resetPassword;
 
       final isAdminRoute = location.startsWith('/admin');
-      final isHrRoute = location.startsWith('/hr');
       final isPlatformAdmin = s.isPlatformAdmin;
-      // Mobile (iOS/Android) is employee self-service only: admin + HR-management
-      // screens exist in the codebase but are only reachable on the web dashboard.
+      // Native mobile: same HR/employee dashboard as web (drawer menus + /hr routes).
+      // Super Admin (/admin) stays web-only.
       final isMobile = !kIsWeb;
-      final adminHome =
-          (isPlatformAdmin && !isMobile) ? AppRoutes.adminDashboard : AppRoutes.dashboard;
+      String homeForUser() {
+        if (isPlatformAdmin) {
+          return isMobile
+              ? AppRoutes.accessDeniedWebOnly()
+              : AppRoutes.adminDashboard;
+        }
+        if (s.roles.isHrStaff || s.roles.isBranchManager) {
+          return AppRoutes.hrDashboard;
+        }
+        return AppRoutes.dashboard;
+      }
 
       if (boot) return location == AppRoutes.splash ? null : AppRoutes.splash;
       if (location == AppRoutes.splash) {
@@ -136,18 +147,24 @@ GoRouter createRouter(AuthCubit auth) {
           final q = state.uri.query;
           return q.isEmpty ? AppRoutes.signIn : '${AppRoutes.signIn}?$q';
         }
-        return adminHome;
+        return homeForUser();
       }
       if (!loggedIn && !isAuth) {
         final q = state.uri.query;
         return q.isEmpty ? AppRoutes.signIn : '${AppRoutes.signIn}?$q';
       }
       if (loggedIn && isAuth) {
-        return adminHome;
+        return homeForUser();
       }
-      // On mobile, any admin/HR-management route falls back to the employee home.
-      if (isMobile && loggedIn && (isAdminRoute || isHrRoute))
-        return AppRoutes.dashboard;
+      // Super Admin console is web-only on native apps.
+      if (isMobile && loggedIn && isPlatformAdmin) {
+        final isWebOnlyDenied =
+            location == AppRoutes.accessDenied &&
+            state.uri.queryParameters['reason'] == 'web_only';
+        if (!isWebOnlyDenied) return AppRoutes.accessDeniedWebOnly();
+      } else if (isMobile && loggedIn && isAdminRoute) {
+        return AppRoutes.accessDeniedWebOnly();
+      }
       if (loggedIn && isPlatformAdmin && !isAdminRoute && !isMobile) {
         if (location == AppRoutes.hrAudit ||
             location == AppRoutes.orgChart ||

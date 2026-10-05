@@ -13,6 +13,7 @@
 ## Daily log
 
 ### 2026-10-05
+- **Auto**: Mobile matches web dashboard UX — drawer-only (removed bottom nav), same `/me` menus + `/hr` routes; Platform Admin gets web-only message; HR home → `/hr/dashboard` with entitlement-filtered KPIs/shortcuts. **MULTI**.
 - **Auto**: Settings always visible for HR managers (no longer gated by `advanced_permissions`); inside Settings hide Odoo/advances/payroll/tips/team sections by entitlement. Access-denied shows friendly feature name (not raw key). Backend menu map + client maps updated; rebuilt web + restarted backend/dashboard. **MULTI**.
 - **Auto**: Hide Home shortcuts + KPI tiles (and related sections) when plan feature is off — uses `/me` entitlements with menus fallback so UI matches sidebar. Deep links still hit `/access-denied`. Rebuilt web + restarted `hudoori-multi-dashboard`. **MULTI**.
 - **Auto**: Super Admin company switcher reloads Users / audit-permission pages / create-user locations when `activeCompanyId` changes; users subtitle shows company name; `COMPANY_CONTEXT_REQUIRED` friendly error. Main system: plan entitlements in `AuthFeatures`, `/access-denied` for feature/role blocks, Home quick-actions + shell nav check entitlements, API 403 parses `FEATURE_DISABLED`. Rebuilt web + restarted `hudoori-multi-dashboard`. **MULTI**.
