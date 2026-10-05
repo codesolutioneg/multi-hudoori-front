@@ -935,6 +935,8 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
     final mapping = _mapping;
     final displayAge = _displayAge;
+    final mobile = isMobile(context);
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -989,6 +991,13 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
               ],
             ),
           ),
+          // On phones the keyboard shrinks the body; hiding the action bar keeps
+          // the focused field on screen (otherwise Android drops focus).
+          if (mobile && !keyboardOpen) ...[
+            const SizedBox(height: 8),
+            _mobileActionBar(context),
+          ],
+          if (!mobile) ...[
           const SizedBox(height: 16),
           SellixCard(
             child: Wrap(
@@ -1065,6 +1074,104 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 ),
               ],
             ),
+          ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileActionBar(BuildContext context) {
+    final archived = _emp['active'] == false;
+    return SellixCard(
+      padding: const EdgeInsets.all(8),
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save, size: 18),
+              label: Text(context.t('employees.action.save')),
+            ),
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            tooltip: context.t('common.more'),
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              switch (v) {
+                case 'push':
+                  _action(
+                    () => api.employeePushBiotime(widget.employeeId),
+                    context.t('employees.action.pushOk'),
+                  );
+                case 'fetch':
+                  _fetchDevicePunches();
+                case 'export':
+                  _exportPunchesRange();
+                case 'archive':
+                  _toggleArchive();
+              }
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'push',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.cloud_upload_outlined),
+                  title: Text(context.t('employees.action.manualPush')),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'fetch',
+                enabled: !_fetchingPunches,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.fingerprint),
+                  title: Text(
+                    _fetchingPunches
+                        ? context.t('employees.action.fetchingPunches')
+                        : context.t('employees.action.fetchPunches'),
+                  ),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'export',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.file_download_outlined),
+                  title: Text(context.t('employees.action.exportPunches')),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'archive',
+                enabled: !_archiving,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+                    color: archived ? AppColors.success : AppColors.danger,
+                  ),
+                  title: Text(
+                    archived
+                        ? context.t('employees.action.restore')
+                        : context.t('employees.action.archive'),
+                    style: TextStyle(
+                      color: archived ? AppColors.success : AppColors.danger,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

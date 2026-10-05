@@ -110,6 +110,7 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String?>(
+                        isExpanded: true,
                         value: locId != null && locId.isNotEmpty ? locId : null,
                         decoration: InputDecoration(
                           labelText: context.t('set.location'),
@@ -120,7 +121,10 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
                           for (final loc in _locations)
                             DropdownMenuItem<String?>(
                               value: loc['id']?.toString(),
-                              child: Text(loc['name']?.toString() ?? ''),
+                              child: Text(
+                                loc['name']?.toString() ?? '',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                         ],
                         onChanged: (v) => _setLocation(d, v),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
 import '../../core/layout/app_page_scaffold.dart';
+import '../../core/layout/breakpoints.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/file_download.dart';
@@ -582,9 +583,37 @@ class _DeductionsPageState extends State<DeductionsPage> {
   Widget build(BuildContext context) {
     final filtered = _filteredItems();
     final locations = _locationOptions;
+    // Phones scroll the whole page; wider screens keep a fixed header + list.
+    final mobile = isMobile(context);
+    final listArea = _loading
+        ? const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        : _items.isEmpty
+            ? HrEmptyListCard(
+                message: context.t('deductions.emptyList'),
+                actionLabel: context.t('deductions.new'),
+                onAction: _add,
+              )
+            : _DeductionGroupedList(
+                inline: mobile,
+                items: filtered,
+                payrollMonthStartDay: _payrollMonthStartDay,
+                typeLabel: _typeLabel,
+                stateAr: _stateAr,
+                stateTag: _tag,
+                selectedIds: _selectedIds,
+                onToggleSelected: _toggleSelected,
+                onTapItem: _showDeductionDetail,
+                onAdd: _add,
+                emptyActionLabel: context.t('deductions.new'),
+              );
 
     return AppPageScaffold(
-      scrollable: false,
+      scrollable: mobile,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -776,28 +805,7 @@ class _DeductionsPageState extends State<DeductionsPage> {
             ),
           ],
           const SizedBox(height: 16),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                    ? HrEmptyListCard(
-                        message: context.t('deductions.emptyList'),
-                        actionLabel: context.t('deductions.new'),
-                        onAction: _add,
-                      )
-                    : _DeductionGroupedList(
-                        items: filtered,
-                        payrollMonthStartDay: _payrollMonthStartDay,
-                        typeLabel: _typeLabel,
-                        stateAr: _stateAr,
-                        stateTag: _tag,
-                        selectedIds: _selectedIds,
-                        onToggleSelected: _toggleSelected,
-                        onTapItem: _showDeductionDetail,
-                        onAdd: _add,
-                        emptyActionLabel: context.t('deductions.new'),
-                      ),
-          ),
+          if (mobile) listArea else Expanded(child: listArea),
         ],
       ),
     );
@@ -806,6 +814,7 @@ class _DeductionsPageState extends State<DeductionsPage> {
 
 class _DeductionGroupedList extends StatefulWidget {
   const _DeductionGroupedList({
+    this.inline = false,
     required this.items,
     required this.payrollMonthStartDay,
     required this.typeLabel,
@@ -818,6 +827,7 @@ class _DeductionGroupedList extends StatefulWidget {
     required this.emptyActionLabel,
   });
 
+  final bool inline;
   final List<Map<String, dynamic>> items;
   final int payrollMonthStartDay;
   final String Function(String) typeLabel;
@@ -1073,6 +1083,9 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
     );
   }
 
+  Widget _expandUnlessInline(Widget child) =>
+      widget.inline ? child : Expanded(child: child);
+
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) {
@@ -1108,10 +1121,15 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
           ),
         ),
         const SizedBox(height: 4),
-        Expanded(
-          child: SellixCard(
+        _expandUnlessInline(
+          SellixCard(
             padding: EdgeInsets.zero,
             child: ListView(
+              shrinkWrap: widget.inline,
+              primary: widget.inline ? false : null,
+              physics: widget.inline
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
               children: [
                 for (final periodKey in periodKeys) ...[
                   () {

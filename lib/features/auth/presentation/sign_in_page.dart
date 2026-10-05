@@ -203,19 +203,8 @@ class _SignInPageState extends State<SignInPage> {
                 ),
               ),
             ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 20,
-              child: Text(
-                'Powered by CodeSolution © ${DateTime.now().year}',
-                textAlign: TextAlign.center,
-                style: AppThemeV2.caption.copyWith(
-                  fontSize: 12,
-                  color: AppThemeV2.textMuted,
-                ),
-              ),
-            ),
+            // Pinned to the bottom, so it would sit on the form while typing.
+            if (MediaQuery.viewInsetsOf(context).bottom == 0)
             Positioned(
               left: 0,
               right: 0,

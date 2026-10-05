@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/layout/breakpoints.dart';
 import '../../core/di/injection.dart';
 import '../../core/layout/app_page_scaffold.dart';
 import '../../core/router/app_router.dart';
@@ -765,49 +766,79 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _fromCtrl,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              labelText: context.t('emp.dateFrom'),
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                              suffixIcon: IconButton(
-                                icon: const Icon(
-                                  Icons.calendar_today,
-                                  size: 18,
+                    if (isMobile(context)) ...[
+                      TextField(
+                        controller: _fromCtrl,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: context.t('emp.dateFrom'),
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.calendar_today, size: 18),
+                            onPressed: () => _pickDate(_fromCtrl),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _toCtrl,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: context.t('emp.dateTo'),
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.calendar_today, size: 18),
+                            onPressed: () => _pickDate(_toCtrl),
+                          ),
+                        ),
+                      ),
+                    ] else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _fromCtrl,
+                              readOnly: true,
+                              decoration: InputDecoration(
+                                labelText: context.t('emp.dateFrom'),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                                suffixIcon: IconButton(
+                                  icon: const Icon(
+                                    Icons.calendar_today,
+                                    size: 18,
+                                  ),
+                                  onPressed: () => _pickDate(_fromCtrl),
                                 ),
-                                onPressed: () => _pickDate(_fromCtrl),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: _toCtrl,
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              labelText: context.t('emp.dateTo'),
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                              suffixIcon: IconButton(
-                                icon: const Icon(
-                                  Icons.calendar_today,
-                                  size: 18,
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _toCtrl,
+                              readOnly: true,
+                              decoration: InputDecoration(
+                                labelText: context.t('emp.dateTo'),
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                                suffixIcon: IconButton(
+                                  icon: const Icon(
+                                    Icons.calendar_today,
+                                    size: 18,
+                                  ),
+                                  onPressed: () => _pickDate(_toCtrl),
                                 ),
-                                onPressed: () => _pickDate(_toCtrl),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
+                      isExpanded: true,
                       value: _shiftGridId,
                       decoration: InputDecoration(
                         labelText: context.t('payL.gridOptional'),
@@ -832,6 +863,7 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String?>(
+                      isExpanded: true,
                       value: _deviceId,
                       decoration: InputDecoration(
                         labelText: context.t('payL.deviceOptional'),
@@ -850,6 +882,7 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                               d['name']?.toString() ??
                                   d['id']?.toString() ??
                                   '',
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                       ],

@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
+import '../../core/layout/breakpoints.dart';
 import '../../core/storage/shift_grid_import_storage.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
@@ -1336,13 +1337,18 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
               ? context.t('grid.fingerprint', {'name': _grid['deviceName']})
               : '');
     // Sticky: رقم + كود + اسم + تاريخ التعيين. Scrollable: وظيفة + أيام.
-    final scrollWidth = _kColJob + _dates.length * _kColDate;
+    // Phones: sticky رقم + اسم only; كود + تاريخ التعيين scroll with the days.
+    final compact = isMobile(context);
+    final scrollWidth =
+        _scrollLeadWidth(compact) + _kColJob + _dates.length * _kColDate;
     final visibleRows = _buildVisibleFlatRows();
     final visibleEmpCount = visibleRows.where((r) => !r.isHeader).length;
     final searching = _searchQuery.trim().isNotEmpty;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(12, 12, 12, 24)
+          : const EdgeInsets.fromLTRB(24, 20, 24, 32),
       child: CustomScrollView(
         controller: _scrollCtrl,
         slivers: [
@@ -1673,6 +1679,7 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
               SliverPersistentHeader(
                 pinned: true,
                 delegate: _StickyGridHeaderDelegate(
+                  compact: compact,
                   scrollWidth: scrollWidth,
                   dates: _dates,
                   horizontalController: _headerHorizontalScroll,
@@ -1701,11 +1708,23 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
                         );
                       }
                       final row = visibleRows[index];
+                      if (row.isHeader && compact) {
+                        return Container(
+                          color: const Color(0xFFF0C040),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          alignment: Alignment.center,
+                          child: Text(
+                            row.jobTitle!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        );
+                      }
                       if (row.isHeader) {
                         return Row(
                           children: [
                             Container(
-                              width: _kStickyColsWidth,
+                              width: _stickyColsWidth(compact),
                               color: const Color(0xFFF0C040),
                               padding: const EdgeInsets.symmetric(vertical: 6),
                               alignment: Alignment.center,
@@ -1737,6 +1756,7 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
                         );
                       }
                       return _GridEmployeeRow(
+                        compact: compact,
                         emp: row.employee!,
                         rowNum: row.rowNum,
                         dates: _dates,
@@ -1774,6 +1794,15 @@ const double _kColDate = 70;
 /// رقم + كود + اسم + تاريخ التعيين — ثابتة جنب الشاشة أثناء السكرول الأفقي.
 const double _kStickyColsWidth =
     _kColNum + _kColCode + _kColName + _kColHiring;
+const double _kColNumCompact = 40;
+const double _kColNameCompact = 150;
+
+double _stickyColsWidth(bool compact) =>
+    compact ? _kColNumCompact + _kColNameCompact : _kStickyColsWidth;
+
+/// Phones have no sticky block: رقم + اسم + كود + تاريخ التعيين scroll too.
+double _scrollLeadWidth(bool compact) =>
+    compact ? _stickyColsWidth(true) + _kColCode + _kColHiring : 0;
 
 class _FlatGridRow {
   _FlatGridRow.header(this.jobTitle) : employee = null, rowNum = 0;
@@ -1786,15 +1815,26 @@ class _FlatGridRow {
 }
 
 class _GridHeaderRow extends StatelessWidget {
-  const _GridHeaderRow({required this.dates, this.onBulkColumn});
+  const _GridHeaderRow({
+    required this.dates,
+    this.onBulkColumn,
+    this.compact = false,
+  });
 
   final List<Map<String, dynamic>> dates;
   final void Function(String date)? onBulkColumn;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
+        if (compact) ...[
+          _hdr(context.t('grid.numberColumn'), width: _kColNumCompact, light: true),
+          _hdr(context.t('common.name'), width: _kColNameCompact, light: true),
+          _hdr(context.t('common.code'), width: _kColCode, light: true),
+          _hdr(context.t('employees.field.hiringDate'), width: _kColHiring, light: true),
+        ],
         _hdr(context.t('grid.jobColumn'), width: _kColJob, light: true),
         for (final d in dates)
           _dateHdr(
@@ -1810,6 +1850,7 @@ class _GridHeaderRow extends StatelessWidget {
 
 class _GridEmployeeRow extends StatelessWidget {
   const _GridEmployeeRow({
+    this.compact = false,
     required this.emp,
     required this.rowNum,
     required this.dates,
@@ -1823,6 +1864,7 @@ class _GridEmployeeRow extends StatelessWidget {
     required this.onShowPunches,
   });
 
+  final bool compact;
   final Map<String, dynamic> emp;
   final int rowNum;
   final List<Map<String, dynamic>> dates;
@@ -1865,10 +1907,176 @@ class _GridEmployeeRow extends StatelessWidget {
     return true;
   }
 
+  Widget _codeCell() => SizedBox(
+        width: _kColCode,
+        child: Text(
+          emp['code']?.toString() ?? '',
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+
+  Widget _hiringCell() => SizedBox(
+        width: _kColHiring,
+        child: Text(
+          _hiringDateText(emp),
+          style: const TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+
+  Widget _rowMenu(BuildContext context, Object employeeId, String name) {
+    return PopupMenuButton<String>(
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 180),
+      icon: const Icon(Icons.more_vert, size: 18),
+      iconSize: 18,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(28, 28),
+        padding: EdgeInsets.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onSelected: (v) {
+        switch (v) {
+          case 'bulk':
+            onBulkRow(employeeId);
+          case 'transfer':
+            onTransfer(employeeId, name);
+          case 'remove':
+            onRemove(employeeId, name);
+        }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'bulk',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.play_arrow),
+            title: Text(context.t('grid.bulkRow')),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'transfer',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.share_outlined, color: Colors.blue.shade700),
+            title: Text(context.t('grid.transferEmployee')),
+          ),
+        ),
+        if (_canRemove)
+          PopupMenuItem(
+            value: 'remove',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.person_remove_outlined, color: Colors.red),
+              title: Text(context.t('grid.removeFromGridNoShifts')),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final employeeId = emp['employee_id'] ?? emp['employeeId'] ?? '';
     final name = emp['name']?.toString() ?? '';
+    final Widget sticky = Container(
+      width: _stickyColsWidth(compact),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: compact
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 4,
+                  offset: const Offset(-2, 0),
+                ),
+              ],
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: compact ? _kColNumCompact : _kColNum,
+            child: Center(
+              child: Text(
+                '$rowNum',
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+          ),
+          if (!compact) _codeCell(),
+          SizedBox(
+            width: compact ? _kColNameCompact : _kColName,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    emp['name']?.toString() ?? '',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 2,
+                    softWrap: true,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (compact && !locked) _rowMenu(context, employeeId, name),
+                if (!compact && !locked)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                    icon: const Icon(Icons.play_arrow, size: 16),
+                    tooltip: context.t('grid.bulkRow'),
+                    onPressed: () => onBulkRow(employeeId),
+                  ),
+                if (!compact && !locked)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                    icon: Icon(
+                      Icons.share_outlined,
+                      size: 16,
+                      color: Colors.blue.shade700,
+                    ),
+                    tooltip: context.t('grid.transferEmployee'),
+                    onPressed: () => onTransfer(employeeId, name),
+                  ),
+                if (!compact && !locked && _canRemove)
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 28,
+                      minHeight: 28,
+                    ),
+                    icon: const Icon(
+                      Icons.person_remove_outlined,
+                      size: 16,
+                      color: Colors.red,
+                    ),
+                    tooltip: context.t('grid.removeFromGridNoShifts'),
+                    onPressed: () => onRemove(employeeId, name),
+                  ),
+              ],
+            ),
+          ),
+          if (!compact) _hiringCell(),
+        ],
+      ),
+    );
     return Container(
       decoration: BoxDecoration(
         border: Border(
@@ -1877,114 +2085,7 @@ class _GridEmployeeRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: _kStickyColsWidth,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 4,
-                  offset: const Offset(-2, 0),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: _kColNum,
-                  child: Center(
-                    child: Text(
-                      '$rowNum',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: _kColCode,
-                  child: Text(
-                    emp['code']?.toString() ?? '',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: _kColName,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          emp['name']?.toString() ?? '',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 2,
-                          softWrap: true,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (!locked)
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          icon: const Icon(Icons.play_arrow, size: 16),
-                          tooltip: context.t('grid.bulkRow'),
-                          onPressed: () => onBulkRow(employeeId),
-                        ),
-                      if (!locked)
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          icon: Icon(
-                            Icons.share_outlined,
-                            size: 16,
-                            color: Colors.blue.shade700,
-                          ),
-                          tooltip: context.t('grid.transferEmployee'),
-                          onPressed: () => onTransfer(employeeId, name),
-                        ),
-                      if (!locked && _canRemove)
-                        IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          icon: const Icon(
-                            Icons.person_remove_outlined,
-                            size: 16,
-                            color: Colors.red,
-                          ),
-                          tooltip: context.t('grid.removeFromGridNoShifts'),
-                          onPressed: () => onRemove(employeeId, name),
-                        ),
-                    ],
-                  ),
-                ),
-                SizedBox(
-                  width: _kColHiring,
-                  child: Text(
-                    _hiringDateText(emp),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppColors.textSecondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          if (!compact) sticky,
           Expanded(
             child: ClipRect(
               child: SyncHorizontalScrollView(
@@ -1992,6 +2093,7 @@ class _GridEmployeeRow extends StatelessWidget {
                 width: scrollWidth,
                 child: Row(
                   children: [
+                    if (compact) ...[sticky, _codeCell(), _hiringCell()],
                     SizedBox(
                       width: _kColJob,
                       child: Text(
@@ -2534,12 +2636,14 @@ class _GridSearchBar extends StatelessWidget {
 
 class _StickyGridHeaderDelegate extends SliverPersistentHeaderDelegate {
   _StickyGridHeaderDelegate({
+    this.compact = false,
     required this.scrollWidth,
     required this.dates,
     required this.horizontalController,
     this.onBulkColumn,
   });
 
+  final bool compact;
   final double scrollWidth;
   final List<Map<String, dynamic>> dates;
   final ScrollController horizontalController;
@@ -2562,8 +2666,9 @@ class _StickyGridHeaderDelegate extends SliverPersistentHeaderDelegate {
       color: Theme.of(context).cardColor,
       child: Row(
         children: [
+          if (!compact)
           Container(
-            width: _kStickyColsWidth,
+            width: _stickyColsWidth(compact),
             height: maxExtent,
             decoration: BoxDecoration(
               gradient: AppThemeV2.primaryGradient,
@@ -2577,10 +2682,20 @@ class _StickyGridHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
             child: Row(
               children: [
-                _hdr(context.t('grid.numberColumn'), width: _kColNum, light: true),
-                _hdr(context.t('common.code'), width: _kColCode, light: true),
-                _hdr(context.t('common.name'), width: _kColName, light: true),
-                _hdr(context.t('employees.field.hiringDate'), width: _kColHiring, light: true),
+                _hdr(
+                  context.t('grid.numberColumn'),
+                  width: compact ? _kColNumCompact : _kColNum,
+                  light: true,
+                ),
+                if (!compact)
+                  _hdr(context.t('common.code'), width: _kColCode, light: true),
+                _hdr(
+                  context.t('common.name'),
+                  width: compact ? _kColNameCompact : _kColName,
+                  light: true,
+                ),
+                if (!compact)
+                  _hdr(context.t('employees.field.hiringDate'), width: _kColHiring, light: true),
               ],
             ),
           ),
@@ -2596,6 +2711,7 @@ class _StickyGridHeaderDelegate extends SliverPersistentHeaderDelegate {
                     gradient: AppThemeV2.primaryGradient,
                   ),
                   child: _GridHeaderRow(
+                    compact: compact,
                     dates: dates,
                     onBulkColumn: onBulkColumn,
                   ),
@@ -2610,7 +2726,8 @@ class _StickyGridHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(covariant _StickyGridHeaderDelegate oldDelegate) {
-    return oldDelegate.scrollWidth != scrollWidth ||
+    return oldDelegate.compact != compact ||
+        oldDelegate.scrollWidth != scrollWidth ||
         oldDelegate.dates != dates ||
         oldDelegate.horizontalController != horizontalController ||
         oldDelegate.onBulkColumn != onBulkColumn;

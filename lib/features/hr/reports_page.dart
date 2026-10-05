@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
+import '../../core/layout/breakpoints.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme_v2.dart';
@@ -564,9 +565,9 @@ class _ReportsPageState extends State<ReportsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-      child: Column(
+    // Phones scroll the whole page; wider screens keep the results area fixed.
+    final mobile = isMobile(context);
+    final content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PageHeader(
@@ -656,20 +657,21 @@ class _ReportsPageState extends State<ReportsPage> {
                   ),
                   const SizedBox(height: 8),
                 ],
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     FilledButton.icon(
                       onPressed: _loading || !_reportReady ? null : _run,
                       icon: const Icon(Icons.play_arrow),
                       label: Text(context.t('reports.run')),
                     ),
-                    const SizedBox(width: 12),
                     OutlinedButton.icon(
                       onPressed: _exporting || !_reportReady ? null : _export,
                       icon: const Icon(Icons.download_outlined),
                       label: Text(context.t('reports.exportExcel')),
                     ),
-                    const Spacer(),
                     if (_hasRun && _error == null)
                       Text(
                         context.t('reports.resultCount', {'count': '${_rows.length}'}),
@@ -681,15 +683,32 @@ class _ReportsPageState extends State<ReportsPage> {
             ),
           ),
           const SizedBox(height: 16),
-          Expanded(child: _buildResults()),
+          if (mobile)
+            _buildResults(inline: true)
+          else
+            Expanded(child: _buildResults()),
         ],
-      ),
+      );
+    if (mobile) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        child: content,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+      child: content,
     );
   }
 
-  Widget _buildResults() {
+  Widget _buildResults({bool inline = false}) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: AppThemeV2.primary));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(color: AppThemeV2.primary),
+        ),
+      );
     }
     if (_error != null) {
       return SellixCard(
@@ -731,6 +750,8 @@ class _ReportsPageState extends State<ReportsPage> {
     return SellixCard(
       padding: EdgeInsets.zero,
       child: SingleChildScrollView(
+        primary: inline ? false : null,
+        physics: inline ? const NeverScrollableScrollPhysics() : null,
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: DataTable(

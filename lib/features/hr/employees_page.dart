@@ -846,8 +846,14 @@ class _EmployeesPageState extends State<EmployeesPage> {
     );
   }
 
-  Widget _employeesList(BuildContext context) {
-    if (_loading) return const _EmployeesListSkeleton();
+  /// [inline]: the list is laid out inside the page's own scroll view
+  /// (mobile), so it must not scroll or own [_scrollCtrl] itself.
+  Widget _employeesList(BuildContext context, {bool inline = false}) {
+    if (_loading) {
+      return inline
+          ? const SizedBox(height: 420, child: _EmployeesListSkeleton())
+          : const _EmployeesListSkeleton();
+    }
     if (_items.isEmpty) {
       return SellixCard(
         child: Center(
@@ -861,7 +867,10 @@ class _EmployeesPageState extends State<EmployeesPage> {
     return SellixCard(
       padding: EdgeInsets.zero,
       child: ListView.separated(
-        controller: _scrollCtrl,
+        controller: inline ? null : _scrollCtrl,
+        shrinkWrap: inline,
+        primary: inline ? false : null,
+        physics: inline ? const NeverScrollableScrollPhysics() : null,
         itemCount: _items.length + (_loadingMore ? _loadMoreSkeletonCount : 0),
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (context, i) {
@@ -914,7 +923,6 @@ class _EmployeesPageState extends State<EmployeesPage> {
                 actions: _headerActions(context),
               );
               final filters = _filtersCard(context);
-              final list = _employeesList(context);
               final quota = _quota;
               final quotaBanner = quota != null && quota.employeesFull
                   ? _QuotaFullBanner(
@@ -925,8 +933,11 @@ class _EmployeesPageState extends State<EmployeesPage> {
                     )
                   : null;
 
-              if (shortViewport) {
+              // Phones/tablets scroll the whole page (header + filters + list)
+              // as one; the layout never switches while the keyboard is open.
+              if (compact || shortViewport) {
                 return ListView(
+                  controller: _scrollCtrl,
                   children: [
                     header,
                     if (quotaBanner != null) ...[
@@ -936,11 +947,12 @@ class _EmployeesPageState extends State<EmployeesPage> {
                     const SizedBox(height: 16),
                     filters,
                     const SizedBox(height: 16),
-                    SizedBox(height: 420, child: list),
+                    _employeesList(context, inline: true),
                   ],
                 );
               }
 
+              final list = _employeesList(context);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

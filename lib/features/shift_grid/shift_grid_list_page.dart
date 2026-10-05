@@ -7,6 +7,7 @@ import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../core/config/api_config.dart';
 import '../../core/di/injection.dart';
+import '../../core/layout/breakpoints.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/entity_id.dart';
@@ -374,16 +375,65 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
 
   Widget _buildHeader() {
     final canCreate = context.watch<AuthCubit>().state.roles.isBranchStaff;
+    final mobile = isMobile(context);
+    final createActions = <Widget>[
+      FilledButton.icon(
+        onPressed: _openCreate,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppThemeV2.primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        icon: const Icon(Icons.add_rounded, size: 18),
+        label: Text(context.t('grid.new')),
+      ),
+      OutlinedButton.icon(
+        onPressed: _openCreateAllLocations,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppThemeV2.primary,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        icon: const Icon(Icons.account_tree_outlined, size: 18),
+        label: Text(context.t('grid.newAllLocations')),
+      ),
+      OutlinedButton.icon(
+        onPressed: _openMonthlyReports,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppThemeV2.primary,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        icon: const Icon(Icons.summarize_outlined, size: 18),
+        label: Text(context.t('grid.monthlyReports.button')),
+      ),
+    ];
     return GlassCard(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(mobile ? 14 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                width: mobile ? 40 : 48,
+                height: mobile ? 40 : 48,
                 decoration: BoxDecoration(
                   gradient: AppThemeV2.primaryGradient,
                   borderRadius: BorderRadius.circular(12),
@@ -401,12 +451,19 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
                   size: 24,
                 ),
               ),
-              const Gap(16),
+              Gap(mobile ? 10 : 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(context.t('grid.title'), style: AppThemeV2.headline),
+                    Text(
+                      context.t('grid.title'),
+                      style: mobile
+                          ? AppThemeV2.headline.copyWith(fontSize: 20)
+                          : AppThemeV2.headline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const Gap(4),
                     Text(context.t('grid.subtitle'), style: AppThemeV2.caption),
                   ],
@@ -429,59 +486,18 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
                   ),
                   tooltip: context.t('grid.mergeAction'),
                 ),
-              if (canCreate) ...[
-                const Gap(8),
-                FilledButton.icon(
-                  onPressed: _openCreate,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppThemeV2.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: Text(context.t('grid.new')),
-                ),
-                const Gap(8),
-                OutlinedButton.icon(
-                  onPressed: _openCreateAllLocations,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppThemeV2.primary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  icon: const Icon(Icons.account_tree_outlined, size: 18),
-                  label: Text(context.t('grid.newAllLocations')),
-                ),
-                const Gap(8),
-                OutlinedButton.icon(
-                  onPressed: _openMonthlyReports,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppThemeV2.primary,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  icon: const Icon(Icons.summarize_outlined, size: 18),
-                  label: Text(context.t('grid.monthlyReports.button')),
-                ),
-              ],
+              if (canCreate && !mobile)
+                for (final b in createActions) ...[const Gap(8), b],
             ],
           ),
+          if (canCreate && mobile) ...[
+            const Gap(12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: createActions,
+            ),
+          ],
           const Gap(14),
           Wrap(
             spacing: 8,
@@ -908,8 +924,95 @@ class _ExpandablePeriodSection extends StatelessWidget {
   final VoidCallback? onSelectAll;
   final VoidCallback? onClearPeriod;
 
+  Widget _countPill(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppThemeV2.border),
+        ),
+        child: Text(
+          selectedInPeriod > 0
+              ? context.t('shiftGrid.gridsCountSelected', {
+                  'count': count,
+                  'selected': selectedInPeriod,
+                })
+              : context.t('shiftGrid.gridsCount', {'count': count}),
+          style: AppThemeV2.caption.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppThemeV2.textSecondary,
+          ),
+        ),
+      );
+
+  List<Widget> _selectionButtons(BuildContext context) => [
+        if (onSelectAll != null) ...[
+          TextButton(
+            onPressed: onSelectAll,
+            child: Text(context.t('grid.selectAllPeriod')),
+          ),
+          if (selectedInPeriod > 0 && onClearPeriod != null)
+            TextButton(
+              onPressed: onClearPeriod,
+              child: Text(context.t('grid.clearSelection')),
+            ),
+        ],
+      ];
+
+  Widget _mobileHeader(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            AnimatedRotation(
+              turns: expanded ? 0.5 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: const Icon(
+                Icons.expand_more_rounded,
+                size: 22,
+                color: AppThemeV2.primary,
+              ),
+            ),
+            const Gap(6),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: AppThemeV2.body.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppThemeV2.primary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const Gap(6),
+        Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _countPill(context),
+            if (hasMerged)
+              StatusBadge(
+                label: context.t('shiftGrid.mergedPeriod'),
+                tone: BadgeTone.warning,
+              ),
+            ..._selectionButtons(context),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final mobile = isMobile(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -927,7 +1030,7 @@ class _ExpandablePeriodSection extends StatelessWidget {
                   color: AppThemeV2.primary.withValues(alpha: 0.15),
                 ),
               ),
-              child: Row(
+              child: mobile ? _mobileHeader(context) : Row(
                 children: [
                   AnimatedRotation(
                     turns: expanded ? 0.5 : 0,
@@ -996,40 +1099,8 @@ class _ExpandablePeriodSection extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (onSelectAll != null) ...[
-                    TextButton(
-                      onPressed: onSelectAll,
-                      child: Text(context.t('grid.selectAllPeriod')),
-                    ),
-                    if (selectedInPeriod > 0 && onClearPeriod != null)
-                      TextButton(
-                        onPressed: onClearPeriod,
-                        child: Text(context.t('grid.clearSelection')),
-                      ),
-                  ],
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppThemeV2.border),
-                    ),
-                    child: Text(
-                      selectedInPeriod > 0
-                          ? context.t('shiftGrid.gridsCountSelected', {
-                              'count': count,
-                              'selected': selectedInPeriod,
-                            })
-                          : context.t('shiftGrid.gridsCount', {'count': count}),
-                      style: AppThemeV2.caption.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppThemeV2.textSecondary,
-                      ),
-                    ),
-                  ),
+                  ..._selectionButtons(context),
+                  _countPill(context),
                 ],
               ),
             ),
@@ -1069,6 +1140,87 @@ class _GridListTile extends StatelessWidget {
   final bool selected;
   final ValueChanged<bool?> onSelectedChanged;
 
+  List<Widget> _badges(BuildContext context, bool isMerged) => [
+        StatusBadge(
+          label: stateLabel(item['state']?.toString() ?? ''),
+          tone: stateTone,
+        ),
+        if (isMerged)
+          StatusBadge(
+            label: context.t('grid.mergeBadgeMonthly'),
+            tone: BadgeTone.info,
+          )
+        else if (item['mergedIntoGridId'] != null &&
+            '${item['mergedIntoGridId']}'.isNotEmpty)
+          StatusBadge(
+            label: context.t('grid.mergeBadgeAdded'),
+            tone: BadgeTone.online,
+          ),
+        if (item['hasAssignedShift'] == true)
+          StatusBadge(
+            label: context.t('grid.modifiedBadge'),
+            tone: BadgeTone.warning,
+          ),
+      ];
+
+  /// Phones: name gets the full width; badges wrap under it.
+  Widget _buildMobile(
+    BuildContext context,
+    String name,
+    List<String> meta,
+    bool isMerged,
+  ) {
+    return Material(
+      color: isMerged
+          ? AppThemeV2.primary.withValues(alpha: 0.07)
+          : Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(4, 12, 8, 12),
+          child: Row(
+            children: [
+              Checkbox(value: selected, onChanged: onSelectedChanged),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: AppThemeV2.title.copyWith(fontSize: 15),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const Gap(2),
+                      Text(
+                        meta.join('  ·  '),
+                        style: AppThemeV2.caption,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const Gap(6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _badges(context, isMerged),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: AppThemeV2.textMuted,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final device = item['deviceName']?.toString() ?? '';
@@ -1087,6 +1239,7 @@ class _GridListTile extends StatelessWidget {
       tr('shiftGrid.employeesCount', {'count': employees}),
       if (days != 0) tr('shiftGrid.daysCount', {'count': days}),
     ];
+    if (isMobile(context)) return _buildMobile(context, name, meta, isMerged);
 
     return Material(
           color: isMerged

@@ -101,12 +101,13 @@ abstract final class AppTheme {
         ),
       ),
       listTileTheme: ListTileThemeData(
-        titleTextStyle: cairo(fontWeight: FontWeight.w600),
+        titleTextStyle: cairo(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
         subtitleTextStyle: cairo(fontSize: 13, color: AppColors.textSecondary),
-        leadingAndTrailingTextStyle: cairo(fontSize: 13),
+        leadingAndTrailingTextStyle: cairo(fontSize: 13, color: AppColors.textPrimary),
       ),
+      // Text styles without a color render white on iOS/Android (black on web).
       chipTheme: ChipThemeData(
-        labelStyle: cairo(fontSize: 13 * kTextScaleFactor),
+        labelStyle: cairo(fontSize: 13 * kTextScaleFactor, color: AppColors.textPrimary),
       ),
       navigationBarTheme: NavigationBarThemeData(
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -139,7 +140,7 @@ abstract final class AppTheme {
         textStyle: cairo(fontSize: 14, color: AppColors.textPrimary),
       ),
       dropdownMenuTheme: DropdownMenuThemeData(
-        textStyle: cairo(fontSize: 14),
+        textStyle: cairo(fontSize: 14, color: AppColors.textPrimary),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimensions.radius2xl)),
