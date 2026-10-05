@@ -1,4 +1,4 @@
-package com.codesolutioneg.biotime_app
+package com.codesolutioneg.multibiotimeApp
 
 import io.flutter.embedding.android.FlutterActivity
 
