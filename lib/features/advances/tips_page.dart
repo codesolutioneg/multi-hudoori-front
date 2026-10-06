@@ -13,6 +13,10 @@ import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_tabbed_page.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
 String _money(num? value) => formatMoney(value ?? 0);
 
 const _fawryCommissionRate = 0.0015;
@@ -72,6 +76,15 @@ Widget _moneyBreakdownText(
   required double total,
   double fontSize = 11.5,
 }) {
+  if (isNativeMobile) {
+    return MobileMoneySummary(
+      total: total,
+      cash: cash,
+      fawry: fawryApproved,
+      commission: fawryCommission,
+      format: (v) => _money(v),
+    );
+  }
   final parts = [
     context.t('tips.cash', {'amount': _money(cash)}),
     context.t('fawryLine.noCommission', {'amount': _money(fawryApproved)}),
@@ -177,37 +190,132 @@ class _TipsPageState extends State<TipsPage>
     if (mounted) _load();
   }
 
+  Widget _importCardMobile(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _openImport(),
+        child: Ink(
+          padding: const EdgeInsets.all(14),
+          decoration: MobileUi.card(r: 20),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFB923C), Color(0xFFEA580C)],
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFEA580C).withValues(alpha: 0.28),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.upload_file_rounded, color: Colors.white, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('tips.importFromSheet'),
+                      style: MobileUi.text(14.5, weight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.t('m.tipsImportHint'),
+                      style: MobileUi.text(12, weight: FontWeight.w500, color: MobileUi.muted, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: const BoxDecoration(
+                  color: MobileUi.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.arrow_forward_rounded, size: 18, color: MobileUi.primary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final header = PageHeader(
+      title: context.t('tips.title'),
+      icon: Icons.card_giftcard_outlined,
+      actions: [
+        IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        FilledButton.icon(
+          onPressed: () => _openImport(),
+          icon: const Icon(Icons.upload_file_outlined, size: 18),
+          label: Text(context.t('tips.importFromSheet')),
+        ),
+      ],
+    );
+    final tabs = AppTabBarV2(
+      controller: _tabs,
+      tabs: [
+        Tab(text: context.t('tips.tab.drafts')),
+        Tab(text: context.t('tips.tab.locked')),
+      ],
+    );
+    final body = _body(context);
+    if (isNativeMobile) {
+      return MobileTabbedPage(
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PageHeader(
+              title: context.t('tips.title'),
+              icon: Icons.card_giftcard_outlined,
+              actions: [
+                IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _importCardMobile(context),
+          ],
+        ),
+        tabBar: tabs,
+        body: body,
+      );
+    }
     return AppPageScaffold(
       scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PageHeader(
-            title: context.t('tips.title'),
-            icon: Icons.card_giftcard_outlined,
-            actions: [
-              IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-              FilledButton.icon(
-                onPressed: () => _openImport(),
-                icon: const Icon(Icons.upload_file_outlined, size: 18),
-                label: Text(context.t('tips.importFromSheet')),
-              ),
-            ],
-          ),
+          header,
           const SizedBox(height: 16),
-          AppTabBarV2(
-            controller: _tabs,
-            tabs: [
-              Tab(text: context.t('tips.tab.drafts')),
-              Tab(text: context.t('tips.tab.locked')),
-            ],
-          ),
+          tabs,
           const SizedBox(height: 16),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
+          Expanded(child: body),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context) {
+    return _loading
+                ? const Center(child: HudooriLoader())
                 : TabBarView(
                     controller: _tabs,
                     children: [
@@ -226,11 +334,7 @@ class _TipsPageState extends State<TipsPage>
                         payrollMonthStartDay: _payrollMonthStartDay,
                       ),
                     ],
-                  ),
-          ),
-        ],
-      ),
-    );
+                  );
   }
 }
 
@@ -273,6 +377,89 @@ class _TipImportList extends StatelessWidget {
     final headline = '${item['reference'] ?? id} — $primary';
     final cash = (item['cashAmount'] as num?)?.toDouble() ?? 0;
     final fawry = _fawryTotalsFromItem(item);
+    if (isNativeMobile) {
+      final locked = item['state']?.toString() == 'locked';
+      final l10n = context.l10n;
+      return InkWell(
+        onTap: id.isEmpty ? null : () => onOpen(id),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const MobileIconBadge(icon: Icons.card_giftcard_rounded, size: 38, color: MobileTone.violet),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${item['reference'] ?? id}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: MobileUi.text(14.5, weight: FontWeight.w800, height: 1.3),
+                        ),
+                        Text(
+                          primary,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: MobileUi.text(12, weight: FontWeight.w500, color: MobileUi.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  MobileChip(
+                    label: locked ? context.t('tips.stateLocked') : context.t('tips.stateDraft'),
+                    color: locked ? MobileTone.success : MobileTone.warning,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  MobileChip(
+                    icon: Icons.people_alt_outlined,
+                    label: l10n.t('m.employeesCount', {'n': item['lineCount'] ?? 0}),
+                  ),
+                  if ((item['date']?.toString() ?? '').isNotEmpty)
+                    MobileChip(icon: Icons.event_outlined, label: item['date'].toString()),
+                  MobileChip(
+                    icon: Icons.payments_outlined,
+                    color: MobileTone.success,
+                    label: l10n.t('m.cashAmount', {'amount': _money(cash)}),
+                  ),
+                  MobileChip(
+                    icon: Icons.bolt_rounded,
+                    color: MobileTone.violet,
+                    label: l10n.t('m.fawryAmount', {'amount': _money(fawry.total)}),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.t('tips.total', {'amount': _money(item['totalAmount'] as num?)}),
+                      style: MobileUi.text(14, weight: FontWeight.w800, color: MobileUi.primaryDeep),
+                    ),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: id.isEmpty ? null : () => onOpen(id),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: Text(l10n.t('m.openSheet')),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return ListTile(
       onTap: id.isEmpty ? null : () => onOpen(id),
       leading: const Icon(
@@ -319,6 +506,14 @@ class _TipImportList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
+      if (isNativeMobile) {
+        return ListView(
+          children: [
+            const SizedBox(height: 8),
+            MobileEmptyState(icon: Icons.card_giftcard_rounded, message: emptyLabel),
+          ],
+        );
+      }
       return SellixCard(
         child: Center(
           child: Padding(
@@ -371,7 +566,29 @@ class _TipImportList extends StatelessWidget {
             padding: EdgeInsets.zero,
             child: ExpansionTile(
               initiallyExpanded: false,
-              title: Row(
+              title: isNativeMobile
+                  ? Row(
+                      children: [
+                        const MobileIconBadge(icon: Icons.calendar_month_rounded, size: 40),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.t('tips.monthCycle', {'month': monthName}),
+                                style: MobileUi.text(15.5, weight: FontWeight.w800, height: 1.3),
+                              ),
+                              Text(
+                                context.t('tips.total', {'amount': _money(total)}),
+                                style: MobileUi.text(13, weight: FontWeight.w700, color: MobileUi.primaryDeep),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(

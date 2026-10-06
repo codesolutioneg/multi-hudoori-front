@@ -6,6 +6,7 @@ import '../../../core/di/injection.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/sellix_card.dart';
 
+import '../../mobile/hudoori_loader.dart';
 class DevicesSettingsSection extends StatefulWidget {
   const DevicesSettingsSection({super.key, this.embedded = false});
 
@@ -67,7 +68,7 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
     }
 
     if (_loading) {
-      return const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()));
+      return const Center(child: Padding(padding: EdgeInsets.all(32), child: HudooriLoader()));
     }
 
     return Column(

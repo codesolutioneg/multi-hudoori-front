@@ -26,6 +26,10 @@ import 'shift_grid_import_untracked_panel.dart';
 import 'shift_grid_manual_ot_panel.dart';
 import 'shift_grid_setup_panel.dart';
 
+import '../../core/platform/mobile_platform.dart';
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_actions.dart';
+import '../mobile/mobile_ui.dart';
 class ShiftGridDetailPage extends StatefulWidget {
   const ShiftGridDetailPage({super.key, required this.gridId});
   final String gridId;
@@ -1319,6 +1323,52 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
         _ => stateLabel(state),
       };
 
+  Widget _cardUnlessMobile(Widget child) =>
+      isNativeMobile ? child : SellixCard(child: child);
+
+  /// Job / department divider row in the grid on native mobile.
+  Widget _mobileGroupHeader(String title, int index, List<_FlatGridRow> rows) {
+    var count = 0;
+    for (var i = index + 1; i < rows.length && !rows[i].isHeader; i++) {
+      count++;
+    }
+    return Container(
+      margin: EdgeInsets.only(top: index == 0 ? 0 : 10),
+      padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
+      decoration: const BoxDecoration(
+        color: MobileUi.primarySoft,
+        border: BorderDirectional(
+          start: BorderSide(color: MobileUi.primary, width: 4),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.work_outline_rounded, size: 17, color: MobileUi.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: MobileUi.text(13, weight: FontWeight.w800, color: MobileUi.primaryDeep),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              '$count',
+              style: MobileUi.text(11.5, weight: FontWeight.w800, color: MobileUi.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -1503,8 +1553,8 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
             else ...[
             if (_canEditGrid)
               SliverToBoxAdapter(
-                child: SellixCard(
-                  child: _ActionBar(
+                child: _cardUnlessMobile(
+                  _ActionBar(
                     disabled: _isBusy,
                     onSync: _syncStart,
                     onExport: _dates.isNotEmpty && !_isBusy
@@ -1708,6 +1758,9 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
                         );
                       }
                       final row = visibleRows[index];
+                      if (row.isHeader && isNativeMobile) {
+                        return _mobileGroupHeader(row.jobTitle!, index, visibleRows);
+                      }
                       if (row.isHeader && compact) {
                         return Container(
                           color: const Color(0xFFF0C040),
@@ -1794,15 +1847,15 @@ const double _kColDate = 70;
 /// رقم + كود + اسم + تاريخ التعيين — ثابتة جنب الشاشة أثناء السكرول الأفقي.
 const double _kStickyColsWidth =
     _kColNum + _kColCode + _kColName + _kColHiring;
-const double _kColNumCompact = 40;
-const double _kColNameCompact = 150;
+const double _kColNumCompact = 34;
+const double _kColNameCompact = 122;
 
 double _stickyColsWidth(bool compact) =>
     compact ? _kColNumCompact + _kColNameCompact : _kStickyColsWidth;
 
-/// Phones have no sticky block: رقم + اسم + كود + تاريخ التعيين scroll too.
+/// Phones keep رقم + اسم sticky; كود + تاريخ التعيين scroll with the days.
 double _scrollLeadWidth(bool compact) =>
-    compact ? _stickyColsWidth(true) + _kColCode + _kColHiring : 0;
+    compact ? _kColCode + _kColHiring : 0;
 
 class _FlatGridRow {
   _FlatGridRow.header(this.jobTitle) : employee = null, rowNum = 0;
@@ -1830,8 +1883,6 @@ class _GridHeaderRow extends StatelessWidget {
     return Row(
       children: [
         if (compact) ...[
-          _hdr(context.t('grid.numberColumn'), width: _kColNumCompact, light: true),
-          _hdr(context.t('common.name'), width: _kColNameCompact, light: true),
           _hdr(context.t('common.code'), width: _kColCode, light: true),
           _hdr(context.t('employees.field.hiringDate'), width: _kColHiring, light: true),
         ],
@@ -1990,15 +2041,13 @@ class _GridEmployeeRow extends StatelessWidget {
       width: _stickyColsWidth(compact),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: compact
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 4,
-                  offset: const Offset(-2, 0),
-                ),
-              ],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 4,
+            offset: const Offset(-2, 0),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -2085,7 +2134,7 @@ class _GridEmployeeRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (!compact) sticky,
+          sticky,
           Expanded(
             child: ClipRect(
               child: SyncHorizontalScrollView(
@@ -2093,7 +2142,7 @@ class _GridEmployeeRow extends StatelessWidget {
                 width: scrollWidth,
                 child: Row(
                   children: [
-                    if (compact) ...[sticky, _codeCell(), _hiringCell()],
+                    if (compact) ...[_codeCell(), _hiringCell()],
                     SizedBox(
                       width: _kColJob,
                       child: Text(
@@ -2331,8 +2380,107 @@ class _ActionBar extends StatelessWidget {
   final VoidCallback? onDeleteGrid;
   final int untrackedCount;
 
+  Widget _mobile(BuildContext context) {
+    VoidCallback? on(VoidCallback? cb) => disabled ? null : cb;
+    MobileActionTile tile(IconData icon, String label, VoidCallback? cb,
+            {Color? color, bool primary = false}) =>
+        MobileActionTile(
+          icon: icon,
+          label: label,
+          color: color,
+          primary: primary,
+          onPressed: on(cb),
+        );
+    const danger = MobileTone.danger;
+    const orange = Color(0xFFE65100);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MobileActionSection(
+          title: context.t('m.gridWorkflow'),
+          icon: Icons.play_circle_outline_rounded,
+          children: [
+            tile(Icons.sync_rounded, context.t('grid.syncPunches'), onSync, primary: true),
+            if (onConfirmAssignments != null)
+              tile(Icons.assignment_turned_in_rounded, context.t('grid.confirmAssignments'),
+                  onConfirmAssignments, color: MobileTone.success, primary: true),
+            if (onCreatePayroll != null)
+              tile(Icons.payments_rounded, context.t('grid.payrollSheet'), onCreatePayroll,
+                  color: MobileTone.violet, primary: true),
+            if (onResyncDates != null)
+              tile(Icons.date_range_rounded, context.t('grid.adjustDays'), onResyncDates,
+                  color: MobileTone.info),
+            if (onBackToSetup != null)
+              tile(Icons.settings_backup_restore_rounded, context.t('grid.backToSetup'), onBackToSetup),
+            if (onClose != null)
+              tile(Icons.lock_outline_rounded, context.t('grid.closeGrid'), onClose,
+                  color: const Color(0xFF0F766E)),
+            if (onReopen != null)
+              tile(Icons.lock_open_rounded, context.t('grid.reopenGrid'), onReopen,
+                  color: const Color(0xFF0F766E)),
+          ],
+        ),
+        MobileActionSection(
+          title: context.t('m.punches'),
+          icon: Icons.fingerprint_rounded,
+          initiallyExpanded: false,
+          children: [
+            if (onExportPunchReport != null)
+              tile(Icons.description_rounded, context.t('grid.punchReportExcel'), onExportPunchReport,
+                  color: const Color(0xFF0D9488)),
+            if (onImportPunchReport != null)
+              tile(Icons.upload_file_rounded, context.t('grid.importPunchReport'), onImportPunchReport,
+                  color: const Color(0xFFEA580C)),
+            if (onPayrollFromPunchImport != null)
+              tile(Icons.calculate_rounded, context.t('grid.payrollFromPunchImport'), onPayrollFromPunchImport),
+            if (onExportSelectedPunches != null)
+              tile(Icons.fact_check_rounded, context.t('grid.selectedPunchesExcel'), onExportSelectedPunches,
+                  color: MobileTone.success),
+            if (onShowUntracked != null)
+              tile(Icons.person_off_rounded,
+                  context.t('grid.untrackedUsersReopen', {'n': untrackedCount}), onShowUntracked,
+                  color: orange),
+          ],
+        ),
+        MobileActionSection(
+          title: 'Excel',
+          icon: Icons.grid_on_rounded,
+          initiallyExpanded: false,
+          children: [
+            if (onExport != null)
+              tile(Icons.download_rounded, context.t('grid.exportExcel'), onExport,
+                  color: const Color(0xFF0D9488)),
+            if (onExportDepartmentsSeparated != null)
+              tile(Icons.folder_zip_rounded, context.t('grid.exportDepartmentsSeparated'),
+                  onExportDepartmentsSeparated, color: MobileTone.info),
+            if (onImport != null)
+              tile(Icons.upload_file_rounded, context.t('grid.importExcel'), onImport,
+                  color: const Color(0xFFEA580C)),
+          ],
+        ),
+        MobileActionSection(
+          title: context.t('m.dangerZone'),
+          icon: Icons.warning_amber_rounded,
+          initiallyExpanded: false,
+          children: [
+            if (onClearAssignments != null)
+              tile(Icons.layers_clear_rounded, context.t('grid.clearAssignments'), onClearAssignments,
+                  color: orange),
+            if (onWipeEmployees != null)
+              tile(Icons.group_off_rounded, context.t('grid.wipeEmployees'), onWipeEmployees,
+                  color: danger),
+            if (onDeleteGrid != null)
+              tile(Icons.delete_forever_rounded, context.t('grid.deleteGrid'), onDeleteGrid,
+                  color: danger, primary: true),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) return _mobile(context);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -2666,7 +2814,6 @@ class _StickyGridHeaderDelegate extends SliverPersistentHeaderDelegate {
       color: Theme.of(context).cardColor,
       child: Row(
         children: [
-          if (!compact)
           Container(
             width: _stickyColsWidth(compact),
             height: maxExtent,
@@ -2766,6 +2913,10 @@ class _BulkBar extends StatelessWidget {
     return DateTime.tryParse(s);
   }
 
+  Widget _bulkShell(Widget child) => isNativeMobile
+      ? Container(decoration: MobileUi.card(r: 20), child: child)
+      : Card(child: child);
+
   Future<void> _pickDate(
     BuildContext context, {
     required String? current,
@@ -2793,12 +2944,32 @@ class _BulkBar extends StatelessWidget {
     final gridMin = _parseDate(gridDateFrom);
     final gridMax = _parseDate(gridDateTo);
 
-    return Card(
-      child: Padding(
+    return _bulkShell(
+      Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (isNativeMobile)
+              Row(
+                children: [
+                  const MobileIconBadge(icon: Icons.format_paint_rounded, size: 34),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.t('grid.bulkAssign'),
+                      style: MobileUi.text(14, weight: FontWeight.w800),
+                    ),
+                  ),
+                  if (onAddEmployee != null)
+                    FilledButton.tonalIcon(
+                      onPressed: onAddEmployee,
+                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                      label: Text(context.t('grid.addEmployees')),
+                    ),
+                ],
+              )
+            else
             Wrap(
               spacing: 12,
               runSpacing: 8,
@@ -2816,11 +2987,13 @@ class _BulkBar extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Text(
-                    context.t('grid.bulkAssign'),
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 8),
+                  if (!isNativeMobile) ...[
+                    Text(
+                      context.t('grid.bulkAssign'),
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       isExpanded: true,
@@ -3285,7 +3458,7 @@ class _AddEmployeesDialogState extends State<_AddEmployeesDialog> {
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
+                    child: HudooriLoader(),
                   ),
                 )
               else if (_error != null)

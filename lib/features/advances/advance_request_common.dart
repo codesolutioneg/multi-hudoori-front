@@ -8,6 +8,7 @@ import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 num asNum(Object? value) {
   if (value is num) return value;
   return num.tryParse(value?.toString() ?? '') ?? 0;
@@ -297,7 +298,7 @@ class AdvanceApproveDialogState extends State<AdvanceApproveDialog> {
         child: _loading
             ? const Center(child: Padding(
                 padding: EdgeInsets.all(AppDimensions.spaceLg),
-                child: CircularProgressIndicator(),
+                child: HudooriLoader(),
               ))
             : SingleChildScrollView(
                 child: Column(
@@ -486,7 +487,7 @@ class _HrAdvanceRequestsReviewState extends State<HrAdvanceRequestsReview> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HudooriLoader());
     if (_error != null) return ApiErrorView(error: _error!, onRetry: _load);
 
     if (_requests.isEmpty) {

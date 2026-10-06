@@ -19,6 +19,12 @@ import '../advances/widgets/long_advance_flow_dialog.dart';
 import 'payroll_line_edit_dialog.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../../core/platform/mobile_platform.dart';
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_actions.dart';
+import '../mobile/mobile_data_grid.dart';
+import '../mobile/mobile_h_scroll.dart';
+import '../mobile/mobile_ui.dart';
 class PayrollDetailPage extends StatefulWidget {
   const PayrollDetailPage({
     super.key,
@@ -673,7 +679,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                   const SizedBox(height: 8),
                   Expanded(
                     child: searching
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(child: HudooriLoader())
                         : ListView.builder(
                             itemCount: results.length,
                             itemBuilder: (_, i) {
@@ -767,7 +773,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                   const SizedBox(height: 8),
                   Expanded(
                     child: loading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(child: HudooriLoader())
                         : _LocationTransferList(
                             items: items,
                             onApply: (selected) async {
@@ -1049,6 +1055,13 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
   }
 
   Widget _statChip(String label, dynamic count, dynamic amount) {
+    if (isNativeMobile) {
+      return MobileChip(
+        icon: Icons.insights_rounded,
+        color: MobileTone.info,
+        label: '$label: ${count ?? 0} • ${_fmtMoney(amount)}',
+      );
+    }
     return Chip(
       avatar: const Icon(Icons.insights, size: 16),
       label: Text('$label: ${count ?? 0} • ${_fmtMoney(amount)}'),
@@ -1227,6 +1240,16 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     bool tonal = false,
     bool loading = false,
   }) {
+    if (isNativeMobile) {
+      return MobileActionTile(
+        icon: icon,
+        label: label,
+        tooltip: tooltip,
+        onPressed: onPressed,
+        primary: filled,
+        loading: loading,
+      );
+    }
     final btnIcon = loading
         ? const SizedBox(
             width: 16,
@@ -1254,8 +1277,21 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     return _tipButton(message: tooltip, child: child);
   }
 
-  Widget _actionSection(String title, List<Widget> children) {
+  Widget _actionSection(
+    String title,
+    List<Widget> children, {
+    IconData icon = Icons.bolt_rounded,
+    bool expanded = false,
+  }) {
     if (children.isEmpty) return const SizedBox.shrink();
+    if (isNativeMobile) {
+      return MobileActionSection(
+        title: title,
+        icon: icon,
+        initiallyExpanded: expanded,
+        children: children,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
@@ -1281,7 +1317,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _actionSection(context.t('pay.step1'), [
+        _actionSection(context.t('pay.step1'), icon: Icons.play_circle_outline_rounded, expanded: true, [
           _actionBtn(
             tooltip: _calculateTooltip,
             onPressed: go(canEdit && (isDraft || isCalc), _calculate),
@@ -1333,7 +1369,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                 _loadingAction('odoo_preview') || _loadingAction('send_odoo'),
           ),
         ]),
-        _actionSection(context.t('pay.step2'), [
+        _actionSection(context.t('pay.step2'), icon: Icons.import_export_rounded, [
           if (_fromPunchImport)
             _actionBtn(
               tooltip: _hasPunchImportFile
@@ -1376,7 +1412,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             label: context.t('pay.importExcel'),
           ),
         ]),
-        _actionSection(context.t('pay.step3'), [
+        _actionSection(context.t('pay.step3'), icon: Icons.account_balance_wallet_outlined, [
           _actionBtn(
             tooltip: context.t('pay.fawryFileHint'),
             onPressed: go(!isDraft, _exportFawry),
@@ -1390,7 +1426,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             label: context.t('pay.cash'),
           ),
         ]),
-        _actionSection(context.t('pay.step4'), [
+        _actionSection(context.t('pay.step4'), icon: Icons.tune_rounded, [
           _actionBtn(
             tooltip: context.t('pay.refreshEmpHint'),
             onPressed: go(isCalc, () => _runPayrollAction('sync_emp')),
@@ -1440,7 +1476,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             label: context.t('pay.dupCheck'),
           ),
         ]),
-        _actionSection(context.t('pay.step5'), [
+        _actionSection(context.t('pay.step5'), icon: Icons.more_horiz_rounded, [
           _actionBtn(
             tooltip: context.t('pay.addOneHint'),
             onPressed: go(canEdit && !isConfirmed, _showSingleEmployeeDialog),
@@ -1503,7 +1539,7 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HudooriLoader());
 
     final state = _payroll['state']?.toString() ?? '';
     final canEdit = state != 'confirmed';
@@ -1634,27 +1670,58 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              _totalCard(
-                context.t('pay.totalEarnings'),
-                _payroll['totalEarnings'],
-              ),
-              const SizedBox(width: 8),
-              _totalCard(
-                context.t('pay.totalDeductions'),
-                _payroll['totalDeductions'],
-              ),
-              const SizedBox(width: 8),
-              _totalCard(context.t('pay.netSalaries'), _payroll['totalNet']),
-              const SizedBox(width: 8),
-              _totalCard(
-                context.t('pay.grandTotal'),
-                _payroll['grandTotal'] ?? _payroll['totalNet'],
-                highlight: true,
-              ),
-            ],
-          ),
+          if (isNativeMobile)
+            Column(
+              children: [
+                Row(
+                  children: [
+                    _totalCard(
+                      context.t('pay.totalEarnings'),
+                      _payroll['totalEarnings'],
+                    ),
+                    const SizedBox(width: 8),
+                    _totalCard(
+                      context.t('pay.totalDeductions'),
+                      _payroll['totalDeductions'],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _totalCard(context.t('pay.netSalaries'), _payroll['totalNet']),
+                    const SizedBox(width: 8),
+                    _totalCard(
+                      context.t('pay.grandTotal'),
+                      _payroll['grandTotal'] ?? _payroll['totalNet'],
+                      highlight: true,
+                    ),
+                  ],
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                _totalCard(
+                  context.t('pay.totalEarnings'),
+                  _payroll['totalEarnings'],
+                ),
+                const SizedBox(width: 8),
+                _totalCard(
+                  context.t('pay.totalDeductions'),
+                  _payroll['totalDeductions'],
+                ),
+                const SizedBox(width: 8),
+                _totalCard(context.t('pay.netSalaries'), _payroll['totalNet']),
+                const SizedBox(width: 8),
+                _totalCard(
+                  context.t('pay.grandTotal'),
+                  _payroll['grandTotal'] ?? _payroll['totalNet'],
+                  highlight: true,
+                ),
+              ],
+            ),
           const SizedBox(height: 16),
           SellixCard(
             padding: EdgeInsets.zero,
@@ -1668,9 +1735,10 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                   ),
-                if (_lines.isNotEmpty || _loading)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
+                if (isNativeMobile && _lines.isNotEmpty)
+                  _mobileLinesGrid(canEdit),
+                if (!isNativeMobile && (_lines.isNotEmpty || _loading))
+                  MobileHScroll(
                     child: DataTable(
                       columns: [
                         DataColumn(label: Text(context.t('common.code'))),
@@ -2078,6 +2146,70 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
     );
   }
 
+  Widget _mobileLinesGrid(bool canEdit) {
+    const money = 0, qty = 1, text = 2;
+    num n(Map<String, dynamic> l, String k) => _lineNum(l, k);
+    final cols = <(MobileGridColumn, int, Object Function(Map<String, dynamic>))>[
+      (MobileGridColumn(context.t('payCol.net'), width: 104, color: MobileUi.primary, bold: true), money, (l) => n(l, 'netSalary')),
+      (MobileGridColumn(context.t('payCol.earnings'), width: 100, color: MobileTone.success), money, (l) => n(l, 'totalEarnings')),
+      (MobileGridColumn(context.t('payCol.deductions'), width: 100, color: MobileTone.danger), money, (l) => n(l, 'totalDeductions')),
+      if (_payroll['showEditComparison'] == true)
+        (MobileGridColumn(context.t('payCol.netDelta')), money, (l) => n(l, 'editNetDelta')),
+      (MobileGridColumn(context.t('payCol.basic')), money, (l) => n(l, 'basicSalary')),
+      (MobileGridColumn(context.t('payCol.actualDays'), width: 76), qty, (l) => n(l, 'actualWorkingDays')),
+      (MobileGridColumn(context.t('payCol.overtime'), width: 76), qty, (l) => n(l, 'overtimeHours')),
+      (MobileGridColumn(context.t('payCol.daysPay')), money, (l) => n(l, 'workDaysSalary')),
+      (MobileGridColumn(context.t('payCol.overtimeAmount')), money, (l) => n(l, 'overtimeAmount')),
+      (MobileGridColumn(context.t('payCol.lateDeduction')), money, (l) => n(l, 'lateDeduction')),
+      (MobileGridColumn(context.t('payCol.earlyLeave')), money, (l) => n(l, 'earlyDeduction')),
+      (MobileGridColumn(context.t('payCol.punchDeduction')), money,
+          (l) => n(l, 'punchDeductionCheckin') + n(l, 'punchDeductionCheckout')),
+      (MobileGridColumn(context.t('payCol.absenceDeduction')), money, (l) => n(l, 'absentDeduction')),
+      (MobileGridColumn(context.t('payCol.sickDeduction')), money, (l) => n(l, 'sickDeduction')),
+      (MobileGridColumn(context.t('payCol.leaveDeduction')), money, (l) => n(l, 'leaveAbsenceDeductionValue')),
+      (MobileGridColumn(context.t('payCol.insurance')), money, (l) => n(l, 'socialInsurance')),
+      (MobileGridColumn(context.t('payCol.cheques')), money, (l) => n(l, 'deductionChecks')),
+      (MobileGridColumn(context.t('payCol.manual')), money, (l) => n(l, 'manualDebit')),
+      (MobileGridColumn(context.t('payCol.penalty')), money, (l) => n(l, 'penaltyDeductionValue')),
+      (MobileGridColumn(context.t('payCol.lateLeave')), money, (l) => n(l, 'lateCheckoutDeduction')),
+      (MobileGridColumn(context.t('payCol.attendanceDeduction')), money, (l) => n(l, 'attendanceDeduction')),
+      (MobileGridColumn(context.t('payCol.hoursDiff'), width: 80), qty, (l) => n(l, 'hoursDifference')),
+      (MobileGridColumn(context.t('payCol.advances')), money,
+          (l) => n(l, 'advanceShortTotal') + n(l, 'advanceLongTotal')),
+      (MobileGridColumn(context.t('payCol.department'), width: 110), text, (l) => _lineText(l, 'departmentName')),
+      (MobileGridColumn(context.t('payCol.job'), width: 110), text, (l) => _lineText(l, 'positionName')),
+      (MobileGridColumn(context.t('payCol.branch'), width: 110), text, (l) => _lineText(l, 'employeeLocation')),
+    ];
+
+    String fmt(int kind, Object v) =>
+        kind == money ? _fmtMoney(v) : (kind == qty ? _fmtQty(v) : v.toString());
+
+    final dups = _duplicateEmployeeIds;
+    return MobileDataGrid(
+      pinnedLabel: context.t('payCol.employee'),
+      columns: [for (final c in cols) c.$1],
+      total: MobileGridRow(
+        title: context.t('payCol.total'),
+        cells: [
+          for (final c in cols)
+            c.$2 == text
+                ? ''
+                : fmt(c.$2, _lines.fold<num>(0, (s, l) => s + (c.$3(l) as num))),
+        ],
+      ),
+      rows: [
+        for (final line in _lines)
+          MobileGridRow(
+            title: line['employeeName']?.toString() ?? '',
+            subtitle: line['employeeCode']?.toString(),
+            warn: dups.contains(line['employeeId']?.toString() ?? ''),
+            onTap: canEdit ? () => _editLine(line) : null,
+            cells: [for (final c in cols) fmt(c.$2, c.$3(line))],
+          ),
+      ],
+    );
+  }
+
   Widget _totalCard(String title, dynamic value, {bool highlight = false}) {
     return Expanded(
       child: Card(
@@ -2094,12 +2226,16 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
                   color: AppColors.textSecondary,
                 ),
               ),
-              Text(
-                formatMoney(value),
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: highlight ? AppColors.primary : null,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  formatMoney(value),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: highlight ? AppColors.primary : null,
+                  ),
                 ),
               ),
             ],

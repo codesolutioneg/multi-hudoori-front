@@ -9,6 +9,7 @@ import '../../core/widgets/list_picker_field.dart';
 import '../../core/widgets/searchable_select_field.dart';
 import '../../core/widgets/sellix_card.dart';
 
+import '../mobile/hudoori_loader.dart';
 enum ShiftGridSelectionMode { department, manual, device, location }
 
 class ShiftGridSetupPanel extends StatefulWidget {
@@ -261,7 +262,7 @@ class _ShiftGridSetupPanelState extends State<ShiftGridSetupPanel> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(32),
-          child: CircularProgressIndicator(),
+          child: HudooriLoader(),
         ),
       );
     }
@@ -467,7 +468,7 @@ class _ShiftGridSetupPanelState extends State<ShiftGridSetupPanel> {
             if (_loadingEmployees)
               const Padding(
                 padding: EdgeInsets.all(12),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: HudooriLoader()),
               )
             else if (_employees.isEmpty)
               Text(

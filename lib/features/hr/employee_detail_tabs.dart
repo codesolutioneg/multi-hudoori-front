@@ -1,16 +1,46 @@
 import 'package:flutter/material.dart';
 
+import '../../core/platform/mobile_platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/widgets/sellix_card.dart';
+import '../mobile/mobile_ui.dart';
 import '../../l10n/l10n_extension.dart';
 
 class EmployeeTabSection extends StatelessWidget {
-  const EmployeeTabSection({super.key, required this.title, required this.children});
+  const EmployeeTabSection({
+    super.key,
+    required this.title,
+    required this.children,
+    this.icon,
+  });
   final String title;
   final List<Widget> children;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: MobileUi.card(r: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                MobileIconBadge(icon: icon ?? Icons.folder_open_rounded, size: 30),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(title, style: MobileUi.text(14.5, weight: FontWeight.w800)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            ...children,
+          ],
+        ),
+      );
+    }
     return SellixCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

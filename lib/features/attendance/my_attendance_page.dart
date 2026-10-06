@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../../core/di/injection.dart';
+import '../../core/platform/mobile_platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../l10n/l10n_extension.dart';
+import '../mobile/mobile_ui.dart';
 
+import '../mobile/hudoori_loader.dart';
 class MyAttendancePage extends StatefulWidget {
   const MyAttendancePage({super.key});
 
@@ -73,8 +77,176 @@ class _MyAttendancePageState extends State<MyAttendancePage> {
     }
   }
 
+  Color _statusColor(String status) => switch (_tag(status)) {
+        StatusTagType.success => MobileTone.success,
+        StatusTagType.danger => MobileTone.danger,
+        StatusTagType.info => MobileTone.info,
+        _ => MobileTone.warning,
+      };
+
+  Widget _buildMobile(BuildContext context) {
+    final l10n = context.l10n;
+    final items = [..._items]
+      ..sort((a, b) =>
+          (b['date']?.toString() ?? '').compareTo(a['date']?.toString() ?? ''));
+
+    return ColoredBox(
+      color: MobileUi.background,
+      child: RefreshIndicator(
+        color: MobileUi.primary,
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 48),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(context.t('attendance.myTitle'), style: MobileUi.text(22, weight: FontWeight.w800)),
+                      Text(
+                        _loading ? context.t('attendance.mySubtitle') : l10n.t('m.records', {'count': items.length}),
+                        style: MobileUi.text(13, weight: FontWeight.w500, color: MobileUi.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                const MobileIconBadge(icon: Icons.fact_check_outlined, size: 44),
+              ],
+            ),
+            const SizedBox(height: 18),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(48),
+                child: Center(child: HudooriLoader()),
+              )
+            else if (_error != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: MobileUi.card(),
+                child: Text(_error!, style: MobileUi.text(13, color: MobileTone.danger)),
+              )
+            else if (items.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: MobileUi.card(),
+                child: Text(
+                  context.t('attendance.emptyPeriod'),
+                  textAlign: TextAlign.center,
+                  style: MobileUi.text(14, weight: FontWeight.w500, color: MobileUi.muted),
+                ),
+              )
+            else
+              for (var i = 0; i < items.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _mobileRecord(context, items[i])
+                      .animate(delay: Duration(milliseconds: 40 * (i.clamp(0, 10))))
+                      .fadeIn(duration: 320.ms)
+                      .slideY(begin: 0.06, end: 0),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileRecord(BuildContext context, Map<String, dynamic> item) {
+    final l10n = context.l10n;
+    final status = item['status']?.toString() ?? '';
+    final color = _statusColor(status);
+    final day = DateTime.tryParse(item['date']?.toString() ?? '');
+    final inAt = parseWallClock(item['firstCheckIn'] ?? item['checkIn']);
+    final outAt = parseWallClock(item['lastCheckOut'] ?? item['checkOut']);
+    final hours = inAt != null && outAt != null && outAt.isAfter(inAt)
+        ? formatDuration(l10n, outAt.difference(inAt))
+        : '--';
+
+    Widget cell(String label, String value) => Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: MobileUi.text(11.5, weight: FontWeight.w500, color: MobileUi.muted)),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                textDirection: TextDirection.ltr,
+                style: MobileUi.text(14, weight: FontWeight.w800),
+              ),
+            ],
+          ),
+        );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: MobileUi.card(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: MobileUi.primarySoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      day == null ? '--' : day.day.toString().padLeft(2, '0'),
+                      style: MobileUi.text(17, weight: FontWeight.w800, color: MobileUi.primary, height: 1.1),
+                    ),
+                    if (day != null)
+                      Text(
+                        monthShort(l10n, day),
+                        style: MobileUi.text(10, weight: FontWeight.w600, color: MobileUi.primary),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  day == null ? (item['date']?.toString() ?? '') : '${weekdayShort(l10n, day)} · ${day.year}',
+                  style: MobileUi.text(15, weight: FontWeight.w700),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _statusLabel(context, status.isEmpty ? '-' : status),
+                  style: MobileUi.text(12, weight: FontWeight.w700, color: color),
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, color: Color(0xFFEDF1F7)),
+          ),
+          Row(
+            children: [
+              cell(l10n.t('m.checkIn'), formatClock(l10n, inAt)),
+              cell(l10n.t('m.checkOut'), formatClock(l10n, outAt)),
+              cell(l10n.t('m.workHours'), hours),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) return _buildMobile(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppDimensions.spaceMd),
       child: Column(
@@ -87,7 +259,7 @@ class _MyAttendancePageState extends State<MyAttendancePage> {
           ),
           const SizedBox(height: 16),
           if (_loading)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: HudooriLoader())
           else if (_error != null)
             SellixCard(child: Text(_error!, style: const TextStyle(color: AppColors.danger)))
           else if (_items.isEmpty)

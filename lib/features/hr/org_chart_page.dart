@@ -16,6 +16,8 @@ import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../../core/platform/mobile_platform.dart';
 class OrgChartPage extends StatefulWidget {
   const OrgChartPage({super.key});
 
@@ -166,11 +168,14 @@ class _OrgChartPageState extends State<OrgChartPage> {
     final showChooser = _canChooseScope || _canPickCompany(auth);
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: isNativeMobile
+          ? const EdgeInsets.fromLTRB(16, 6, 16, 24)
+          : const EdgeInsets.all(20),
       children: [
         PageHeader(
           title: context.t('orgChart.title'),
           subtitle: _subtitle(context),
+          icon: isNativeMobile ? Icons.account_tree_rounded : null,
         ),
         const SizedBox(height: 16),
         if (showChooser)
@@ -252,7 +257,7 @@ class _OrgChartPageState extends State<OrgChartPage> {
         if (_loading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 48),
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: HudooriLoader()),
           )
         else if (_error != null)
           SellixCard(
@@ -1299,7 +1304,7 @@ class _MoveEmployeeDialogState extends State<_MoveEmployeeDialog> {
   }
 
   Widget _list() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HudooriLoader());
     if (_error != null) {
       return Center(
         child: Text(_error!, style: const TextStyle(color: AppColors.danger)),

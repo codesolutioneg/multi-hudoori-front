@@ -20,6 +20,10 @@ import '../../core/widgets/status_tag.dart';
 import '../../data/api/biotime_api_client.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_multi_select_sheet.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
 String _money(dynamic value) =>
     formatMoney(value, fallback: value?.toString() ?? '');
 
@@ -484,6 +488,29 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       _snack(context.t('loanImp.noLocations'));
       return;
     }
+    if (isNativeMobile) {
+      final picked = await showMobileMultiSelectSheet(
+        context,
+        title: context.t('loanImp.pickBranches'),
+        hint: context.t('loanImp.pickBranchesHintTip'),
+        options: [
+          for (final loc in _locations)
+            if ((loc['id']?.toString() ?? '').isNotEmpty)
+              (loc['id'].toString(), loc['name']?.toString() ?? loc['id'].toString()),
+        ],
+        initial: _tipLocationIds.toSet(),
+        applyLabel: context.t('loanImp.apply'),
+        selectAllLabel: context.t('loanImp.selectAll'),
+        clearLabel: context.t('loanImp.clearSelection'),
+      );
+      if (picked == null || !mounted) return;
+      setState(() {
+        _tipLocationIds
+          ..clear()
+          ..addAll(picked);
+      });
+      return;
+    }
     final selected = await showDialog<Set<String>>(
       context: context,
       builder: (ctx) {
@@ -611,6 +638,23 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     if (locations.isEmpty) {
       _snack(context.t('loanImp.noLocations'));
       return null;
+    }
+    if (isNativeMobile) {
+      final picked = await showMobileMultiSelectSheet(
+        context,
+        title: context.t('loanImp.pickBranches'),
+        hint: context.t('loanImp.pickBranchesHintLoan'),
+        options: [
+          for (final loc in locations)
+            if ((loc['id']?.toString() ?? '').isNotEmpty)
+              (loc['id'].toString(), loc['name']?.toString() ?? loc['id'].toString()),
+        ],
+        initial: const {},
+        applyLabel: context.t('loanImp.downloadTemplate'),
+        selectAllLabel: context.t('loanImp.selectAll'),
+        clearLabel: context.t('loanImp.clearSelection'),
+      );
+      return picked?.toList();
     }
     return showDialog<List<String>>(
       context: context,
@@ -1614,7 +1658,337 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     return ' • ${context.t('loanImp.draftDuplicateCount', {'count': count})}';
   }
 
+  Widget _mSection({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: MobileUi.card(r: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              MobileIconBadge(icon: icon, size: 30),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(title, style: MobileUi.text(14.5, weight: FontWeight.w800)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _mPickTile({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String value,
+    bool placeholder = false,
+    String? action,
+    VoidCallback? onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFF6F8FC),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, size: 19, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: MobileUi.text(11.5, weight: FontWeight.w600, color: MobileUi.muted, height: 1.2),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: MobileUi.text(
+                        placeholder ? 12.5 : 14,
+                        weight: placeholder ? FontWeight.w500 : FontWeight.w800,
+                        color: placeholder ? MobileUi.muted : MobileUi.ink,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (action != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: MobileUi.primarySoft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    action,
+                    style: MobileUi.text(12, weight: FontWeight.w800, color: MobileUi.primary),
+                  ),
+                ),
+              ] else if (onTap != null)
+                const Icon(Icons.edit_calendar_rounded, size: 18, color: MobileUi.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mStep({
+    required int step,
+    required IconData icon,
+    required String title,
+    required String hint,
+    required VoidCallback? onTap,
+    bool primary = false,
+  }) {
+    final fg = primary ? Colors.white : MobileUi.ink;
+    final accent = primary ? Colors.white : const Color(0xFF0D9488);
+    return Opacity(
+      opacity: onTap == null ? 0.5 : 1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            decoration: BoxDecoration(
+              gradient: primary ? MobileUi.primaryGradient : null,
+              color: primary ? null : const Color(0xFFF0FDFA),
+              borderRadius: BorderRadius.circular(18),
+              border: primary ? null : Border.all(color: const Color(0xFFCCF2EC)),
+              boxShadow: primary
+                  ? [
+                      BoxShadow(
+                        color: MobileUi.primary.withValues(alpha: 0.3),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: primary
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: accent, size: 23),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: MobileUi.text(14, weight: FontWeight.w800, color: fg, height: 1.3)),
+                      const SizedBox(height: 2),
+                      Text(
+                        hint,
+                        style: MobileUi.text(
+                          11.5,
+                          weight: FontWeight.w500,
+                          color: primary ? Colors.white.withValues(alpha: 0.85) : MobileUi.muted,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: primary ? Colors.white : accent.withValues(alpha: 0.14),
+                  ),
+                  child: Text(
+                    '$step',
+                    style: MobileUi.text(12.5, weight: FontWeight.w800, color: primary ? MobileUi.primary : accent, height: 1),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mHint(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(top: 1),
+          child: Icon(Icons.info_outline_rounded, size: 15, color: MobileUi.muted),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: MobileUi.text(11.5, weight: FontWeight.w500, color: MobileUi.muted, height: 1.45),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSetupMobile() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _mSection(
+          icon: Icons.description_outlined,
+          title: context.t('m.importSheetData'),
+          children: [
+            if (_isTip) ...[
+              _mPickTile(
+                icon: Icons.storefront_outlined,
+                color: MobileTone.violet,
+                label: context.t('loanImp.branches'),
+                value: _tipLocationSummary(),
+                placeholder: _tipLocationIds.isEmpty,
+                action: _tipLocationIds.isEmpty
+                    ? context.t('loanImp.pickBranches')
+                    : context.t('loanImp.editCount', {'count': _tipLocationIds.length}),
+                onTap: _busy ? null : _pickTipLocations,
+              ),
+              const SizedBox(height: 8),
+            ] else if (_devices.isNotEmpty) ...[
+              ListPickerField<String>(
+                label: context.t('loanImp.location'),
+                value: _deviceId ?? '',
+                options: [
+                  (value: '', label: context.t('loanImp.allLocations')),
+                  for (final d in _devices)
+                    (value: d['id']?.toString() ?? '', label: _locationLabel(d)),
+                ],
+                onChanged: (v) => setState(() => _deviceId = v.isEmpty ? null : v),
+              ),
+              const SizedBox(height: 8),
+            ],
+            _mPickTile(
+              icon: Icons.event_rounded,
+              color: MobileUi.primary,
+              label: context.t(_isTip ? 'loanImp.dateTip' : 'loanImp.dateLoan'),
+              value: _dateCtrl.text,
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _reasonCtrl,
+              enabled: !_locked,
+              decoration: InputDecoration(
+                labelText: _isTip
+                    ? context.t('loanImp.reasonDefaultTip')
+                    : context.t('loanImp.reasonDefaultLoan'),
+                prefixIcon: const Icon(Icons.edit_note_rounded),
+              ),
+            ),
+          ],
+        ),
+        if (_isTip)
+          _mSection(
+            icon: Icons.date_range_rounded,
+            title: context.t('m.workPeriod'),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _mPickTile(
+                      icon: Icons.play_arrow_rounded,
+                      color: MobileTone.success,
+                      label: context.t('loanImp.workDaysFrom'),
+                      value: _tipsFromCtrl.text,
+                      onTap: _busy ? null : () => _pickTipsBound(from: true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _mPickTile(
+                      icon: Icons.stop_rounded,
+                      color: const Color(0xFFF2552C),
+                      label: context.t('loanImp.workDaysTo'),
+                      value: _tipsToCtrl.text,
+                      onTap: _busy ? null : () => _pickTipsBound(from: false),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _mHint(context.t('loanImp.periodHint')),
+            ],
+          ),
+        if (!_locked)
+          _mSection(
+            icon: Icons.checklist_rounded,
+            title: context.t('m.importSteps'),
+            children: [
+              _mStep(
+                step: 1,
+                icon: Icons.file_download_outlined,
+                title: context.t(
+                  _isTip ? 'loanImp.downloadTemplateTip' : 'loanImp.downloadTemplateLoan',
+                ),
+                hint: context.t('m.stepTemplateHint'),
+                onTap: _busy ? null : _downloadLoanTemplate,
+              ),
+              const SizedBox(height: 10),
+              _mStep(
+                step: 2,
+                icon: Icons.upload_file_rounded,
+                primary: true,
+                title: context.t(_isTip ? 'loanImp.uploadTip' : 'loanImp.uploadLoan'),
+                hint: context.t('m.stepUploadHint'),
+                onTap: _busy ? null : _pickLoanAndContinue,
+              ),
+              const SizedBox(height: 12),
+              _mHint(
+                _isTip
+                    ? context.t('loanImp.uploadHintTip')
+                    : context.t('loanImp.uploadHintLoan'),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
   Widget _buildSetup() {
+    if (isNativeMobile) return _buildSetupMobile();
     return SellixCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2485,7 +2859,7 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     return AppPageScaffold(
       scrollable: false,
       child: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: HudooriLoader())
           : SingleChildScrollView(
               child: Column(
                 children: [
@@ -2516,6 +2890,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                       _ImportPhase.setup => Icons.upload_file_outlined,
                       _ImportPhase.review => Icons.fact_check_outlined,
                     },
+                    onBack: isNativeMobile && _phase == _ImportPhase.setup
+                        ? (_busy ? null : _showDrafts)
+                        : null,
                   ),
                   if (_busy) const LinearProgressIndicator(),
                   switch (_phase) {

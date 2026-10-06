@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../features/mobile/mobile_page_header.dart';
 import '../../l10n/l10n_extension.dart';
 
 import '../layout/breakpoints.dart';
+import '../platform/mobile_platform.dart';
 import '../theme/app_theme_v2.dart';
 
 /// Standard page wrapper — centered max width with dashboard spacing.
@@ -22,6 +24,7 @@ class AppPageScaffold extends StatelessWidget {
 
   EdgeInsetsGeometry _padding(BuildContext context) {
     if (padding != null) return padding!;
+    if (isNativeMobile) return const EdgeInsets.fromLTRB(16, 6, 16, 24);
     final mobile = isMobile(context);
     return EdgeInsets.fromLTRB(
       mobile ? 12 : 24,
@@ -93,6 +96,15 @@ class AppPageHeaderV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) {
+      return MobilePageHeader(
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        onBack: onBack,
+        actions: actions ?? const [],
+      );
+    }
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: isMobile(context) ? 14 : 20,

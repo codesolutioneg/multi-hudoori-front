@@ -7,6 +7,7 @@ import '../../core/utils/api_error_message.dart';
 import '../../core/widgets/page_header.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 class AdminPlansPage extends StatefulWidget {
   const AdminPlansPage({super.key});
 
@@ -314,7 +315,7 @@ class _AdminPlansPageState extends State<AdminPlansPage> {
           const Gap(16),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: HudooriLoader())
                 : _error != null
                     ? Center(child: Text(_error!))
                     : _plans.isEmpty

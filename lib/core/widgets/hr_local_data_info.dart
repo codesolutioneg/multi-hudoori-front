@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../../features/mobile/mobile_ui.dart';
+import '../platform/mobile_platform.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_dimensions.dart';
 import 'sellix_card.dart';
@@ -18,6 +20,7 @@ class HrLocalDataBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) return const SizedBox.shrink();
     return SellixCard(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
@@ -62,6 +65,18 @@ class HrEmptyListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) {
+      return MobileEmptyState(
+        message: message,
+        action: actionLabel != null && onAction != null
+            ? FilledButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.add_rounded, size: 20),
+                label: Text(actionLabel!),
+              )
+            : null,
+      );
+    }
     final inner = Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),

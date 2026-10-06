@@ -19,6 +19,13 @@ import 'long_advance_filters.dart';
 import 'widgets/advance_create_dialogs.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_actions.dart';
+import '../mobile/mobile_filters.dart';
+import '../mobile/mobile_tabbed_page.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
+
 String _money(num? value) => formatMoney(value ?? 0);
 
 class AdvancesPage extends StatefulWidget {
@@ -122,16 +129,37 @@ class _AdvancesPageState extends State<AdvancesPage>
 
   @override
   Widget build(BuildContext context) {
+    final page = _buildPage(context);
+    if (isNativeMobile) {
+      return MobileTabbedPage(
+        header: page.header,
+        tabBar: page.tabs,
+        body: page.body,
+      );
+    }
     return AppPageScaffold(
       scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PageHeader(
-            title: context.t('advances.title'),
-            subtitle: context.t('advances.subtitle'),
-            icon: Icons.account_balance_wallet_outlined,
-            actions: [
+          page.header,
+          const SizedBox(height: 16),
+          page.tabs,
+          const SizedBox(height: 16),
+          Expanded(child: page.body),
+        ],
+      ),
+    );
+  }
+
+  ({Widget header, Widget tabs, Widget body}) _buildPage(BuildContext context) {
+    final pageHeader = PageHeader(
+      title: context.t('advances.title'),
+      subtitle: context.t('advances.subtitle'),
+      icon: Icons.account_balance_wallet_outlined,
+      actions: isNativeMobile
+          ? const []
+          : [
               OutlinedButton.icon(
                 onPressed: _openCreateShort,
                 icon: const Icon(Icons.payments_outlined, size: 18),
@@ -148,9 +176,44 @@ class _AdvancesPageState extends State<AdvancesPage>
                 label: Text(context.t('adv.longBtn')),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          AppTabBarV2(
+    );
+    return (
+          header: !isNativeMobile
+              ? pageHeader
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    pageHeader,
+                    const SizedBox(height: 12),
+                    MobileActionSection(
+                      title: context.t('m.advActions'),
+                      icon: Icons.bolt_rounded,
+                      collapsible: false,
+                      columns: 3,
+                      children: [
+                        MobileActionTile(
+                          icon: Icons.payments_rounded,
+                          color: MobileTone.success,
+                          label: context.t('adv.shortBtn'),
+                          onPressed: _openCreateShort,
+                        ),
+                        MobileActionTile(
+                          icon: Icons.event_repeat_rounded,
+                          label: context.t('adv.longBtn'),
+                          primary: true,
+                          onPressed: _openCreateLong,
+                        ),
+                        MobileActionTile(
+                          icon: Icons.upload_file_rounded,
+                          color: const Color(0xFFEA580C),
+                          label: context.t('adv.importFromSheet'),
+                          onPressed: () => context.push(AppRoutes.hrAdvanceLoanImport),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+          tabs: AppTabBarV2(
             controller: _tabs,
             tabs: [
               Tab(text: context.t('advances.tab.short')),
@@ -161,10 +224,8 @@ class _AdvancesPageState extends State<AdvancesPage>
               Tab(text: context.t('advances.tab.requests')),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
+          body: _loading
+                ? const Center(child: HudooriLoader())
                 : TabBarView(
                     controller: _tabs,
                     children: [
@@ -191,11 +252,30 @@ class _AdvancesPageState extends State<AdvancesPage>
                       HrAdvanceRequestsReview(onApproved: _load),
                     ],
                   ),
-          ),
-        ],
-      ),
     );
   }
+}
+
+Widget _advanceFiltersShell({
+  required Widget search,
+  required int activeCount,
+  required List<Widget> children,
+}) {
+  if (isNativeMobile) {
+    return MobileFilters(
+      leading: search,
+      activeCount: activeCount,
+      child: Wrap(spacing: 12, runSpacing: 12, children: children),
+    );
+  }
+  return SellixCard(
+    child: Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      crossAxisAlignment: WrapCrossAlignment.end,
+      children: [SizedBox(width: 280, child: search), ...children],
+    ),
+  );
 }
 
 String _advanceStateLabel(
@@ -329,6 +409,15 @@ Widget _moneyBreakdownText(
   required double total,
   double fontSize = 12,
 }) {
+  if (isNativeMobile) {
+    return MobileMoneySummary(
+      total: total,
+      cash: cash,
+      fawry: fawryApproved,
+      commission: fawryCommission,
+      format: (v) => _money(v),
+    );
+  }
   final parts = _moneyBreakdownParts(
     context,
     cash: cash,
@@ -685,7 +774,7 @@ class _PayrollPeriodBlock extends StatelessWidget {
               total: total,
               fontSize: 11.5,
             ),
-            if (duplicateCount > 0 && onShowDuplicates != null) ...[
+            if (!isNativeMobile && duplicateCount > 0 && onShowDuplicates != null) ...[
               const SizedBox(height: 8),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -701,6 +790,32 @@ class _PayrollPeriodBlock extends StatelessWidget {
           ],
         ),
         children: [
+          if (isNativeMobile)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: MobileActionTile(
+                      icon: Icons.folder_zip_rounded,
+                      color: const Color(0xFF0D9488),
+                      label: context.t('adv.downloadAllSheets'),
+                      onPressed: () => onExportPeriod(from, to),
+                    ),
+                  ),
+                  if (duplicateCount > 0 && onShowDuplicates != null)
+                    Expanded(
+                      child: MobileActionTile(
+                        icon: Icons.copy_all_rounded,
+                        color: MobileTone.danger,
+                        label: context.t('adv.duplicatesOnly', {'count': duplicateCount}),
+                        onPressed: onShowDuplicates,
+                      ),
+                    ),
+                ],
+              ),
+            )
+          else
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
             child: Align(
@@ -753,6 +868,82 @@ class _LoanImportSummaryTile extends StatelessWidget {
       '${context.t('adv.employeeCount', {'count': item['lineCount'] ?? 0})}'
           '${item['date'] != null && item['date'].toString().isNotEmpty ? ' • ${item['date']}' : ''}',
     ];
+
+    if (isNativeMobile) {
+      return SellixCard(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const MobileIconBadge(icon: Icons.fact_check_rounded, size: 40),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(headline, style: MobileUi.text(14.5, weight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          MobileChip(icon: Icons.storefront_outlined, label: primary),
+                          MobileChip(
+                            icon: Icons.people_alt_outlined,
+                            label: context.t('adv.employeeCount', {'count': item['lineCount'] ?? 0}),
+                          ),
+                          if (item['date'] != null && item['date'].toString().isNotEmpty)
+                            MobileChip(icon: Icons.event_outlined, label: item['date'].toString()),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                MobileChip(
+                  label: context.t(sent ? 'adv.sentToOdoo' : 'adv.approved'),
+                  color: MobileTone.success,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _moneyBreakdownText(
+              context,
+              cash: cash,
+              fawryApproved: fawry.approved,
+              fawryCommission: fawry.commission,
+              fawryTotal: fawry.total,
+              total: total,
+            ),
+            const Divider(height: 18, color: Color(0xFFEDF1F7)),
+            Row(
+              children: [
+                Expanded(
+                  child: MobileActionTile(
+                    icon: Icons.open_in_new_rounded,
+                    label: context.t('adv.openSheet'),
+                    primary: true,
+                    onPressed: onOpen,
+                  ),
+                ),
+                Expanded(
+                  child: MobileActionTile(
+                    icon: Icons.person_off_rounded,
+                    color: const Color(0xFFE65100),
+                    label: context.t('adv.outsideBranch', {
+                      'count': item['outsiderCount'] ?? outsiders.length,
+                    }),
+                    onPressed: () => _showOutsiderEmployees(context, outsiders, primary),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
 
     return SellixCard(
       padding: EdgeInsets.zero,
@@ -1075,7 +1266,7 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
     required ValueChanged<String?> onChanged,
   }) {
     return SizedBox(
-      width: 210,
+      width: isNativeMobile ? double.infinity : 210,
       child: DropdownButtonFormField<String>(
         key: ValueKey('$label-$value'),
         initialValue: value,
@@ -1117,23 +1308,20 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SellixCard(
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.end,
-            children: [
-              SizedBox(
-                width: 280,
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: context.t('adv.searchCodeNameJob'),
-                    prefixIcon: const Icon(Icons.search),
-                  ),
-                ),
-              ),
+        _advanceFiltersShell(
+          search: TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: isNativeMobile ? null : context.t('adv.searchCodeNameJob'),
+              hintText: isNativeMobile ? context.t('adv.searchCodeNameJob') : null,
+              prefixIcon: const Icon(Icons.search),
+            ),
+          ),
+          activeCount: [_locationFilter, _stateFilter, _importFilter]
+              .where((v) => v != null)
+              .length,
+          children: [
               _dropdown(
                 label: context.t('adv.branch'),
                 value: _locationFilter,
@@ -1181,8 +1369,7 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                 icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
                 label: Text(context.t('adv.clearFilters')),
               ),
-            ],
-          ),
+          ],
         ),
         const SizedBox(height: 12),
         Expanded(
@@ -1557,7 +1744,7 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
     required ValueChanged<T?> onChanged,
   }) {
     return SizedBox(
-      width: 210,
+      width: isNativeMobile ? double.infinity : 210,
       child: DropdownButtonFormField<T>(
         key: ValueKey('$label-$value'),
         initialValue: value,
@@ -1765,6 +1952,18 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
   }
 
   Widget _summaryStat(String label, String value) {
+    if (isNativeMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: MobileUi.text(12, weight: FontWeight.w600, color: MobileUi.muted)),
+          Text(
+            value,
+            style: MobileUi.text(18, weight: FontWeight.w800, color: MobileUi.primaryDeep, height: 1.3),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2050,23 +2249,22 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
           ),
         ),
         const SizedBox(height: 12),
-        SellixCard(
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.end,
-            children: [
-              SizedBox(
-                width: 280,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    labelText: context.t('adv.searchCodeName'),
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
+        _advanceFiltersShell(
+          search: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              labelText: isNativeMobile ? null : context.t('adv.searchCodeName'),
+              hintText: isNativeMobile ? context.t('adv.searchCodeName') : null,
+              prefixIcon: const Icon(Icons.search, size: 20),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+          activeCount: [
+            _stateFilter != null,
+            _repaymentFilter != LongAdvanceRepaymentFilter.all,
+            _employeeFilter != LongAdvanceEmployeeFilter.all,
+          ].where((a) => a).length,
+          children: [
               _filterDropdown<String?>(
                 label: context.t('adv.state'),
                 value: _stateFilter,
@@ -2143,8 +2341,7 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
                 icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
                 label: Text(context.t('adv.clearFilters')),
               ),
-            ],
-          ),
+          ],
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty)
@@ -2390,6 +2587,76 @@ class _AdvanceList extends StatelessWidget {
             else if (payrollId != null && payrollId.isNotEmpty)
               _detailRow(context.t('adv.payroll'), payrollId),
             const SizedBox(height: 16),
+            if (isNativeMobile)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!isLong && importId.isNotEmpty)
+                    Expanded(
+                      child: MobileActionTile(
+                        icon: Icons.receipt_long_rounded,
+                        color: MobileTone.info,
+                        label: context.t('adv.openLoanSheet'),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          context.push(
+                            '${AppRoutes.hrAdvanceLoanImport}'
+                            '?importId=${Uri.encodeQueryComponent(importId)}',
+                          );
+                        },
+                      ),
+                    )
+                  else if (payrollId != null && payrollId.isNotEmpty)
+                    Expanded(
+                      child: MobileActionTile(
+                        icon: Icons.receipt_long_rounded,
+                        color: MobileTone.info,
+                        label: context.t('adv.openPayroll'),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          context.go('${AppRoutes.hrPayroll}/$payrollId');
+                        },
+                      ),
+                    ),
+                  if (_canConfirmLong(a))
+                    Expanded(
+                      child: MobileActionTile(
+                        icon: Icons.play_circle_fill_rounded,
+                        color: MobileTone.success,
+                        primary: true,
+                        label: context.t('adv.activateRunning'),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _confirmLongAdvance(context, a);
+                        },
+                      ),
+                    ),
+                  if (_canEditLong(a))
+                    Expanded(
+                      child: MobileActionTile(
+                        icon: Icons.edit_rounded,
+                        label: context.t('adv.edit'),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _editLongAdvance(context, a);
+                        },
+                      ),
+                    ),
+                  if (_canCancel(a))
+                    Expanded(
+                      child: MobileActionTile(
+                        icon: Icons.cancel_rounded,
+                        color: MobileTone.danger,
+                        label: context.t('adv.cancelAdvance'),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await _confirmCancel(context, a);
+                        },
+                      ),
+                    ),
+                ],
+              )
+            else ...[
             // Short advances from a loan import always open the advances sheet,
             // even after they were deducted on a payroll (closed / done).
             if (!isLong && importId.isNotEmpty)
@@ -2448,6 +2715,7 @@ class _AdvanceList extends StatelessWidget {
                   foregroundColor: AppColors.danger,
                 ),
               ),
+            ],
             ],
           ],
         ),

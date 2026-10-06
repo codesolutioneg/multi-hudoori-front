@@ -14,6 +14,7 @@ import '../../core/widgets/page_header.dart';
 import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 
+import '../mobile/hudoori_loader.dart';
 class AdminCompaniesPage extends StatefulWidget {
   const AdminCompaniesPage({super.key});
 
@@ -441,7 +442,7 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
           ),
           const Gap(16),
           if (_loading)
-            const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator()))
+            const Center(child: Padding(padding: EdgeInsets.all(48), child: HudooriLoader()))
           else if (_error != null)
             Text(_error!, style: TextStyle(color: Colors.red.shade700))
           else if (_companies.isEmpty)

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/layout/breakpoints.dart';
@@ -17,6 +17,9 @@ import '../../core/widgets/skeleton_box.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
 class PayrollListPage extends StatefulWidget {
   const PayrollListPage({super.key});
 
@@ -304,6 +307,339 @@ class _PayrollListPageState extends State<PayrollListPage> {
     );
   }
 
+  Widget _periodHeaderMobile({
+    bool expanded = false,
+    required String from,
+    required String to,
+    required int branchCount,
+    required double cash,
+    required double fawryApproved,
+    required double fawryCommission,
+    required double fawryGrand,
+    required double grandTotalSum,
+    required int employees,
+  }) {
+    final periodEnd = parseIsoDate(to) ?? DateTime.now();
+    final monthName = payrollCycleMonthName(
+      periodEnd,
+      Localizations.localeOf(context).languageCode,
+    );
+    final l10n = context.l10n;
+
+    Widget report(IconData icon, Color color, String label, VoidCallback run) =>
+        Material(
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: run,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 10, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(icon, size: 19, color: color),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 2,
+                      style: MobileUi.text(12, weight: FontWeight.w700, height: 1.25),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const MobileIconBadge(icon: Icons.calendar_month_rounded, size: 40),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    context.t('payL.monthCycle', {'month': monthName}),
+                    style: MobileUi.text(16, weight: FontWeight.w800, height: 1.3),
+                  ),
+                  Text(
+                    '$from  â†’  $to',
+                    textDirection: TextDirection.ltr,
+                    style: MobileUi.text(12, weight: FontWeight.w500, color: MobileUi.muted),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFEFF4FF), Color(0xFFF7F9FF)],
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.t('m.grandTotal'),
+                      style: MobileUi.text(12, weight: FontWeight.w600, color: MobileUi.muted),
+                    ),
+                    Text(
+                      formatMoney(grandTotalSum, fallback: '0'),
+                      style: MobileUi.text(20, weight: FontWeight.w800, color: MobileUi.primaryDeep, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  MobileChip(
+                    icon: Icons.people_alt_outlined,
+                    label: l10n.t('m.employeesCount', {'n': employees}),
+                  ),
+                  const SizedBox(height: 4),
+                  MobileChip(
+                    icon: Icons.storefront_outlined,
+                    label: l10n.t('m.branchesCount', {'n': branchCount}),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            MobileChip(
+              icon: Icons.payments_outlined,
+              color: MobileTone.success,
+              label: l10n.t('m.cashAmount', {'amount': formatMoney(cash, fallback: '0')}),
+            ),
+            MobileChip(
+              icon: Icons.bolt_rounded,
+              color: MobileTone.violet,
+              label: l10n.t('m.fawryAmount', {'amount': formatMoney(fawryApproved, fallback: '0')}),
+            ),
+            if (fawryCommission > 0)
+              MobileChip(
+                icon: Icons.percent_rounded,
+                color: MobileTone.warning,
+                label: l10n.t('m.commissionAmount', {'amount': formatMoney(fawryCommission, fallback: '0')}),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          l10n.t('m.cycleReports'),
+          style: MobileUi.text(12.5, weight: FontWeight.w800, color: MobileUi.muted),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(builder: (context, c) {
+          final w = (c.maxWidth - 8) / 2;
+          return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final r in [
+            report(Icons.money_off_rounded, MobileTone.danger, context.t('payL.zeroBasic'), () {
+              _openPeriodReportDialog(kind: _PeriodReportKind.zeroBasic, dateFrom: from, dateTo: to);
+            }),
+            report(Icons.trending_down_rounded, MobileTone.warning, context.t('payL.negativeNet'), () {
+              _openPeriodReportDialog(kind: _PeriodReportKind.negativeNet, dateFrom: from, dateTo: to);
+            }),
+            report(Icons.content_copy_rounded, MobileTone.violet, context.t('payL.dupInGrids'), () {
+              _openPeriodReportDialog(kind: _PeriodReportKind.duplicates, dateFrom: from, dateTo: to);
+            }),
+            report(Icons.account_balance_wallet_rounded, MobileTone.success, context.t('payL.cashFawryCycle'), () {
+              _downloadPeriodFile(
+                call: () => api.payrollPeriodCashFawryExportZip(dateFrom: from, dateTo: to),
+                successLabel: context.t('payL.cashFawryDownloaded'),
+              );
+            }),
+            report(Icons.summarize_rounded, const Color(0xFF0D9488), context.t('payL.payrollSummary'), () {
+              _downloadPeriodFile(
+                call: () => api.payrollPeriodSummaryExportXlsx(dateFrom: from, dateTo: to),
+                successLabel: context.t('payL.summaryDownloaded'),
+              );
+            }),
+            ])
+              SizedBox(width: w, child: r),
+          ],
+          );
+        }),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: expanded ? MobileUi.primary : MobileUi.primarySoft,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.receipt_long_rounded,
+                size: 19,
+                color: expanded ? Colors.white : MobileUi.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.t('m.sheetsCount', {'n': branchCount}),
+                  style: MobileUi.text(
+                    13,
+                    weight: FontWeight.w800,
+                    color: expanded ? Colors.white : MobileUi.primary,
+                  ),
+                ),
+              ),
+              AnimatedRotation(
+                turns: expanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: expanded ? Colors.white : MobileUi.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _payrollTileMobile(Map<String, dynamic> p, {
+    required String title,
+    required double grandTotal,
+    required double cash,
+    required double fawryGrand,
+    required bool fromImport,
+  }) {
+    final l10n = context.l10n;
+    final state = p['state']?.toString() ?? '';
+    final stateColor = switch (state) {
+      'confirmed' => MobileTone.success,
+      'calculated' => MobileUi.primary,
+      _ => MobileTone.warning,
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Material(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => context.go('${AppRoutes.hrPayroll}/${p['id']}'),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE6ECF7)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const MobileIconBadge(icon: Icons.storefront_rounded, size: 38),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: MobileUi.text(14.5, weight: FontWeight.w800),
+                      ),
+                    ),
+                    MobileChip(label: _stateAr(state), color: stateColor),
+                    Icon(
+                      Directionality.of(context) == TextDirection.rtl
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                      color: MobileUi.muted,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _sheetFigure(l10n.t('m.grandTotal'), formatMoney(grandTotal, fallback: '0'), MobileUi.primaryDeep),
+                    ),
+                    Expanded(
+                      child: _sheetFigure(context.t('pay.netSalaries'), formatMoney(p['totalNet'], fallback: '0'), MobileUi.ink),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    MobileChip(
+                      icon: Icons.people_alt_outlined,
+                      label: l10n.t('m.employeesCount', {'n': p['employeeCount'] ?? 0}),
+                    ),
+                    if (cash > 0)
+                      MobileChip(
+                        icon: Icons.payments_outlined,
+                        color: MobileTone.success,
+                        label: l10n.t('m.cashAmount', {'amount': formatMoney(cash, fallback: '0')}),
+                      ),
+                    if (fawryGrand > 0)
+                      MobileChip(
+                        icon: Icons.bolt_rounded,
+                        color: MobileTone.violet,
+                        label: l10n.t('m.fawryAmount', {'amount': formatMoney(fawryGrand, fallback: '0')}),
+                      ),
+                    if (fromImport)
+                      MobileChip(
+                        icon: Icons.fingerprint,
+                        color: MobileTone.info,
+                        label: context.t('payL.fromPunchReport'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sheetFigure(String label, String value, Color color) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: MobileUi.text(11.5, weight: FontWeight.w600, color: MobileUi.muted)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(value, style: MobileUi.text(16, weight: FontWeight.w800, color: color)),
+          ),
+        ],
+      );
+
   Future<void> _downloadPeriodFile({
     required Future<Map<String, dynamic>> Function() call,
     required String successLabel,
@@ -408,7 +744,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
           if (searching)
             const Padding(
               padding: EdgeInsets.all(16),
-              child: CircularProgressIndicator(),
+              child: HudooriLoader(),
             )
           else if (query.isNotEmpty && results.isEmpty)
             Padding(
@@ -462,6 +798,18 @@ class _PayrollListPageState extends State<PayrollListPage> {
     final grandTotal = p['grandTotal'] != null
         ? _num(p['grandTotal'])
         : _round2(_num(p['totalNet']) + fawryComm);
+    if (isNativeMobile) {
+      return _payrollTileMobile(
+        p,
+        title: branch.isNotEmpty
+            ? branch
+            : (name.isNotEmpty ? name : context.t('pay.sheetTitle')),
+        grandTotal: grandTotal,
+        cash: cash,
+        fawryGrand: fawryGrand,
+        fromImport: fromImport,
+      );
+    }
     return ListTile(
       title: Text(
         branch.isNotEmpty
@@ -512,25 +860,52 @@ class _PayrollListPageState extends State<PayrollListPage> {
   @override
   Widget build(BuildContext context) {
     final groups = _groupedByPeriod();
+    final header = PageHeader(
+      title: context.t('payroll.listTitle'),
+      subtitle: context.t('payroll.listSubtitle'),
+      icon: Icons.payments_outlined,
+      actions: [
+        IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        FilledButton.icon(
+          onPressed: _create,
+          style: isNativeMobile ? null : headerActionStyle,
+          icon: const Icon(Icons.add, size: 18),
+          label: Text(context.t('payroll.newSheet')),
+        ),
+      ],
+    );
+    if (isNativeMobile) {
+      return RefreshIndicator(
+        onRefresh: () async => _load(),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+          children: [
+            header,
+            const SizedBox(height: 16),
+            if (_loading)
+              const SizedBox(height: 360, child: Center(child: HudooriLoader()))
+            else if (_items.isEmpty)
+              HrEmptyListCard(
+                message: context.t('payroll.emptyList'),
+                actionLabel: context.t('payroll.newSheet'),
+                onAction: _create,
+              )
+            else
+              for (final g in groups)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _periodCard(g),
+                ),
+          ],
+        ),
+      );
+    }
     return AppPageScaffold(
       scrollable: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PageHeader(
-            title: context.t('payroll.listTitle'),
-            subtitle: context.t('payroll.listSubtitle'),
-            icon: Icons.payments_outlined,
-            actions: [
-              IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-              FilledButton.icon(
-                onPressed: _create,
-                style: headerActionStyle,
-                icon: const Icon(Icons.add, size: 18),
-                label: Text(context.t('payroll.newSheet')),
-              ),
-            ],
-          ),
+          header,
           HrLocalDataBanner(
             title: context.t('payroll.localBanner'),
             hint: context.t('payroll.localHint'),
@@ -548,8 +923,15 @@ class _PayrollListPageState extends State<PayrollListPage> {
                 : ListView.separated(
                     itemCount: groups.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) {
-                      final entry = groups[i];
+                    itemBuilder: (_, i) => _periodCard(groups[i]),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _periodCard(MapEntry<String, List<Map<String, dynamic>>> entry) {
                       final key = entry.key;
                       final parts = key.split('|');
                       final from = parts.isNotEmpty ? parts.first : '';
@@ -603,7 +985,26 @@ class _PayrollListPageState extends State<PayrollListPage> {
                               }
                             });
                           },
-                          title: _periodHeader(
+                          tilePadding: isNativeMobile
+                              ? const EdgeInsets.fromLTRB(14, 10, 14, 12)
+                              : null,
+                          showTrailingIcon: !isNativeMobile,
+                          shape: isNativeMobile ? const Border() : null,
+                          collapsedShape: isNativeMobile ? const Border() : null,
+                          title: isNativeMobile
+                              ? _periodHeaderMobile(
+                                  expanded: expanded,
+                                  from: from,
+                                  to: to,
+                                  branchCount: branchCount,
+                                  cash: cash,
+                                  fawryApproved: fawryApproved,
+                                  fawryCommission: fawryCommission,
+                                  fawryGrand: fawryGrand,
+                                  grandTotalSum: grandTotalSum,
+                                  employees: employees,
+                                )
+                              : _periodHeader(
                             from: from,
                             to: to,
                             branchCount: branchCount,
@@ -620,18 +1021,12 @@ class _PayrollListPageState extends State<PayrollListPage> {
                             if ((_periodSearchQueries[key] ?? '').isEmpty)
                               for (var j = 0; j < payrolls.length; j++) ...[
                                 _payrollTile(payrolls[j]),
-                                if (j < payrolls.length - 1)
+                                if (!isNativeMobile && j < payrolls.length - 1)
                                   const Divider(height: 1),
                               ],
                           ],
                         ),
                       );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -749,7 +1144,7 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
         child: _loading
             ? const SizedBox(
                 height: 120,
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: HudooriLoader()),
               )
             : SingleChildScrollView(
                 child: Column(
@@ -854,7 +1249,7 @@ class _PayrollCreateDialogState extends State<_PayrollCreateDialog> {
                           DropdownMenuItem<String?>(
                             value: g['id']?.toString(),
                             child: Text(
-                              '${g['name'] ?? g['id']} (${g['dateFrom']} → ${g['dateTo']})',
+                              '${g['name'] ?? g['id']} (${g['dateFrom']} â†’ ${g['dateTo']})',
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -1056,7 +1451,7 @@ class _PeriodPayrollReportDialogState
         width: width > 900 ? 820 : width * 0.92,
         height: 480,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: HudooriLoader())
             : _error != null
             ? Center(
                 child: Text(
@@ -1095,7 +1490,7 @@ class _PeriodPayrollReportDialogState
                         dense: true,
                         contentPadding: EdgeInsets.zero,
                         title: Text(
-                          '${row['employeeCode'] ?? ''} — ${row['employeeName'] ?? ''}',
+                          '${row['employeeCode'] ?? ''} â€” ${row['employeeName'] ?? ''}',
                           style: const TextStyle(fontSize: 13),
                         ),
                         subtitle: Text(switch (widget.kind) {

@@ -49,7 +49,10 @@ import '../../features/admin/admin_shell.dart';
 import '../../features/admin/admin_users_page.dart';
 import '../../features/audit/audit_log_page.dart';
 import '../../features/common/access_denied_page.dart';
+import '../../features/mobile/mobile_home_page.dart';
+import '../../features/mobile/mobile_punch_page.dart';
 import '../../features/shell/biotime_shell.dart';
+import '../platform/mobile_platform.dart';
 import '../utils/feature_entitlements.dart';
 
 abstract final class AppRoutes {
@@ -304,8 +307,11 @@ GoRouter createRouter(AuthCubit auth) {
         routes: [
           GoRoute(
             path: AppRoutes.dashboard,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: DashboardPageV2()),
+            pageBuilder: (_, __) => NoTransitionPage(
+              child: isNativeMobile
+                  ? const MobileHomePage()
+                  : const DashboardPageV2(),
+            ),
           ),
           GoRoute(
             path: AppRoutes.accessDenied,
@@ -332,8 +338,11 @@ GoRouter createRouter(AuthCubit auth) {
           ),
           GoRoute(
             path: AppRoutes.myLocationPunch,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: LocationPunchPage()),
+            pageBuilder: (_, __) => NoTransitionPage(
+              child: isNativeMobile
+                  ? const MobilePunchPage()
+                  : const LocationPunchPage(),
+            ),
           ),
           GoRoute(
             path: AppRoutes.hrAdvanceRequests,
@@ -361,8 +370,11 @@ GoRouter createRouter(AuthCubit auth) {
           ),
           GoRoute(
             path: AppRoutes.hrDashboard,
-            pageBuilder: (_, __) =>
-                const NoTransitionPage(child: HrDashboardPage()),
+            pageBuilder: (_, __) => NoTransitionPage(
+              child: isNativeMobile
+                  ? const MobileHomePage()
+                  : const HrDashboardPage(),
+            ),
           ),
           GoRoute(
             path: AppRoutes.hrAbsentEmployees,

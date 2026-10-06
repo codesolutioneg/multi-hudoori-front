@@ -13,6 +13,9 @@ import '../../core/utils/money_format.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
+import '../../core/platform/mobile_platform.dart';
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_ui.dart';
 import 'widgets/report_options_panel.dart';
 import 'widgets/sync_progress_dialog.dart';
 
@@ -587,6 +590,9 @@ class _ReportsPageState extends State<ReportsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (isNativeMobile)
+                  _mobileReportPicker(context)
+                else
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -657,6 +663,9 @@ class _ReportsPageState extends State<ReportsPage> {
                   ),
                   const SizedBox(height: 8),
                 ],
+                if (isNativeMobile)
+                  _mobileRunBar()
+                else
                 Wrap(
                   spacing: 12,
                   runSpacing: 8,
@@ -691,7 +700,9 @@ class _ReportsPageState extends State<ReportsPage> {
       );
     if (mobile) {
       return SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        padding: isNativeMobile
+            ? const EdgeInsets.fromLTRB(16, 6, 16, 24)
+            : const EdgeInsets.fromLTRB(12, 12, 12, 24),
         child: content,
       );
     }
@@ -701,14 +712,283 @@ class _ReportsPageState extends State<ReportsPage> {
     );
   }
 
+  Widget _mobileRunBar() {
+    const excel = Color(0xFF16A34A);
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(16));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: FilledButton.icon(
+                onPressed: _loading || !_reportReady ? null : _run,
+                style: FilledButton.styleFrom(
+                  backgroundColor: MobileUi.primary,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: shape,
+                  textStyle: MobileUi.text(14.5, weight: FontWeight.w800),
+                ),
+                icon: _loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                      )
+                    : const Icon(Icons.play_arrow_rounded, size: 24),
+                label: Text(context.t('reports.run')),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: FilledButton.tonalIcon(
+                onPressed: _exporting || !_reportReady ? null : _export,
+                style: FilledButton.styleFrom(
+                  backgroundColor: excel.withValues(alpha: 0.12),
+                  foregroundColor: excel,
+                  minimumSize: const Size.fromHeight(52),
+                  shape: shape,
+                  textStyle: MobileUi.text(13.5, weight: FontWeight.w800),
+                ),
+                icon: _exporting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.2, color: excel),
+                      )
+                    : const Icon(Icons.table_view_rounded, size: 20),
+                label: const Text('Excel'),
+              ),
+            ),
+          ],
+        ),
+        if (_hasRun && _error == null) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: MobileChip(
+              label: context.t('reports.resultCount', {'count': '${_rows.length}'}),
+              icon: Icons.fact_check_outlined,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _selectReport(HrReport report) => setState(() {
+        _report = report;
+        _rows = [];
+        _hasRun = false;
+        _error = null;
+      });
+
+  Widget _mobileReportPicker(BuildContext context) {
+    Future<void> open() async {
+      final picked = await showModalBottomSheet<HrReport>(
+        context: context,
+        isScrollControlled: true,
+        builder: (ctx) => ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.75),
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.fromLTRB(12, 0, 12, 24 + MediaQuery.viewPaddingOf(ctx).bottom),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+                child: Text(context.t('m.reportType'), style: MobileUi.sectionTitle),
+              ),
+              for (final report in HrReport.values)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Material(
+                    color: report == _report ? MobileUi.primarySoft : const Color(0xFFF7F9FD),
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () => Navigator.pop(ctx, report),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.insert_chart_outlined_rounded,
+                              size: 20,
+                              color: report == _report ? MobileUi.primary : MobileUi.muted,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _reportTitle(report),
+                                style: MobileUi.text(
+                                  14,
+                                  weight: report == _report ? FontWeight.w800 : FontWeight.w600,
+                                  color: report == _report ? MobileUi.primaryDeep : MobileUi.ink,
+                                ),
+                              ),
+                            ),
+                            if (report == _report)
+                              const Icon(Icons.check_circle_rounded, color: MobileUi.primary, size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (picked != null && picked != _report) _selectReport(picked);
+    }
+
+    return Material(
+      color: MobileUi.primarySoft,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: open,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: MobileUi.primaryGradient,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(Icons.insert_chart_outlined_rounded, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.t('m.reportType'),
+                      style: MobileUi.text(12, weight: FontWeight.w600, color: MobileUi.muted),
+                    ),
+                    Text(
+                      _reportTitle(_report),
+                      style: MobileUi.text(15, weight: FontWeight.w800, color: MobileUi.primaryDeep, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.unfold_more_rounded, color: MobileUi.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileResults() {
+    final title = _columns.isEmpty ? null : _columns.first;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final row in _rows)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () {
+                  final id = EntityId.parse(row['employeeId']);
+                  if (id != null) context.go(AppRoutes.hrEmployeeDetail(id));
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: MobileUi.card().copyWith(
+                    border: _isAlertRow(row)
+                        ? Border.all(color: MobileTone.danger.withValues(alpha: 0.35))
+                        : null,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (title != null)
+                        Row(
+                          children: [
+                            MobileAvatar(name: _cellText(row, title), size: 38),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _cellText(row, title),
+                                style: MobileUi.text(14.5, weight: FontWeight.w800),
+                              ),
+                            ),
+                            if (_isAlertRow(row))
+                              const Icon(Icons.error_outline_rounded, color: MobileTone.danger, size: 20),
+                          ],
+                        ),
+                      const SizedBox(height: 8),
+                      for (final column in _columns.skip(1))
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  context.t('reports.column.$column'),
+                                  style: MobileUi.text(12, weight: FontWeight.w600, color: MobileUi.muted),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  _cellText(row, column),
+                                  style: MobileUi.text(13, weight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildResults({bool inline = false}) {
     if (_loading) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(32),
-          child: CircularProgressIndicator(color: AppThemeV2.primary),
+          child: HudooriLoader(),
         ),
       );
+    }
+    if (isNativeMobile) {
+      if (_error != null) {
+        return MobileEmptyState(icon: Icons.error_outline_rounded, message: _error!);
+      }
+      if (!_hasRun) {
+        return MobileEmptyState(
+          icon: Icons.insert_chart_outlined_rounded,
+          message: context.t('reports.pressRun'),
+        );
+      }
+      if (_rows.isEmpty) {
+        return MobileEmptyState(
+          icon: Icons.check_circle_outline_rounded,
+          message: context.t('reports.empty'),
+        );
+      }
+      return _mobileResults();
     }
     if (_error != null) {
       return SellixCard(

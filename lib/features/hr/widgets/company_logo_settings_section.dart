@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/file_pick.dart';
 import '../../../core/widgets/sellix_card.dart';
 
+import '../../mobile/hudoori_loader.dart';
 class CompanyLogoSettingsSection extends StatefulWidget {
   const CompanyLogoSettingsSection({super.key, this.hasLogo = false, this.onChanged});
 
@@ -120,7 +121,7 @@ class _CompanyLogoSettingsSectionState extends State<CompanyLogoSettingsSection>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_loading)
-                const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                const Center(child: Padding(padding: EdgeInsets.all(24), child: HudooriLoader()))
               else if (_logoBytes != null)
                 Align(
                   alignment: Alignment.centerLeft,

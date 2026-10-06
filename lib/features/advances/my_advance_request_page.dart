@@ -9,6 +9,7 @@ import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
 import 'advance_request_common.dart';
 
+import '../mobile/hudoori_loader.dart';
 /// «طلب سلفة» — what an employee sees: their entitlement, the request form,
 /// and the history of what they've asked for.
 class MyAdvanceRequestPage extends StatefulWidget {
@@ -111,7 +112,7 @@ class _MyAdvanceRequestPageState extends State<MyAdvanceRequestPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HudooriLoader());
     if (_error != null) return ApiErrorView(error: _error!, onRetry: _load);
 
     final eligibility = _eligibility ?? const <String, dynamic>{};

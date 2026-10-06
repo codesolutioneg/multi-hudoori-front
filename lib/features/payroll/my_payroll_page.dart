@@ -9,6 +9,7 @@ import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 class MyPayrollPage extends StatefulWidget {
   const MyPayrollPage({super.key});
 
@@ -90,7 +91,7 @@ class _MyPayrollPageState extends State<MyPayrollPage> {
           ),
           const SizedBox(height: 16),
           if (_loading)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: HudooriLoader())
           else if (_items.isEmpty)
             SellixCard(child: Text(context.t('payroll.emptyMy')))
           else

@@ -28,6 +28,11 @@ import '../../core/widgets/status_tag.dart';
 import '../../data/api/biotime_api_client.dart';
 import '../auth/auth_cubit.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_actions.dart';
+import '../mobile/mobile_filters.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
 class EmployeesPage extends StatefulWidget {
   const EmployeesPage({super.key});
 
@@ -722,35 +727,167 @@ class _EmployeesPageState extends State<EmployeesPage> {
     ];
   }
 
+  Widget _mobileActions(BuildContext context) {
+    return MobileActionSection(
+      title: context.t('m.empActions'),
+      icon: Icons.bolt_rounded,
+      columns: 5,
+      collapsible: false,
+      children: [
+        MobileActionTile(
+          icon: Icons.person_add_alt_1_rounded,
+          label: context.t('employees.newEmployee'),
+          primary: true,
+          onPressed: _openCreateForm,
+        ),
+        MobileActionTile(
+          icon: Icons.fingerprint_rounded,
+          color: MobileTone.violet,
+          label: context.t('m.empPunchShort'),
+          tooltip: context.t('employees.punchReport'),
+          onPressed: _loading ? null : _exportPunchReport,
+        ),
+        MobileActionTile(
+          icon: Icons.note_add_outlined,
+          color: const Color(0xFF0891B2),
+          label: context.t('m.empTemplateShort'),
+          tooltip: context.t('emp.newEmployeeTemplate'),
+          loading: _exportingTemplate,
+          onPressed: _loading ? null : _exportTemplate,
+        ),
+        MobileActionTile(
+          icon: Icons.upload_file_rounded,
+          color: const Color(0xFFEA580C),
+          label: context.t('employees.importExcel'),
+          loading: _importingExcel,
+          onPressed: _loading ? null : _importExcel,
+        ),
+        MobileActionTile(
+          icon: Icons.download_rounded,
+          color: const Color(0xFF16A34A),
+          label: context.t('employees.exportExcel'),
+          loading: _exportingExcel,
+          onPressed: _loading ? null : _exportExcel,
+        ),
+      ],
+    );
+  }
+
+  Widget _mobileStatusChips(BuildContext context) {
+    final options = <(String, Color?, IconData?, bool?, bool)>[
+      (context.t('common.all'), null, Icons.apps_rounded, null, false),
+      (context.t('emp.linkedBio'), MobileTone.success, null, true, false),
+      (context.t('emp.notLinked'), MobileTone.warning, null, false, false),
+      (context.t('emp.archived'), const Color(0xFF64748B), Icons.archive_outlined, null, true),
+    ];
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: options.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final (label, dot, icon, bio, archived) = options[i];
+          final selected = _biotimeFilter == bio && _showArchived == archived;
+          return GestureDetector(
+            onTap: () {
+              if (selected) return;
+              setState(() {
+                _biotimeFilter = bio;
+                _showArchived = archived;
+              });
+              _reload(reset: true);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                gradient: selected ? MobileUi.primaryGradient : null,
+                color: selected ? null : Colors.white,
+                borderRadius: BorderRadius.circular(19),
+                border: Border.all(color: selected ? Colors.transparent : const Color(0xFFE6EBF3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null)
+                    Icon(icon, size: 15, color: selected ? Colors.white : MobileUi.muted)
+                  else
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: selected ? Colors.white : dot,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: MobileUi.text(13, weight: FontWeight.w700, color: selected ? Colors.white : MobileUi.ink, height: 1.2),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _filtersCard(BuildContext context) {
+    final search = TextField(
+      controller: _searchCtrl,
+      focusNode: _searchFocus,
+      autofillHints: const <String>[],
+      autocorrect: false,
+      enableSuggestions: false,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: context.t('emp.searchHint'),
+        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+        suffixIcon: _searchCtrl.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  _reload(reset: true);
+                },
+              )
+            : null,
+      ),
+      onChanged: _onSearchChanged,
+      onSubmitted: (_) => _reload(reset: true),
+    );
+    if (isNativeMobile) {
+      final auth = context.read<AuthCubit>().state;
+      final active = [
+        !auth.isLocationScoped && _locationFilter != null,
+        _departmentFilter != null,
+        _biotimeFilter != null || _showArchived,
+      ].where((a) => a).length;
+      return MobileFilters(
+        leading: search,
+        activeCount: active,
+        child: _filterFields(context),
+      );
+    }
     return SellixCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _searchCtrl,
-            focusNode: _searchFocus,
-            autofillHints: const <String>[],
-            autocorrect: false,
-            enableSuggestions: false,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              labelText: context.t('emp.searchHint'),
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _searchCtrl.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        _reload(reset: true);
-                      },
-                    )
-                  : null,
-            ),
-            onChanged: _onSearchChanged,
-            onSubmitted: (_) => _reload(reset: true),
-          ),
+          search,
           const SizedBox(height: 12),
+          _filterFields(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterFields(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
           SearchableSelectField<String>(
             label: context.t('employees.field.location'),
             allLabel: context.t('employees.allLocations'),
@@ -842,13 +979,45 @@ class _EmployeesPageState extends State<EmployeesPage> {
             ],
           ),
         ],
-      ),
     );
   }
 
   /// [inline]: the list is laid out inside the page's own scroll view
   /// (mobile), so it must not scroll or own [_scrollCtrl] itself.
   Widget _employeesList(BuildContext context, {bool inline = false}) {
+    if (isNativeMobile) {
+      if (_loading) {
+        return const SizedBox(height: 360, child: Center(child: HudooriLoader()));
+      }
+      if (_items.isEmpty) {
+        return MobileEmptyState(
+          icon: Icons.person_search_rounded,
+          message: context.t('emp.noMatches'),
+        );
+      }
+      final canDelete = context.watch<AuthCubit>().state.canDeleteEmployee;
+      return ListView.separated(
+        shrinkWrap: true,
+        primary: false,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        itemCount: _items.length + (_loadingMore ? 1 : 0),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (context, i) {
+          if (i >= _items.length) {
+            return const SizedBox(height: 56, child: Center(child: HudooriLoader()));
+          }
+          return _EmployeeTile(
+            employee: _items[i],
+            onTap: () async {
+              await context.push('${AppRoutes.hrEmployees}/${_items[i]['id']}');
+              if (mounted) _reload(reset: true);
+            },
+            onDelete: canDelete ? () => _deleteEmployee(_items[i]) : null,
+          );
+        },
+      );
+    }
     if (_loading) {
       return inline
           ? const SizedBox(height: 420, child: _EmployeesListSkeleton())
@@ -893,12 +1062,14 @@ class _EmployeesPageState extends State<EmployeesPage> {
   @override
   Widget build(BuildContext context) {
     final compact = isMobile(context) || isTablet(context);
-    final pagePadding = EdgeInsets.fromLTRB(
-      compact ? 12 : 24,
-      compact ? 12 : 20,
-      compact ? 12 : 24,
-      compact ? 16 : 24,
-    );
+    final pagePadding = isNativeMobile
+        ? const EdgeInsets.fromLTRB(16, 6, 16, 0)
+        : EdgeInsets.fromLTRB(
+            compact ? 12 : 24,
+            compact ? 12 : 20,
+            compact ? 12 : 24,
+            compact ? 16 : 24,
+          );
 
     return Stack(
       children: [
@@ -914,15 +1085,42 @@ class _EmployeesPageState extends State<EmployeesPage> {
                 layoutHeight: constraints.maxHeight,
                 keyboardInset: MediaQuery.viewInsetsOf(context).bottom,
               );
-              final header = PageHeader(
+              final pageHeader = PageHeader(
                 title: context.t('employees.title'),
                 subtitle: _total > 0
                     ? context.t('employees.totalBioTime', {'n': _total})
                     : context.t('employees.emptyBioTime'),
                 icon: Icons.people_outline_rounded,
-                actions: _headerActions(context),
+                actions: isNativeMobile
+                    ? [
+                        IconButton(
+                          onPressed: () => _reload(reset: true),
+                          icon: const Icon(Icons.refresh_rounded),
+                          tooltip: context.t('common.refresh'),
+                        ),
+                      ]
+                    : _headerActions(context),
               );
-              final filters = _filtersCard(context);
+              final header = isNativeMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        pageHeader,
+                        const SizedBox(height: 12),
+                        _mobileActions(context),
+                      ],
+                    )
+                  : pageHeader;
+              final filters = isNativeMobile
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _filtersCard(context),
+                        const SizedBox(height: 10),
+                        _mobileStatusChips(context),
+                      ],
+                    )
+                  : _filtersCard(context);
               final quota = _quota;
               final quotaBanner = quota != null && quota.employeesFull
                   ? _QuotaFullBanner(
@@ -938,6 +1136,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
               if (compact || shortViewport) {
                 return ListView(
                   controller: _scrollCtrl,
+                  padding: isNativeMobile ? const EdgeInsets.only(bottom: 100) : null,
                   children: [
                     header,
                     if (quotaBanner != null) ...[
@@ -984,7 +1183,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const CircularProgressIndicator(),
+                        const HudooriLoader(),
                         const SizedBox(height: 14),
                         Text(
                           _exportingExcel
@@ -1147,6 +1346,143 @@ class _EmployeeTile extends StatelessWidget {
     final email = employee['workEmail']?.toString() ?? '';
     final phone = employee['mobilePhone']?.toString() ?? '';
     final synced = employee['biotimeSynced'] == true;
+
+    if (isNativeMobile) {
+      final statusLabel = synced
+          ? 'BioTime'
+          : (code.isNotEmpty
+                ? context.t('emp.awaitingUpload')
+                : context.t('emp.notLinked'));
+      final statusColor = synced ? MobileTone.success : MobileTone.warning;
+      final role = [job, dept].where((s) => s.isNotEmpty).join(' · ');
+      return Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+            decoration: MobileUi.card(r: 20),
+            child: Row(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: statusColor.withValues(alpha: 0.45), width: 2),
+                      ),
+                      child: MobileAvatar(name: _displayName, size: 46),
+                    ),
+                    PositionedDirectional(
+                      end: 0,
+                      bottom: 0,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: Icon(
+                          synced ? Icons.check_rounded : Icons.cloud_upload_rounded,
+                          size: 10,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: MobileUi.text(15, weight: FontWeight.w800, height: 1.3),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(8, 3, 9, 3),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              statusLabel,
+                              style: MobileUi.text(11, weight: FontWeight.w800, color: statusColor, height: 1.2),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (role.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.work_outline_rounded, size: 13, color: MobileUi.muted),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  role,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: MobileUi.text(12, weight: FontWeight.w500, color: MobileUi.muted, height: 1.35),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (code.isNotEmpty)
+                            MobileChip(icon: Icons.fingerprint_rounded, label: code, color: MobileUi.primary),
+                          if (branch.isNotEmpty)
+                            MobileChip(icon: Icons.storefront_outlined, label: branch),
+                          if (phone.isNotEmpty)
+                            MobileChip(icon: Icons.phone_iphone_rounded, label: phone),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                if (onDelete != null)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppThemeV2.danger),
+                    tooltip: context.t('emp.deleteEmployee'),
+                    onPressed: onDelete,
+                  )
+                else
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: const BoxDecoration(
+                      color: MobileUi.primarySoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.chevron_right_rounded, size: 20, color: MobileUi.primary),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

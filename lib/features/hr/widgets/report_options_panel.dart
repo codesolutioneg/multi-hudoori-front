@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../core/platform/mobile_platform.dart';
 
 import '../../../core/theme/app_theme_v2.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../core/widgets/searchable_select_field.dart';
+import '../../mobile/mobile_ui.dart';
 import '../../../l10n/l10n_extension.dart';
 import '../reports_page.dart';
 
@@ -125,7 +127,7 @@ class ReportOptionsPanel extends StatelessWidget {
           runSpacing: 12,
           children: [
             SizedBox(
-              width: 260,
+              width: isNativeMobile ? double.infinity : 260,
               child: SearchableSelectField<String>(
                 label: context.t('reports.filterLocation'),
                 allLabel: report == HrReport.punchSummary
@@ -143,7 +145,7 @@ class ReportOptionsPanel extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 260,
+              width: isNativeMobile ? double.infinity : 260,
               child: SearchableSelectField<String>(
                 label: context.t('reports.filterDepartment'),
                 allLabel: context.t('common.all'),
@@ -163,86 +165,53 @@ class ReportOptionsPanel extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         if (_showNationalIdGate)
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.requireNationalId')),
-            subtitle: Text(
-              context.t('reports.requireNationalIdHint'),
-              style: AppThemeV2.caption,
-            ),
+          _OptionToggle(
+            title: context.t('reports.requireNationalId'),
+            hint: context.t('reports.requireNationalIdHint'),
             value: requireNationalId,
             onChanged: (v) => onRequireNationalIdChanged(v ?? false),
           ),
         if (report == HrReport.noPunches) ...[
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.includeNeverScheduled')),
-            subtitle: Text(
-              context.t('reports.includeNeverScheduledHint'),
-              style: AppThemeV2.caption,
-            ),
+          _OptionToggle(
+            title: context.t('reports.includeNeverScheduled'),
+            hint: context.t('reports.includeNeverScheduledHint'),
             value: includeNeverScheduled,
             onChanged: (v) => onIncludeNeverScheduledChanged(v ?? false),
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.includeArchived')),
+          _OptionToggle(
+            title: context.t('reports.includeArchived'),
             value: includeArchived,
             onChanged: (v) => onIncludeArchivedChanged(v ?? false),
           ),
         ],
         if (report == HrReport.locationMismatch) ...[
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.includeUnmappedDevices')),
-            subtitle: Text(
-              context.t('reports.includeUnmappedDevicesHint'),
-              style: AppThemeV2.caption,
-            ),
+          _OptionToggle(
+            title: context.t('reports.includeUnmappedDevices'),
+            hint: context.t('reports.includeUnmappedDevicesHint'),
             value: includeUnmappedDevices,
             onChanged: (v) => onIncludeUnmappedDevicesChanged(v ?? false),
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.includeArchived')),
+          _OptionToggle(
+            title: context.t('reports.includeArchived'),
             value: includeArchived,
             onChanged: (v) => onIncludeArchivedChanged(v ?? false),
           ),
         ],
         if (report == HrReport.punchSummary)
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.includeArchived')),
+          _OptionToggle(
+            title: context.t('reports.includeArchived'),
             value: includeArchived,
             onChanged: (v) => onIncludeArchivedChanged(v ?? false),
           ),
         if (report == HrReport.employeeEmails)
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.includeArchived')),
+          _OptionToggle(
+            title: context.t('reports.includeArchived'),
             value: includeArchived,
             onChanged: (v) => onIncludeArchivedChanged(v ?? false),
           ),
         if (report == HrReport.documents)
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-            title: Text(context.t('reports.acceptCopies')),
+          _OptionToggle(
+            title: context.t('reports.acceptCopies'),
             value: acceptCopies,
             onChanged: (v) => onAcceptCopiesChanged(v ?? true),
           ),
@@ -291,7 +260,7 @@ class ReportOptionsPanel extends StatelessWidget {
       case HrReport.employeeExits:
         return [
           SizedBox(
-            width: 200,
+            width: isNativeMobile ? double.infinity : 200,
             child: OutlinedButton.icon(
               onPressed: () => onPickDate(true),
               icon: const Icon(Icons.calendar_today_outlined, size: 18),
@@ -299,7 +268,7 @@ class ReportOptionsPanel extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 200,
+            width: isNativeMobile ? double.infinity : 200,
             child: OutlinedButton.icon(
               onPressed: () => onPickDate(false),
               icon: const Icon(Icons.calendar_today_outlined, size: 18),
@@ -312,7 +281,7 @@ class ReportOptionsPanel extends StatelessWidget {
       case HrReport.fawry:
         return [
           SizedBox(
-            width: 260,
+            width: isNativeMobile ? double.infinity : 260,
             child: _dropdown(
               context: context,
               label: context.t('reports.show'),
@@ -330,7 +299,7 @@ class ReportOptionsPanel extends StatelessWidget {
       case HrReport.insurance:
         return [
           SizedBox(
-            width: 260,
+            width: isNativeMobile ? double.infinity : 260,
             child: _dropdown(
               context: context,
               label: context.t('reports.insuranceKind'),
@@ -344,7 +313,7 @@ class ReportOptionsPanel extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 260,
+            width: isNativeMobile ? double.infinity : 260,
             child: _dropdown(
               context: context,
               label: context.t('reports.show'),
@@ -361,7 +330,7 @@ class ReportOptionsPanel extends StatelessWidget {
       case HrReport.documents:
         return [
           SizedBox(
-            width: 260,
+            width: isNativeMobile ? double.infinity : 260,
             child: _dropdown(
               context: context,
               label: context.t('reports.show'),
@@ -378,7 +347,7 @@ class ReportOptionsPanel extends StatelessWidget {
       case HrReport.healthCertificates:
         return [
           SizedBox(
-            width: 260,
+            width: isNativeMobile ? double.infinity : 260,
             child: _dropdown(
               context: context,
               label: context.t('reports.show'),
@@ -394,7 +363,7 @@ class ReportOptionsPanel extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 200,
+            width: isNativeMobile ? double.infinity : 200,
             child: TextField(
               decoration: InputDecoration(labelText: context.t('reports.warningDays')),
               keyboardType: TextInputType.number,
@@ -403,5 +372,73 @@ class ReportOptionsPanel extends StatelessWidget {
           ),
         ];
     }
+  }
+}
+
+/// Report option: a checkbox on web, a switch card on native mobile.
+class _OptionToggle extends StatelessWidget {
+  const _OptionToggle({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.hint,
+  });
+
+  final String title;
+  final String? hint;
+  final bool value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isNativeMobile) {
+      return CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        dense: true,
+        title: Text(title),
+        subtitle: hint == null ? null : Text(hint!, style: AppThemeV2.caption),
+        value: value,
+        onChanged: onChanged,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Material(
+        color: value ? MobileUi.primarySoft : const Color(0xFFF6F8FC),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => onChanged(!value),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(14, 10, 8, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: MobileUi.text(13.5, weight: FontWeight.w700, height: 1.3),
+                      ),
+                      if (hint != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          hint!,
+                          style: MobileUi.text(11.5, weight: FontWeight.w500, color: MobileUi.muted, height: 1.35),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Switch(value: value, onChanged: onChanged),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

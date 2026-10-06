@@ -11,6 +11,7 @@ import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 class AuditLogPage extends StatefulWidget {
   const AuditLogPage({super.key});
 
@@ -231,7 +232,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
       context: context,
       useRootNavigator: true,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const Center(child: HudooriLoader()),
     );
     try {
       final data = await api.auditGet(id);
@@ -473,7 +474,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
               ),
               const SizedBox(height: 12),
               if (_loading)
-                const Expanded(child: Center(child: CircularProgressIndicator()))
+                const Expanded(child: Center(child: HudooriLoader()))
               else if (_error != null)
                 Expanded(
                   child: Center(

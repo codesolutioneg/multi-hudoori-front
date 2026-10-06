@@ -100,6 +100,7 @@ class AuthState extends Equatable {
     this.user,
     this.employeeName = '',
     this.employeeCode = '',
+    this.employeeId,
     this.roles = const BioTimeRoles(),
     this.menus = const [],
     this.features = const AuthFeatures(),
@@ -116,6 +117,7 @@ class AuthState extends Equatable {
   final BioTimeUser? user;
   final String employeeName;
   final String employeeCode;
+  final String? employeeId;
   final BioTimeRoles roles;
   final List<BioTimeMenuItem> menus;
   final AuthFeatures features;
@@ -167,6 +169,7 @@ class AuthState extends Equatable {
     BioTimeUser? user,
     String? employeeName,
     String? employeeCode,
+    String? employeeId,
     BioTimeRoles? roles,
     List<BioTimeMenuItem>? menus,
     AuthFeatures? features,
@@ -187,6 +190,7 @@ class AuthState extends Equatable {
       user: user ?? this.user,
       employeeName: employeeName ?? this.employeeName,
       employeeCode: employeeCode ?? this.employeeCode,
+      employeeId: employeeId ?? this.employeeId,
       roles: roles ?? this.roles,
       menus: menus ?? this.menus,
       features: features ?? this.features,
@@ -205,6 +209,7 @@ class AuthState extends Equatable {
         token,
         user,
         employeeName,
+        employeeId,
         roles,
         menus,
         features,

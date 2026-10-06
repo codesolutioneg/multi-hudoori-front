@@ -10,6 +10,7 @@ import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
 
+import '../mobile/hudoori_loader.dart';
 class ShiftAssignmentsPage extends StatefulWidget {
   const ShiftAssignmentsPage({super.key});
 
@@ -156,7 +157,7 @@ class _ShiftAssignmentsPageState extends State<ShiftAssignmentsPage> {
           if (_loading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 48),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: HudooriLoader()),
             )
           else if (_loadError != null)
             SellixCard(
@@ -348,7 +349,7 @@ class _AssignmentFormDialogState extends State<_AssignmentFormDialog> {
       content: SizedBox(
         width: 420,
         child: _loading
-            ? Center(child: CircularProgressIndicator())
+            ? Center(child: HudooriLoader())
             : SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

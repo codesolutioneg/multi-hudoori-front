@@ -27,6 +27,7 @@ import 'widgets/settings_accordion_section.dart';
 import 'widgets/sync_progress_dialog.dart';
 import 'widgets/location_punch_settings_section.dart';
 
+import '../mobile/hudoori_loader.dart';
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -1249,7 +1250,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HudooriLoader());
 
     final auth = context.watch<AuthCubit>().state;
     final showEmployees = isFeatureEnabled(auth, 'hr_employees');

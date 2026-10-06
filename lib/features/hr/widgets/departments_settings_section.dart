@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/sellix_card.dart';
 import '../../../l10n/l10n_extension.dart';
 
+import '../../mobile/hudoori_loader.dart';
 class DepartmentsSettingsSection extends StatefulWidget {
   const DepartmentsSettingsSection({super.key, this.embedded = false});
 
@@ -107,7 +108,7 @@ class _DepartmentsSettingsSectionState extends State<DepartmentsSettingsSection>
           const SizedBox(height: 12),
         ],
         if (_loading)
-          const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+          const Center(child: Padding(padding: EdgeInsets.all(24), child: HudooriLoader()))
         else if (_items.isEmpty)
           SellixCard(
             child: Column(

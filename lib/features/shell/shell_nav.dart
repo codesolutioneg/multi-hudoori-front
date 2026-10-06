@@ -57,3 +57,40 @@ List<NavItem> navItemsFromMenus(BuildContext context, List<BioTimeMenuItem> menu
   }
   return filtered;
 }
+
+/// Bottom-bar destinations beside Home on native mobile, picked by role from
+/// the menus the user actually has. Everything else lives in the drawer.
+List<NavItem> mobileTabsFor(
+  AuthState auth,
+  List<NavItem> navItems, {
+  int count = 2,
+}) {
+  final priority = auth.roles.isHrStaff
+      ? const [
+          AppRoutes.hrEmployees,
+          AppRoutes.hrAttendance,
+          AppRoutes.requests,
+          AppRoutes.hrPayroll,
+        ]
+      : auth.roles.isBranchManager
+          ? const [
+              AppRoutes.hrAttendance,
+              AppRoutes.hrHiringAppointments,
+              AppRoutes.hrShiftGrid,
+              AppRoutes.hrShifts,
+            ]
+          : const [
+              AppRoutes.myAttendance,
+              AppRoutes.mySchedule,
+              AppRoutes.requests,
+              AppRoutes.myPayroll,
+              AppRoutes.myAdvanceRequest,
+            ];
+  final tabs = <NavItem>[];
+  for (final route in priority) {
+    final match = navItems.where((n) => n.route == route);
+    if (match.isNotEmpty) tabs.add(match.first);
+    if (tabs.length == count) break;
+  }
+  return tabs;
+}

@@ -5,6 +5,7 @@ import '../../core/theme/app_theme_v2.dart';
 import '../../core/widgets/searchable_select_field.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 /// Tab content: list of employee+day rows that earn manual overtime on the
 /// punch report — formula (net − shift) / 9 days, only for listed pairs.
 class ShiftGridManualOtPanel extends StatefulWidget {
@@ -134,7 +135,7 @@ class _ShiftGridManualOtPanelState extends State<ShiftGridManualOtPanel> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: HudooriLoader()),
       );
     }
     if (_error != null) {

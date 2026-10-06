@@ -8,6 +8,7 @@ import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 class OvertimePage extends StatefulWidget {
   const OvertimePage({super.key});
 
@@ -132,7 +133,7 @@ class _OvertimePageState extends State<OvertimePage> {
         const SizedBox(height: 8),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: HudooriLoader())
               : _items.isEmpty
                   ? Center(child: Text(context.t('ot.noPending')))
                   : ListView.builder(

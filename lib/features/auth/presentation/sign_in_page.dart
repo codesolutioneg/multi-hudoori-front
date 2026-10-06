@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/api_url_resolver.dart';
 import '../../../core/di/injection.dart';
+import '../../../core/platform/mobile_platform.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme_v2.dart';
 import '../../../core/widgets/glass_card.dart';
@@ -13,7 +14,9 @@ import '../../../core/widgets/language_toggle.dart';
 import '../../../features/dashboard/widgets/dashboard_page_background.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../l10n/l10n_extension.dart';
+import '../../mobile/mobile_sign_in.dart';
 import '../auth_cubit.dart';
+import '../biometric_login.dart';
 import '../auth_state.dart';
 import 'login_validators.dart';
 import 'demo_prefill.dart';
@@ -45,6 +48,7 @@ class _SignInPageState extends State<SignInPage> {
   final _loginFocus = FocusNode();
   final _passFocus = FocusNode();
   bool _obscurePassword = true;
+  bool _bioReady = false;
 
   @override
   void initState() {
@@ -52,6 +56,34 @@ class _SignInPageState extends State<SignInPage> {
     _applyPrefill();
     _initApiUrl();
     _restoreCompanyCode();
+    if (isNativeMobile) _initBiometric();
+  }
+
+  Future<void> _initBiometric() async {
+    final ready = await BiometricLogin.isAvailable() && await BiometricLogin.isEnabled();
+    if (!mounted || !ready) return;
+    setState(() => _bioReady = true);
+  }
+
+  Future<void> _biometricSignIn() async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await BiometricLogin.authenticate(l10n.t('m.bioReason'));
+    if (!ok || !mounted) return;
+    final saved = await BiometricLogin.saved();
+    if (saved == null || !mounted) return;
+    _companyCtrl.text = saved.company;
+    _loginCtrl.text = saved.login;
+    _passCtrl.text = saved.password;
+    BiometricLogin.pending = saved;
+    final server = ApiUrlResolver.effectiveUrl;
+    session.saveBaseUrl(server);
+    context.read<AuthCubit>().signIn(
+          login: saved.login,
+          password: saved.password,
+          companyCode: saved.company.isEmpty ? null : saved.company,
+          baseUrl: server,
+          l10n: l10n,
+        );
   }
 
   void _applyPrefill() {
@@ -126,6 +158,13 @@ class _SignInPageState extends State<SignInPage> {
     FocusScope.of(context).unfocus();
     final server = ApiUrlResolver.effectiveUrl;
     session.saveBaseUrl(server);
+    if (isNativeMobile) {
+      BiometricLogin.pending = (
+        company: _companyCtrl.text.trim(),
+        login: LoginValidators.normalizeLogin(_loginCtrl.text),
+        password: _passCtrl.text,
+      );
+    }
     context.read<AuthCubit>().signIn(
           login: LoginValidators.normalizeLogin(_loginCtrl.text),
           password: _passCtrl.text,
@@ -139,6 +178,23 @@ class _SignInPageState extends State<SignInPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isAr = l10n.isAr;
+
+    if (isNativeMobile) {
+      return MobileSignInView(
+        formKey: _formKey,
+        companyCtrl: _companyCtrl,
+        loginCtrl: _loginCtrl,
+        passCtrl: _passCtrl,
+        companyFocus: _companyFocus,
+        loginFocus: _loginFocus,
+        passFocus: _passFocus,
+        obscurePassword: _obscurePassword,
+        onTogglePassword: () =>
+            setState(() => _obscurePassword = !_obscurePassword),
+        onSubmit: _submit,
+        onBiometric: _bioReady ? _biometricSignIn : null,
+      );
+    }
 
     return Scaffold(
       body: DashboardPageBackground(

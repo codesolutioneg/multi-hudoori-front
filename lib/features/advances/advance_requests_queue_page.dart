@@ -13,6 +13,7 @@ import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 import 'advance_request_common.dart';
 
+import '../mobile/hudoori_loader.dart';
 /// «طلبات السلف» — the branch manager's queue: their own branch's requests, to
 /// vouch for or turn down. HR does not work here; granting the advance is their
 /// step and it lives in «السلف», next to the sheet the advance lands on.
@@ -90,7 +91,7 @@ class _AdvanceRequestsQueuePageState extends State<AdvanceRequestsQueuePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HudooriLoader());
     if (_error != null) return ApiErrorView(error: _error!, onRetry: _load);
 
     return ListView(
@@ -321,7 +322,7 @@ class _OnBehalfDialogState extends State<_OnBehalfDialog> {
                 if (_eligibility == null)
                   const Padding(
                     padding: EdgeInsets.all(AppDimensions.spaceMd),
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: HudooriLoader()),
                   )
                 else
                   EligibilityCard(eligibility: _eligibility!, compact: true),

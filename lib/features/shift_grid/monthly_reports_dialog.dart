@@ -7,6 +7,7 @@ import '../../core/utils/file_download.dart';
 import '../../core/utils/file_pick.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 /// Import / export monthly shift-report Excel for merged grids.
 class MonthlyReportsDialog extends StatefulWidget {
   const MonthlyReportsDialog({super.key});
@@ -173,7 +174,7 @@ class _MonthlyReportsDialogState extends State<MonthlyReportsDialog> {
         child: _loadingPeriods
             ? const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: HudooriLoader()),
               )
             : Column(
                 mainAxisSize: MainAxisSize.min,

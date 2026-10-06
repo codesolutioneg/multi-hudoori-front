@@ -7,6 +7,7 @@ import '../../../core/utils/file_pick.dart';
 import '../../../core/widgets/sellix_card.dart';
 import '../../../l10n/l10n_extension.dart';
 
+import '../../mobile/hudoori_loader.dart';
 class LocationsSettingsSection extends StatefulWidget {
   const LocationsSettingsSection({super.key, this.embedded = false});
 
@@ -190,7 +191,7 @@ class _LocationsSettingsSectionState extends State<LocationsSettingsSection> {
           const Center(
             child: Padding(
               padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
+              child: HudooriLoader(),
             ),
           )
         else if (_items.isEmpty)

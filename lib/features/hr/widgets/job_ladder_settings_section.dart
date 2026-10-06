@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/entity_id.dart';
 import '../../../l10n/l10n_extension.dart';
 
+import '../../mobile/hudoori_loader.dart';
 /// «تدرج الوظائف» — the seniority ladder the org chart derives its reporting
 /// lines from. Levels run from the most senior on the left; job titles are
 /// dragged between them. A title left in the «غير مصنفة» pool falls back to the
@@ -172,7 +173,7 @@ class _JobLadderSettingsSectionState extends State<JobLadderSettingsSection> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: HudooriLoader()),
       );
     }
     if (_error != null) {

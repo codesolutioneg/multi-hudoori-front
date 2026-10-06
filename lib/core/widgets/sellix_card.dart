@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../platform/mobile_platform.dart';
 import '../theme/app_theme_v2.dart';
 import '../theme/app_dimensions.dart';
+
+const double _mobileRadius = 20;
 
 /// Lovable DataCard — aligned with dashboard v2 glass cards.
 class SellixCard extends StatefulWidget {
@@ -36,16 +39,29 @@ class _SellixCardState extends State<SellixCard> {
       padding: widget.padding,
       transform: elevated ? (Matrix4.identity()..scale(1.005)) : Matrix4.identity(),
       transformAlignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: widget.muted ? AppThemeV2.surfaceElevated : AppThemeV2.surface,
-        borderRadius: BorderRadius.circular(AppThemeV2.cardRadius),
-        border: Border.all(
-          color: elevated
-              ? AppThemeV2.primary.withValues(alpha: 0.25)
-              : AppThemeV2.border,
-        ),
-        boxShadow: elevated ? AppThemeV2.glowShadow : AppThemeV2.cardShadow,
-      ),
+      decoration: isNativeMobile
+          ? BoxDecoration(
+              color: widget.muted ? const Color(0xFFF8FAFD) : Colors.white,
+              borderRadius: BorderRadius.circular(_mobileRadius),
+              border: Border.all(color: const Color(0xFFEDF1F7)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0D1E3A8A),
+                  blurRadius: 18,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            )
+          : BoxDecoration(
+              color: widget.muted ? AppThemeV2.surfaceElevated : AppThemeV2.surface,
+              borderRadius: BorderRadius.circular(AppThemeV2.cardRadius),
+              border: Border.all(
+                color: elevated
+                    ? AppThemeV2.primary.withValues(alpha: 0.25)
+                    : AppThemeV2.border,
+              ),
+              boxShadow: elevated ? AppThemeV2.glowShadow : AppThemeV2.cardShadow,
+            ),
       child: widget.child,
     );
 
@@ -55,7 +71,9 @@ class _SellixCardState extends State<SellixCard> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(AppThemeV2.cardRadius),
+          borderRadius: BorderRadius.circular(
+            isNativeMobile ? _mobileRadius : AppThemeV2.cardRadius,
+          ),
           child: card,
         ),
       );

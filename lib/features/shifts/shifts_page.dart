@@ -17,6 +17,7 @@ import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 import 'widgets/shift_card.dart';
 
+import '../mobile/hudoori_loader.dart';
 class ShiftsPage extends StatefulWidget {
   const ShiftsPage({super.key});
 
@@ -163,7 +164,7 @@ class _ShiftsPageState extends State<ShiftsPage> {
           const SizedBox(height: 12),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: HudooriLoader())
                 : _items.isEmpty
                     ? HrEmptyListCard(message: context.t('shifts.emptyHint'))
                     : _filtered.isEmpty

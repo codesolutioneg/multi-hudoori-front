@@ -11,6 +11,7 @@ import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 
+import '../mobile/hudoori_loader.dart';
 class AdminAuditAccessPage extends StatefulWidget {
   const AdminAuditAccessPage({
     super.key,
@@ -118,7 +119,7 @@ class _AdminAuditAccessPageState extends State<AdminAuditAccessPage> {
         ),
         const SizedBox(height: 12),
         if (_loading)
-          const Expanded(child: Center(child: CircularProgressIndicator()))
+          const Expanded(child: Center(child: HudooriLoader()))
         else if (_error != null)
           Expanded(child: Center(child: Text(_error!, style: const TextStyle(color: AppColors.danger))))
         else if (_items.isEmpty)

@@ -8,6 +8,7 @@ import '../../core/utils/payroll_month.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 /// Merges weekly grids into one monthly grid, or appends a later week into an
 /// existing monthly merge.
 class ShiftGridMergeDialog extends StatefulWidget {
@@ -877,7 +878,7 @@ class _ShiftGridMergeDialogState extends State<ShiftGridMergeDialog> {
             ? const Center(
                 child: Padding(
                   padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
+                  child: HudooriLoader(),
                 ),
               )
             : SingleChildScrollView(
@@ -889,7 +890,7 @@ class _ShiftGridMergeDialogState extends State<ShiftGridMergeDialog> {
                     if (_loading)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: CircularProgressIndicator()),
+                        child: Center(child: HudooriLoader()),
                       )
                     else ...[
                     _branchHintBanner(),

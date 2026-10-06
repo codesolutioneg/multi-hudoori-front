@@ -15,6 +15,10 @@ import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
+
 class HiringAppointmentCreatePage extends StatefulWidget {
   const HiringAppointmentCreatePage({super.key});
 
@@ -245,26 +249,305 @@ class _HiringAppointmentCreatePageState extends State<HiringAppointmentCreatePag
     }
   }
 
+  Widget? _mIcon(IconData icon) => isNativeMobile ? Icon(icon, size: 21) : null;
+
+  Widget _mobileSection(IconData icon, String title, List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: MobileUi.card(r: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              MobileIconBadge(icon: icon, size: 30),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(title, style: MobileUi.text(14.5, weight: FontWeight.w800)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileDateTile({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required DateTime value,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: const Color(0xFFF6F8FC),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(icon, size: 18, color: color),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.edit_calendar_rounded, size: 17, color: MobileUi.muted),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                maxLines: 2,
+                style: MobileUi.text(11.5, weight: FontWeight.w600, color: MobileUi.muted, height: 1.25),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _iso(value),
+                textDirection: TextDirection.ltr,
+                style: MobileUi.text(15, weight: FontWeight.w800, height: 1.3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: HudooriLoader());
     }
 
     final locationLocked = context.read<AuthCubit>().state.isLocationScoped;
     final nidInfo = parseEgyptianNationalId(_nationalId.text);
+
+    final nameField = TextFormField(
+      controller: _name,
+      decoration: InputDecoration(
+        labelText: context.t('hire.nameReq'),
+        prefixIcon: _mIcon(Icons.person_outline_rounded),
+      ),
+      validator: (v) => (v?.trim().length ?? 0) < 2 ? context.t('hire.nameRequired') : null,
+    );
+    final phoneField = TextFormField(
+      controller: _phone,
+      keyboardType: TextInputType.phone,
+      decoration: InputDecoration(
+        labelText: context.t('hire.mobileReq'),
+        prefixIcon: _mIcon(Icons.phone_iphone_rounded),
+      ),
+      validator: (v) => (v?.trim().length ?? 0) < 8 ? context.t('hire.phoneRequired') : null,
+    );
+    final nidField = TextFormField(
+      controller: _nationalId,
+      enabled: !_skipNationalId,
+      keyboardType: TextInputType.number,
+      maxLength: 14,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      decoration: InputDecoration(
+        labelText: _skipNationalId ? context.t('hire.idSkipped') : context.t('hire.idNumberReq'),
+        prefixIcon: _mIcon(Icons.badge_outlined),
+        counterText: '',
+        errorText: _skipNationalId || _nationalId.text.isEmpty
+            ? null
+            : validateEgyptianNationalId(context, _nationalId.text),
+      ),
+      onChanged: (_) => setState(() {}),
+    );
+    void toggleSkip(bool v) {
+      setState(() {
+        _skipNationalId = v;
+        if (_skipNationalId) _nationalId.clear();
+      });
+    }
+
+    final birthInfo = !_skipNationalId && nidInfo.birthDate != null
+        ? context.t('emp.birthAndAge', {
+            'date': formatBirthDateIso(nidInfo.birthDate!),
+            'age': nidInfo.age ?? '—',
+          })
+        : null;
+    final jobField = TextFormField(
+      controller: _job,
+      decoration: InputDecoration(
+        labelText: context.t('hire.jobReq'),
+        prefixIcon: _mIcon(Icons.work_outline_rounded),
+      ),
+      validator: (v) => (v?.trim().isEmpty ?? true) ? context.t('hire.jobRequired') : null,
+    );
+    final branchField = DropdownButtonFormField<String?>(
+      value: _locationId,
+      isExpanded: isNativeMobile,
+      decoration: InputDecoration(
+        labelText: context.t('hire.branchReq'),
+        prefixIcon: _mIcon(Icons.storefront_outlined),
+      ),
+      items: [
+        for (final l in _locations)
+          DropdownMenuItem(value: l['id']?.toString(), child: Text(l['name']?.toString() ?? '')),
+      ],
+      onChanged: locationLocked ? null : (v) => setState(() => _locationId = v),
+      validator: (v) => v == null || v.isEmpty ? context.t('hire.pickBranch') : null,
+    );
+    final codeField = TextFormField(
+      controller: _code,
+      decoration: InputDecoration(
+        labelText: context.t('hire.codeReq'),
+        hintText: 'English / numbers',
+        helperText: context.t('hire.codeCharset'),
+        prefixIcon: _mIcon(Icons.fingerprint_rounded),
+      ),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9_-]')),
+      ],
+      validator: (v) => validateEnglishCode(context, v),
+    );
+    final saveIcon = _saving
+        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+        : const Icon(Icons.picture_as_pdf_outlined);
+    final saveLabel = Text(_saving ? context.t('common.saving') : context.t('hire.saveAndPdf'));
+
+    final header = PageHeader(
+      title: context.t('hiring.createTitle'),
+      subtitle: context.t('hiring.createSubtitle'),
+      icon: Icons.person_add_alt_1_rounded,
+      onBack: () => context.go(AppRoutes.hrHiringAppointments),
+    );
+
+    if (isNativeMobile) {
+      return Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+            header,
+            const SizedBox(height: 14),
+            _mobileSection(Icons.person_rounded, context.t('m.hireEmployeeData'), [
+              nameField,
+              const SizedBox(height: 12),
+              phoneField,
+              const SizedBox(height: 12),
+              nidField,
+              if (birthInfo != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: MobileChip(
+                    label: birthInfo,
+                    icon: Icons.cake_outlined,
+                    color: MobileTone.violet,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Material(
+                color: _skipNationalId ? const Color(0xFFFFF6E5) : const Color(0xFFF6F8FC),
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => toggleSkip(!_skipNationalId),
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 8, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                context.t('hire.skipNid'),
+                                style: MobileUi.text(13.5, weight: FontWeight.w700, height: 1.3),
+                              ),
+                              Text(
+                                context.t('hire.skipNidHint'),
+                                style: MobileUi.text(11.5, weight: FontWeight.w500, color: MobileUi.muted, height: 1.35),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(value: _skipNationalId, onChanged: toggleSkip),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+            _mobileSection(Icons.work_rounded, context.t('m.hireJobData'), [
+              jobField,
+              const SizedBox(height: 12),
+              branchField,
+              const SizedBox(height: 12),
+              codeField,
+            ]),
+            _mobileSection(Icons.event_rounded, context.t('m.hireDates'), [
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _mobileDateTile(
+                        icon: Icons.edit_document,
+                        color: MobileUi.primary,
+                        label: context.t('common.date'),
+                        value: _appointmentDate,
+                        onTap: () => _pickDate(true),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _mobileDateTile(
+                        icon: Icons.rocket_launch_outlined,
+                        color: MobileTone.success,
+                        label: context.t('hire.firstDayReq'),
+                        value: _firstWorkingDay,
+                        onTap: () => _pickDate(false),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: MobileUi.primary,
+                minimumSize: const Size.fromHeight(54),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: MobileUi.text(15, weight: FontWeight.w800),
+              ),
+              icon: saveIcon,
+              label: saveLabel,
+            ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PageHeader(
-            title: context.t('hiring.createTitle'),
-            subtitle: context.t('hiring.createSubtitle'),
-            icon: Icons.person_add_alt_1_rounded,
-            onBack: () => context.go(AppRoutes.hrHiringAppointments),
-          ),
+          header,
           const SizedBox(height: 16),
           Expanded(
             child: SingleChildScrollView(
@@ -284,84 +567,32 @@ class _HiringAppointmentCreatePageState extends State<HiringAppointmentCreatePag
                         ),
                       ),
                       const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _name,
-                        decoration: InputDecoration(labelText: context.t('hire.nameReq')),
-                        validator: (v) => (v?.trim().length ?? 0) < 2 ? context.t('hire.nameRequired') : null,
-                      ),
+                      nameField,
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _phone,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(labelText: context.t('hire.mobileReq')),
-                        validator: (v) => (v?.trim().length ?? 0) < 8 ? context.t('hire.phoneRequired') : null,
-                      ),
+                      phoneField,
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _nationalId,
-                        enabled: !_skipNationalId,
-                        keyboardType: TextInputType.number,
-                        maxLength: 14,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        decoration: InputDecoration(
-                          labelText: _skipNationalId ? context.t('hire.idSkipped') : context.t('hire.idNumberReq'),
-                          counterText: '',
-                          errorText: _skipNationalId || _nationalId.text.isEmpty
-                              ? null
-                              : validateEgyptianNationalId(context, _nationalId.text),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
+                      nidField,
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
                         value: _skipNationalId,
                         controlAffinity: ListTileControlAffinity.leading,
                         title: Text(context.t('hire.skipNid')),
                         subtitle: Text(context.t('hire.skipNidHint')),
-                        onChanged: (v) {
-                          setState(() {
-                            _skipNationalId = v == true;
-                            if (_skipNationalId) _nationalId.clear();
-                          });
-                        },
+                        onChanged: (v) => toggleSkip(v == true),
                       ),
-                      if (!_skipNationalId && nidInfo.birthDate != null) ...[
+                      if (birthInfo != null) ...[
                         const SizedBox(height: 8),
                         Text(
-                          context.t('emp.birthAndAge', {'date': formatBirthDateIso(nidInfo.birthDate!), 'age': nidInfo.age ?? '—'}),
+                          birthInfo,
                           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                         ),
                       ],
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _job,
-                        decoration: InputDecoration(labelText: context.t('hire.jobReq')),
-                        validator: (v) => (v?.trim().isEmpty ?? true) ? context.t('hire.jobRequired') : null,
-                      ),
+                      jobField,
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String?>(
-                        value: _locationId,
-                        decoration: InputDecoration(labelText: context.t('hire.branchReq')),
-                        items: [
-                          for (final l in _locations)
-                            DropdownMenuItem(value: l['id']?.toString(), child: Text(l['name']?.toString() ?? '')),
-                        ],
-                        onChanged: locationLocked ? null : (v) => setState(() => _locationId = v),
-                        validator: (v) => v == null || v.isEmpty ? context.t('hire.pickBranch') : null,
-                      ),
+                      branchField,
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _code,
-                        decoration: InputDecoration(
-                          labelText: context.t('hire.codeReq'),
-                          hintText: 'English / numbers',
-                          helperText: context.t('hire.codeCharset'),
-                        ),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9_-]')),
-                        ],
-                        validator: (v) => validateEnglishCode(context, v),
-                      ),
+                      codeField,
                       const SizedBox(height: 12),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -375,10 +606,8 @@ class _HiringAppointmentCreatePageState extends State<HiringAppointmentCreatePag
                       const SizedBox(height: 24),
                       FilledButton.icon(
                         onPressed: _saving ? null : _save,
-                        icon: _saving
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.picture_as_pdf_outlined),
-                        label: Text(_saving ? context.t('common.saving') : context.t('hire.saveAndPdf')),
+                        icon: saveIcon,
+                        label: saveLabel,
                       ),
                     ],
                   ),

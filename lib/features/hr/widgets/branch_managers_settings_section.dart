@@ -10,6 +10,7 @@ import '../../../core/widgets/sellix_card.dart';
 import '../../../core/widgets/status_tag.dart';
 import '../../../l10n/l10n_extension.dart';
 
+import '../../mobile/hudoori_loader.dart';
 /// «مدير الفرع» — who signs off advance requests for each branch.
 ///
 /// A branch with nobody chosen falls back to the head the org chart derives, and
@@ -77,7 +78,7 @@ class _BranchManagersSettingsSectionState
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(AppDimensions.spaceLg),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: HudooriLoader()),
       );
     }
     if (_error != null) return ApiErrorView(error: _error!, onRetry: _load);
@@ -231,7 +232,7 @@ class _BranchManagerPickerState extends State<_BranchManagerPicker> {
             const Divider(height: 1),
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(child: HudooriLoader())
                   : ListView.builder(
                       itemCount: _employees.length,
                       itemBuilder: (_, i) {

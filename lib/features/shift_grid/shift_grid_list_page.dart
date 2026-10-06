@@ -19,6 +19,10 @@ import 'shift_grid_helpers.dart';
 import 'shift_grid_merge_dialog.dart';
 import 'monthly_reports_dialog.dart';
 import '../../core/widgets/status_badge.dart';
+import '../../core/platform/mobile_platform.dart';
+import '../../core/widgets/page_header.dart';
+import '../mobile/mobile_actions.dart';
+import '../mobile/mobile_ui.dart';
 import '../auth/auth_cubit.dart';
 import '../../l10n/l10n_extension.dart';
 
@@ -347,7 +351,9 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       controller: _scrollCtrl,
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+      padding: isNativeMobile
+          ? const EdgeInsets.fromLTRB(16, 6, 16, 32)
+          : const EdgeInsets.fromLTRB(24, 20, 24, 32),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1360),
@@ -373,8 +379,117 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
     );
   }
 
+  Widget _buildHeaderMobile(bool canCreate) {
+    final noneSelected = _selectedGridIds.isEmpty;
+    final canExport = !_loading && !_exporting && !noneSelected;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PageHeader(
+          title: context.t('grid.title'),
+          icon: Icons.grid_view_rounded,
+          actions: [
+            IconButton(
+              onPressed: _loading ? null : () => _load(reset: true),
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: context.t('common.refresh'),
+            ),
+            if (canCreate)
+              IconButton(
+                onPressed: _loading ? null : _openMerge,
+                icon: const Icon(Icons.merge_type_rounded),
+                tooltip: context.t('grid.mergeAction'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (canCreate)
+          MobileActionSection(
+            title: context.t('m.gridCreate'),
+            icon: Icons.add_box_outlined,
+            columns: 3,
+            collapsible: false,
+            children: [
+              MobileActionTile(
+                icon: Icons.add_rounded,
+                label: context.t('grid.new'),
+                primary: true,
+                onPressed: _openCreate,
+              ),
+              MobileActionTile(
+                icon: Icons.account_tree_outlined,
+                color: MobileTone.violet,
+                label: context.t('grid.newAllLocations'),
+                onPressed: _openCreateAllLocations,
+              ),
+              MobileActionTile(
+                icon: Icons.summarize_outlined,
+                color: const Color(0xFF0891B2),
+                label: context.t('grid.monthlyReports.button'),
+                onPressed: _openMonthlyReports,
+              ),
+            ],
+          ),
+        MobileActionSection(
+          title: context.t('m.gridExport'),
+          icon: Icons.file_download_outlined,
+          columns: 3,
+          collapsible: false,
+          footer: Row(
+            children: [
+              Icon(
+                noneSelected ? Icons.info_outline_rounded : Icons.check_circle_rounded,
+                size: 16,
+                color: noneSelected ? MobileUi.muted : MobileTone.success,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  noneSelected
+                      ? context.t('grid.exportSelectFirst')
+                      : context
+                          .t('grid.selectedCount')
+                          .replaceAll('{n}', '${_selectedGridIds.length}'),
+                  style: MobileUi.text(
+                    12,
+                    weight: FontWeight.w600,
+                    color: noneSelected ? MobileUi.muted : MobileTone.success,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          children: [
+            MobileActionTile(
+              icon: Icons.table_view_outlined,
+              color: const Color(0xFF16A34A),
+              label: context.t('grid.exportFullSelected'),
+              loading: _exporting,
+              onPressed: canExport ? () => _exportSelected(byDepartment: false) : null,
+            ),
+            MobileActionTile(
+              icon: Icons.folder_zip_outlined,
+              color: MobileTone.warning,
+              label: context.t('grid.exportDepartmentsBulk'),
+              onPressed: canExport ? () => _exportSelected(byDepartment: true) : null,
+            ),
+            MobileActionTile(
+              icon: Icons.clear_all_rounded,
+              color: const Color(0xFF64748B),
+              label: context.t('m.clearSelection'),
+              onPressed: noneSelected || _exporting
+                  ? null
+                  : () => setState(() => _selectedGridIds.clear()),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _buildHeader() {
     final canCreate = context.watch<AuthCubit>().state.roles.isBranchStaff;
+    if (isNativeMobile) return _buildHeaderMobile(canCreate);
     final mobile = isMobile(context);
     final createActions = <Widget>[
       FilledButton.icon(

@@ -14,6 +14,11 @@ import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_actions.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
+
 class RequestsPage extends StatefulWidget {
   const RequestsPage({super.key});
 
@@ -60,7 +65,78 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
     }
   }
 
+  Future<String?> _pickTypeMobile() {
+    final types = <(String, String, IconData, Color)>[
+      ('leave', context.t('req.leave'), Icons.beach_access_rounded, const Color(0xFF0D9488)),
+      ('shift', context.t('req.shiftChange'), Icons.swap_horiz_rounded, MobileTone.violet),
+      ('salary', context.t('req.salaryRequest'), Icons.payments_rounded, MobileUi.primary),
+      ('certificate', context.t('req.certificate'), Icons.workspace_premium_rounded, const Color(0xFFEA580C)),
+      ('attendance', context.t('req.attendanceEdit'), Icons.edit_calendar_rounded, MobileTone.info),
+    ];
+    return showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD5DCE8),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text(context.t('req.new'), style: MobileUi.text(18, weight: FontWeight.w800)),
+              ),
+              const SizedBox(height: 10),
+              LayoutBuilder(builder: (context, c) {
+                final w = c.maxWidth / 3;
+                return Wrap(
+                  children: [
+                    for (final (id, label, icon, color) in types)
+                      SizedBox(
+                        width: w,
+                        child: MobileActionTile(
+                          icon: icon,
+                          color: color,
+                          label: label,
+                          onPressed: () => Navigator.pop(ctx, id),
+                        ),
+                      ),
+                  ],
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openCreateMenu() async {
+    if (isNativeMobile) {
+      final type = await _pickTypeMobile();
+      if (type == null || !mounted) return;
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => _RequestFormDialog(type: type),
+      );
+      if (ok == true) await _load();
+      return;
+    }
     final type = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -200,7 +276,7 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const Center(child: HudooriLoader());
 
     if (_error != null) {
       return ApiErrorView(error: _error!, onRetry: _load);
@@ -212,6 +288,23 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
     final salary = (_data['salary'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final certificate = (_data['certificate'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final attendanceEdit = (_data['attendanceEdit'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+    if (isNativeMobile) {
+      return _buildMobile([
+        _ReqType('leave', context.t('requests.tab.leave'), Icons.beach_access_rounded, const Color(0xFF0D9488), leave,
+            (r) => '${r['leaveType']} • ${r['dateFrom']} → ${r['dateTo']}'),
+        _ReqType('loan', context.t('requests.tab.loan'), Icons.account_balance_wallet_rounded, const Color(0xFF16A34A), loan,
+            (r) => context.t('req.loanSummary', {'amount': r['amount'], 'months': r['repaymentMonths']})),
+        _ReqType('shiftChange', context.t('requests.tab.shift'), Icons.swap_horiz_rounded, MobileTone.violet, shift,
+            (r) => '${r['dateFrom']} → ${r['dateTo']}'),
+        _ReqType('salary', context.t('requests.tab.salary'), Icons.payments_rounded, MobileUi.primary, salary,
+            (r) => '${r['amount']}'),
+        _ReqType('certificate', context.t('requests.tab.certificate'), Icons.workspace_premium_rounded, const Color(0xFFEA580C), certificate,
+            (r) => '${r['certificateType']}'),
+        _ReqType('attendanceEdit', context.t('requests.tab.attendance'), Icons.edit_calendar_rounded, MobileTone.info, attendanceEdit,
+            (r) => '${r['date']}'),
+      ]);
+    }
 
     return Column(
       children: [
@@ -259,6 +352,319 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMobile(List<_ReqType> types) {
+    final total = types.fold<int>(0, (s, t) => s + t.items.length);
+    final pending = types.fold<int>(
+      0,
+      (s, t) => s + t.items.where((r) => (r['state']?.toString() ?? '') == 'pending').length,
+    );
+
+    Widget stat(IconData icon, String label, int value) => Expanded(
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$value',
+                      style: MobileUi.text(20, weight: FontWeight.w800, color: Colors.white, height: 1.1),
+                    ),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: MobileUi.text(11.5, weight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.85)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+          child: PageHeader(
+            title: context.t('requests.title'),
+            subtitle: _hrReview ? context.t('requests.subtitle') : context.t('requests.mySubtitle'),
+            icon: Icons.assignment_outlined,
+            actions: [
+              IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+              if (!_hrReview)
+                FilledButton.icon(
+                  onPressed: _openCreateMenu,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(context.t('requests.newRequest')),
+                ),
+            ],
+          ),
+        ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: MobileUi.primaryGradient,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: MobileUi.primary.withValues(alpha: 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              stat(Icons.inbox_rounded, context.t('m.reqTotal'), total),
+              Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.25)),
+              const SizedBox(width: 12),
+              stat(Icons.hourglass_top_rounded, context.t('m.reqPending'), pending),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        AnimatedBuilder(
+          animation: _tabs,
+          builder: (context, _) => SizedBox(
+            height: 40,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: types.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                final t = types[i];
+                final selected = _tabs.index == i;
+                return GestureDetector(
+                  onTap: () => _tabs.animateTo(i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.fromLTRB(12, 0, 8, 0),
+                    decoration: BoxDecoration(
+                      color: selected ? t.color : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: selected ? t.color : const Color(0xFFE6EBF3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(t.icon, size: 17, color: selected ? Colors.white : t.color),
+                        const SizedBox(width: 6),
+                        Text(
+                          t.label,
+                          style: MobileUi.text(13, weight: FontWeight.w700, color: selected ? Colors.white : MobileUi.ink, height: 1.2),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          constraints: const BoxConstraints(minWidth: 22),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: selected ? Colors.white.withValues(alpha: 0.25) : t.color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${t.items.length}',
+                            textAlign: TextAlign.center,
+                            style: MobileUi.text(11.5, weight: FontWeight.w800, color: selected ? Colors.white : t.color, height: 1.2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: TabBarView(
+            controller: _tabs,
+            children: [for (final t in types) _mobileList(t)],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _mobileList(_ReqType t) {
+    if (t.items.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
+        children: [
+          MobileEmptyState(message: context.t('requests.empty'), icon: t.icon),
+        ],
+      );
+    }
+    return RefreshIndicator(
+      color: MobileUi.primary,
+      onRefresh: _load,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
+        itemCount: t.items.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (_, i) => _mobileCard(t, t.items[i]),
+      ),
+    );
+  }
+
+  Widget _mobileCard(_ReqType t, Map<String, dynamic> r) {
+    final state = r['state']?.toString() ?? '';
+    final emp = r['employee'];
+    final name = emp is Map ? (emp['name']?.toString() ?? '') : '';
+    final code = emp is Map ? (emp['code']?.toString() ?? '') : '';
+    final summary = t.subtitle(r);
+    final reason = r['reason']?.toString() ?? '';
+    final stateColor = switch (_stateTag(state)) {
+      StatusTagType.success => MobileTone.success,
+      StatusTagType.danger => MobileTone.danger,
+      _ => MobileTone.warning,
+    };
+    final canReview = _hrReview && state == 'pending';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: MobileUi.card(r: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: t.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(t.icon, color: t.color, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name.isNotEmpty ? name : t.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: MobileUi.text(15, weight: FontWeight.w800),
+                    ),
+                    Text(
+                      [if (code.isNotEmpty) code, t.label].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: MobileUi.text(12, weight: FontWeight.w500, color: MobileUi.muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.fromLTRB(9, 4, 10, 4),
+                decoration: BoxDecoration(
+                  color: stateColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _stateAr(state),
+                  style: MobileUi.text(12, weight: FontWeight.w800, color: stateColor, height: 1.2),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F8FC),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.event_note_rounded, size: 16, color: MobileUi.primary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(summary, style: MobileUi.text(13, weight: FontWeight.w700, height: 1.35)),
+                    ),
+                  ],
+                ),
+                if (reason.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.notes_rounded, size: 16, color: MobileUi.muted),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          reason,
+                          style: MobileUi.text(12, weight: FontWeight.w500, color: MobileUi.muted, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (canReview) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _approve(t.kind, r),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MobileTone.success,
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      textStyle: MobileUi.text(13.5, weight: FontWeight.w800),
+                    ),
+                    icon: const Icon(Icons.check_rounded, size: 20),
+                    label: Text(context.t('req.approve')),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => _reject(t.kind, r),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MobileTone.danger.withValues(alpha: 0.1),
+                      foregroundColor: MobileTone.danger,
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      textStyle: MobileUi.text(13.5, weight: FontWeight.w800),
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    label: Text(context.t('req.reject')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -312,6 +718,16 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
       },
     );
   }
+}
+
+class _ReqType {
+  const _ReqType(this.kind, this.label, this.icon, this.color, this.items, this.subtitle);
+  final String kind;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final List<Map<String, dynamic>> items;
+  final String Function(Map<String, dynamic>) subtitle;
 }
 
 class _RequestFormDialog extends StatefulWidget {
@@ -479,7 +895,7 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
                 TextField(controller: _amount, decoration: InputDecoration(labelText: context.t('req.requestedAmount')), keyboardType: TextInputType.number),
               if (widget.type == 'shift') ...[
                 if (_loadingShifts)
-                  const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())
+                  const Padding(padding: EdgeInsets.all(12), child: HudooriLoader())
                 else if (_shifts.isEmpty)
                   Text(context.t('req.noShifts'))
                 else

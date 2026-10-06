@@ -281,6 +281,7 @@ class AuthCubit extends Cubit<AuthState> {
       final employee = me['employee'];
       final empName = employee is Map ? employee['name']?.toString() ?? '' : '';
       final empCode = employee is Map ? employee['code']?.toString() ?? '' : '';
+      final empId = employee is Map ? employee['id']?.toString() : null;
       roles = BioTimeRoles.fromJson(me['roles'] as Map<String, dynamic>?);
       menus = (me['menus'] as List? ?? [])
           .whereType<Map>()
@@ -306,6 +307,7 @@ class AuthCubit extends Cubit<AuthState> {
         user: user,
         employeeName: empName,
         employeeCode: empCode,
+        employeeId: (empId == null || empId.isEmpty) ? null : empId,
         roles: roles,
         menus: menus,
         features: features,

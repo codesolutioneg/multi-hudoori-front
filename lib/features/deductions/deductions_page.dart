@@ -21,6 +21,10 @@ import '../../l10n/l10n_extension.dart';
 import 'deduction_import_skipped_panel.dart';
 import 'deductions_wizard_dialog.dart';
 
+import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_filters.dart';
+import '../mobile/mobile_ui.dart';
+import '../../core/platform/mobile_platform.dart';
 String _fmtDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -424,7 +428,223 @@ class _DeductionsPageState extends State<DeductionsPage> {
     }
   }
 
+  void _showDeductionDetailMobile(Map<String, dynamic> d) {
+    final state = d['state']?.toString() ?? '';
+    final payrollId = d['payrollId']?.toString();
+    final hasPayroll = payrollId != null && payrollId.isNotEmpty;
+    final code = d['employeeCode']?.toString().trim() ?? '';
+    final applied = d['appliedAmount'] as num?;
+    final stateColor = switch (state) {
+      'pending' => MobileTone.warning,
+      'applied' => MobileTone.success,
+      'cancelled' => MobileTone.danger,
+      _ => MobileTone.info,
+    };
+    Widget row(IconData icon, String label, String value, {Widget? trailing}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          child: Row(
+            children: [
+              MobileIconBadge(icon: icon, size: 32),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(label, style: MobileUi.text(12.5, weight: FontWeight.w600, color: MobileUi.muted)),
+              ),
+              Flexible(
+                flex: 2,
+                child: Text(
+                  value,
+                  textAlign: TextAlign.end,
+                  style: MobileUi.text(13.5, weight: FontWeight.w700),
+                ),
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+        );
+    const divider = Divider(height: 1, color: Color(0xFFEDF1F7));
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  MobileAvatar(name: d['employeeName']?.toString() ?? '', size: 52),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          d['employeeName']?.toString() ?? '—',
+                          style: MobileUi.text(16.5, weight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 4),
+                        MobileChip(label: _stateAr(state), color: stateColor),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFFFF1F1), Color(0xFFFFF8F8)]),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFFFDADA)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(context.t('ded.amount'),
+                              style: MobileUi.text(12, weight: FontWeight.w600, color: MobileUi.muted)),
+                          Text(_deductionMoney(d['amount'] as num?),
+                              style: MobileUi.text(22, weight: FontWeight.w800, color: MobileTone.danger)),
+                        ],
+                      ),
+                    ),
+                    if (applied != null && applied > 0)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(context.t('ded.applied'),
+                              style: MobileUi.text(12, weight: FontWeight.w600, color: MobileUi.muted)),
+                          Text(_deductionMoney(applied),
+                              style: MobileUi.text(16, weight: FontWeight.w800, color: MobileTone.success)),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+              if (state == 'pending') ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: MobileUi.primarySoft,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 18, color: MobileUi.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.t('ded.pendingNote'),
+                          style: MobileUi.text(12.5, weight: FontWeight.w500, height: 1.45),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: MobileUi.card(r: 18),
+                child: Column(
+                  children: [
+                    row(
+                      Icons.badge_outlined,
+                      context.t('ded.employeeCode'),
+                      code.isEmpty ? '—' : code,
+                      trailing: code.isEmpty
+                          ? null
+                          : IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: context.t('ded.copyCode'),
+                              icon: const Icon(Icons.copy_rounded, size: 18, color: MobileUi.primary),
+                              onPressed: () async {
+                                await Clipboard.setData(ClipboardData(text: code));
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(context.t('ded.codeCopied', {'code': code}))),
+                                  );
+                                }
+                              },
+                            ),
+                    ),
+                    divider,
+                    row(
+                      Icons.category_outlined,
+                      context.t('ded.type'),
+                      d['deductionTypeLabel']?.toString() ?? _typeLabel(d['deductionType']?.toString() ?? ''),
+                    ),
+                    divider,
+                    row(Icons.event_outlined, context.t('common.date'), d['date']?.toString() ?? '—'),
+                    divider,
+                    row(
+                      Icons.storefront_outlined,
+                      context.t('ded.branch'),
+                      d['locationName']?.toString() ?? d['deviceName']?.toString() ?? '—',
+                    ),
+                    if ((d['reference']?.toString() ?? '').isNotEmpty) ...[
+                      divider,
+                      row(Icons.confirmation_number_outlined, context.t('ded.reference'), d['reference'].toString()),
+                    ],
+                    if (d['notes'] != null && d['notes'].toString().trim().isNotEmpty) ...[
+                      divider,
+                      row(Icons.notes_rounded, context.t('ded.notes'), d['notes'].toString()),
+                    ],
+                  ],
+                ),
+              ),
+              if (state == 'pending' || hasPayroll) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (state == 'pending')
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: MobileTone.danger,
+                            side: const BorderSide(color: MobileTone.danger),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _cancel(d);
+                          },
+                          icon: const Icon(Icons.cancel_outlined, size: 18),
+                          label: Text(context.t('ded.cancelDeduction')),
+                        ),
+                      ),
+                    if (state == 'pending' && hasPayroll) const SizedBox(width: 10),
+                    if (hasPayroll)
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            context.go('${AppRoutes.hrPayroll}/$payrollId');
+                          },
+                          icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                          label: Text(context.t('ded.openPayroll')),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showDeductionDetail(Map<String, dynamic> d) async {
+    if (isNativeMobile) return _showDeductionDetailMobile(d);
     final state = d['state']?.toString() ?? '';
     final payrollId = d['payrollId']?.toString();
     showModalBottomSheet<void>(
@@ -589,7 +809,7 @@ class _DeductionsPageState extends State<DeductionsPage> {
         ? const Center(
             child: Padding(
               padding: EdgeInsets.all(32),
-              child: CircularProgressIndicator(),
+              child: HudooriLoader(),
             ),
           )
         : _items.isEmpty
@@ -683,16 +903,22 @@ class _DeductionsPageState extends State<DeductionsPage> {
             ),
           ],
           const SizedBox(height: 12),
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              labelText: context.t('grid.searchNameOrCode'),
-              prefixIcon: Icon(Icons.search, size: 20),
+          MobileFilters(
+            activeCount: [
+              _stateFilter != null,
+              _locationFilter != null,
+              _typeFilter != null,
+            ].where((a) => a).length,
+            leading: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                labelText: isNativeMobile ? null : context.t('grid.searchNameOrCode'),
+                hintText: isNativeMobile ? context.t('grid.searchNameOrCode') : null,
+                prefixIcon: const Icon(Icons.search, size: 20),
+              ),
+              onChanged: (_) => setState(() {}),
             ),
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
+            child: Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
@@ -731,7 +957,7 @@ class _DeductionsPageState extends State<DeductionsPage> {
               ),
               if (locations.isNotEmpty)
                 SizedBox(
-                  width: 210,
+                  width: isNativeMobile ? double.infinity : 210,
                   child: DropdownButtonFormField<String>(
                     key: ValueKey('deduction-location-$_locationFilter'),
                     initialValue: _locationFilter,
@@ -749,6 +975,9 @@ class _DeductionsPageState extends State<DeductionsPage> {
                 ),
               if (_types.isNotEmpty)
                 DropdownMenu<String?>(
+                  width: isNativeMobile
+                      ? MediaQuery.sizeOf(context).width - 32
+                      : null,
                   initialSelection: _typeFilter,
                   label: Text(context.t('ded.typeFilter')),
                   dropdownMenuEntries: [
@@ -768,6 +997,7 @@ class _DeductionsPageState extends State<DeductionsPage> {
                   },
                 ),
             ],
+          ),
           ),
           if (_pendingInView().isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -910,6 +1140,56 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
   Widget _periodTypeBreakdown(List<Map<String, dynamic>> periodItems) {
     final rows = _typeTotals(periodItems);
     if (rows.isEmpty) return const SizedBox.shrink();
+    if (isNativeMobile) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+        child: LayoutBuilder(builder: (context, c) {
+          final w = (c.maxWidth - 8) / 2;
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final row in rows)
+                Container(
+                  width: w,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FE),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE6ECF7)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              row.label,
+                              maxLines: 2,
+                              style: MobileUi.text(12, weight: FontWeight.w700, color: MobileUi.muted, height: 1.25),
+                            ),
+                          ),
+                          MobileChip(label: '${row.count}'),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          formatMoney(row.amount),
+                          style: MobileUi.text(15, weight: FontWeight.w800, color: MobileTone.danger),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          );
+        }),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Wrap(
@@ -992,6 +1272,16 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
     required String subtitle,
     double indent = 0,
   }) {
+    if (isNativeMobile) {
+      return mobileGroupHeader(
+        expanded: expanded,
+        onTap: onTap,
+        icon: leadingIcon,
+        title: title,
+        subtitle: subtitle,
+        nested: indent > 0,
+      );
+    }
     return Material(
       color: AppColors.muted.withValues(alpha: indent > 0 ? 0.25 : 0.45),
       child: InkWell(
@@ -1042,6 +1332,88 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
     final id = d['id']?.toString() ?? '';
     final isPending = d['state']?.toString() == 'pending';
     final selected = id.isNotEmpty && widget.selectedIds.contains(id);
+    if (isNativeMobile) {
+      final state = d['state']?.toString() ?? '';
+      final type = (d['deductionTypeLabel'] ??
+              widget.typeLabel(d['deductionType']?.toString() ?? ''))
+          .toString();
+      final stateColor = switch (state) {
+        'pending' => MobileTone.warning,
+        'applied' || 'done' || 'confirmed' => MobileTone.success,
+        'cancelled' || 'cancel' => MobileUi.muted,
+        _ => MobileTone.info,
+      };
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+        child: Material(
+          color: selected ? MobileUi.primarySoft : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => widget.onTapItem(d),
+            child: Container(
+              padding: const EdgeInsetsDirectional.fromSTEB(4, 10, 12, 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: selected ? MobileUi.primary.withValues(alpha: 0.4) : const Color(0xFFEDF1F7),
+                ),
+              ),
+              child: Row(
+                children: [
+                  if (isPending)
+                    Checkbox(
+                      value: selected,
+                      visualDensity: VisualDensity.compact,
+                      onChanged: id.isEmpty ? null : (v) => widget.onToggleSelected(id, v == true),
+                    )
+                  else
+                    const SizedBox(width: 8),
+                  MobileAvatar(name: d['employeeName']?.toString() ?? '', size: 38),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          d['employeeName']?.toString() ?? '—',
+                          style: MobileUi.text(13.5, weight: FontWeight.w800, height: 1.3),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            if ((d['employeeCode']?.toString() ?? '').isNotEmpty)
+                              MobileChip(icon: Icons.tag_rounded, label: d['employeeCode'].toString()),
+                            if (type.isNotEmpty)
+                              MobileChip(label: type, color: MobileTone.violet),
+                            if (ref != null && ref.isNotEmpty)
+                              MobileChip(label: ref, color: MobileUi.muted),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        formatMoney(d['amount']),
+                        style: MobileUi.text(14.5, weight: FontWeight.w800, color: MobileTone.danger),
+                      ),
+                      const SizedBox(height: 4),
+                      MobileChip(label: widget.stateAr(state), color: stateColor),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return ListTile(
       dense: true,
       onTap: () => widget.onTapItem(d),
@@ -1099,6 +1471,41 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
     final tree = _tree();
     final periodKeys = tree.keys.toList()..sort((a, b) => b.compareTo(a));
 
+    if (isNativeMobile && widget.inline) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: _expandAll,
+                icon: const Icon(Icons.unfold_more_rounded, size: 18),
+                label: Text(context.t('common.expandAll')),
+              ),
+              TextButton.icon(
+                onPressed: _collapseAll,
+                icon: const Icon(Icons.unfold_less_rounded, size: 18),
+                label: Text(context.t('common.collapseAll')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          for (final periodKey in periodKeys)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SellixCard(
+                padding: EdgeInsets.zero,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: _periodSection(tree, periodKey),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1131,8 +1538,19 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
                   ? const NeverScrollableScrollPhysics()
                   : null,
               children: [
-                for (final periodKey in periodKeys) ...[
-                  () {
+                for (final periodKey in periodKeys) _periodSection(tree, periodKey),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _periodSection(
+    Map<String, Map<String, List<Map<String, dynamic>>>> tree,
+    String periodKey,
+  ) {
                     final branches = tree[periodKey]!;
                     final periodItems =
                         branches.values.expand((list) => list).toList();
@@ -1185,18 +1603,11 @@ class _DeductionGroupedListState extends State<_DeductionGroupedList> {
                               );
                             }(),
                           ],
+                          if (isNativeMobile) const SizedBox(height: 8),
                         ],
-                        const Divider(height: 1),
+                        if (!isNativeMobile) const Divider(height: 1),
                       ],
                     );
-                  }(),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 

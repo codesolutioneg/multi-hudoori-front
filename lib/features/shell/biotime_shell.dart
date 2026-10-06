@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
 import '../../core/layout/breakpoints.dart';
+import '../../core/locale/locale_cubit.dart';
+import '../../core/platform/mobile_platform.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/feature_entitlements.dart';
@@ -13,6 +15,12 @@ import '../../features/dashboard/widgets/dashboard_page_background.dart';
 import '../../l10n/app_localizations.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
+import '../auth/biometric_login.dart';
+import '../mobile/mobile_bottom_bar.dart';
+import '../mobile/mobile_more_page.dart';
+import '../mobile/mobile_top_header.dart';
+import '../mobile/mobile_ui.dart';
+import '../mobile/my_photo.dart';
 import 'dashboard_notifications_panel.dart';
 import 'shell_nav.dart';
 
@@ -26,6 +34,20 @@ class BioTimeShell extends StatefulWidget {
 
 class _BioTimeShellState extends State<BioTimeShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _moreOpen = false;
+  String? _lastLocation;
+
+  @override
+  void dispose() {
+    if (isNativeMobile) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mobileStatusBarColor.value == MobileTopHeader.top) {
+          mobileStatusBarColor.value = MobileUi.background;
+        }
+      });
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +58,9 @@ class _BioTimeShellState extends State<BioTimeShell> {
       builder: (context, auth) {
         final l10n = AppLocalizations.of(context);
         final navItems = navItemsFromMenus(context, auth.menus);
+        if (mobile && isNativeMobile) {
+          return _buildNativeMobile(context, auth, navItems, location);
+        }
         assert(() {
           debugPrint(
             '[BioTimeShell] mobile=${isMobile(context)} '
@@ -105,6 +130,177 @@ class _BioTimeShellState extends State<BioTimeShell> {
   }
 
   void _closeDrawer() => Navigator.of(context).pop();
+
+  Widget _buildNativeMobile(
+    BuildContext context,
+    AuthState auth,
+    List<NavItem> navItems,
+    String location,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final staff = auth.roles.isHrStaff || auth.roles.isBranchManager;
+    final homeRoute = staff ? AppRoutes.hrDashboard : AppRoutes.dashboard;
+    final hasPunch = (navItems.any((n) => n.route == AppRoutes.myLocationPunch) ||
+            auth.features.mobileLocationPunch) &&
+        isRouteEntitled(auth, AppRoutes.myLocationPunch);
+    final picked = mobileTabsFor(auth, navItems, count: hasPunch ? 2 : 3);
+    final NavItem? centerItem = hasPunch
+        ? null
+        : (picked.isNotEmpty ? picked.first : null);
+    final tabs = hasPunch ? picked : picked.skip(1).toList();
+    final centerRoute = hasPunch ? AppRoutes.myLocationPunch : centerItem?.route;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+
+    void go(String route) {
+      if (!isRouteEntitled(auth, route)) {
+        final feat = featureKeyForRoute(route);
+        context.go(feat != null
+            ? AppRoutes.accessDeniedFeature(feat)
+            : AppRoutes.accessDeniedRole());
+        return;
+      }
+      context.go(route);
+    }
+
+    if (location != _lastLocation) {
+      _lastLocation = location;
+      _moreOpen = false;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      mobileStatusBarColor.value = MobileTopHeader.top;
+      MyPhoto.load(auth.employeeId);
+      BiometricLogin.offerIfPending(context);
+    });
+
+    void open(String route) {
+      if (_moreOpen) setState(() => _moreOpen = false);
+      go(route);
+    }
+
+    final more = _moreOpen;
+    final onHome = !more &&
+        (location == homeRoute ||
+            location == AppRoutes.dashboard ||
+            location == AppRoutes.hrDashboard);
+    final onCenter =
+        !more && centerRoute != null && location.startsWith(centerRoute);
+    final tabIndex =
+        more ? -1 : tabs.indexWhere((t) => location.startsWith(t.route));
+
+    final items = <MobileNavEntry>[
+      MobileNavEntry(
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
+        label: l10n.home,
+        selected: onHome,
+        onTap: () => open(homeRoute),
+      ),
+      for (var i = 0; i < tabs.length; i++)
+        MobileNavEntry(
+          icon: tabs[i].icon,
+          activeIcon: _filledIcon(tabs[i].icon),
+          label: tabs[i].label,
+          selected: tabIndex == i,
+          onTap: () => open(tabs[i].route),
+        ),
+      MobileNavEntry(
+        icon: Icons.grid_view_outlined,
+        activeIcon: Icons.grid_view_rounded,
+        label: l10n.t('m.more'),
+        selected: more || (!onHome && !onCenter && tabIndex < 0),
+        onTap: () => setState(() => _moreOpen = !_moreOpen),
+      ),
+    ];
+
+    final role = auth.isPlatformAdmin
+        ? l10n.t('role.platformAdmin')
+        : l10n.roleLabel(
+            isSystemAdmin: auth.roles.isSystemAdmin,
+            isHrManager: auth.roles.isHrManager,
+            isHrSupervisor: auth.roles.isHrSupervisor,
+            isBranchManager: auth.roles.isBranchManager,
+            isEmployee: auth.roles.isEmployee,
+          );
+
+    return PopScope(
+      canPop: !more,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _moreOpen = false);
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: MobileUi.background,
+        body: Column(
+          children: [
+            _TopBar(
+              nativeMobile: true,
+              flat: !more &&
+                  (location == AppRoutes.dashboard ||
+                      location == AppRoutes.hrDashboard),
+              userName: auth.employeeName.isNotEmpty
+                  ? auth.employeeName
+                  : (auth.user?.name ?? ''),
+              userRole: role,
+              company: auth.activeCompanyName,
+              showNotifications:
+                  auth.roles.isHrStaff || auth.roles.isBranchManager,
+            ),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(child: widget.child),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: !more,
+                      child: AnimatedOpacity(
+                        opacity: more ? 1 : 0,
+                        duration: const Duration(milliseconds: 220),
+                        child: more
+                            ? MobileMorePage(
+                                items: navItems,
+                                location: location,
+                                onOpen: open,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: centerRoute == null || keyboardOpen
+            ? null
+            : MobileCenterButton(
+                selected: onCenter,
+                icon: hasPunch ? null : _filledIcon(centerItem!.icon),
+                tooltip: hasPunch ? l10n.t('m.punch') : centerItem!.label,
+                onTap: () => open(centerRoute),
+              ),
+        bottomNavigationBar:
+            keyboardOpen ? null : MobileBottomBar(items: items),
+      ),
+    );
+  }
+
+  static IconData _filledIcon(IconData outlined) => switch (outlined) {
+        Icons.schedule_outlined => Icons.schedule_rounded,
+        Icons.calendar_month_outlined => Icons.calendar_month_rounded,
+        Icons.assignment_outlined => Icons.assignment_rounded,
+        Icons.assignment_ind_outlined => Icons.assignment_ind_rounded,
+        Icons.payments_outlined => Icons.payments_rounded,
+        Icons.people_outline => Icons.people_alt_rounded,
+        Icons.access_time_outlined => Icons.access_time_filled_rounded,
+        Icons.grid_on_outlined => Icons.grid_on_rounded,
+        Icons.fact_check_outlined => Icons.fact_check_rounded,
+        Icons.request_quote_outlined => Icons.request_quote_rounded,
+        Icons.account_balance_wallet_outlined =>
+          Icons.account_balance_wallet_rounded,
+        _ => outlined,
+      };
 }
 
 class _Sidebar extends StatelessWidget {
@@ -336,11 +532,17 @@ class _TopBar extends StatefulWidget {
     required this.userName,
     required this.userRole,
     this.showNotifications = false,
+    this.nativeMobile = false,
+    this.flat = false,
+    this.company,
   });
   final VoidCallback? onMenu;
+  final bool flat;
   final String userName;
   final String userRole;
+  final String? company;
   final bool showNotifications;
+  final bool nativeMobile;
 
   @override
   State<_TopBar> createState() => _TopBarState();
@@ -409,8 +611,43 @@ class _TopBarState extends State<_TopBar> {
     if (mounted) _loadNotifications();
   }
 
+  Widget _buildNativeMobile(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return MobileTopHeader(
+      flat: widget.flat,
+      name: widget.userName,
+      role: widget.userRole,
+      company: widget.company,
+      actions: [
+        MobileHeaderButton(
+          tooltip: l10n.language,
+          onPressed: () {
+            final cubit = context.read<LocaleCubit>();
+            cubit.setLocale(Locale(l10n.isAr ? 'en' : 'ar'));
+          },
+          child: Text(
+            l10n.isAr ? 'EN' : 'ع',
+            style: MobileUi.text(14, weight: FontWeight.w800, color: Colors.white, height: 1),
+          ),
+        ),
+        if (widget.showNotifications)
+          MobileHeaderButton(
+            tooltip: l10n.t('notif.title'),
+            onPressed: _openNotifications,
+            child: Badge(
+              isLabelVisible: _notifCount > 0,
+              backgroundColor: const Color(0xFFFF4D4F),
+              label: Text(_notifCount > 99 ? '99+' : '$_notifCount'),
+              child: const Icon(Icons.notifications_none_rounded),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.nativeMobile) return _buildNativeMobile(context);
     final mobile = widget.onMenu != null;
     final narrow = MediaQuery.sizeOf(context).width < 480;
 

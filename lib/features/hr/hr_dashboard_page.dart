@@ -14,6 +14,7 @@ import '../../features/dashboard/widgets/dashboard_quick_actions.dart';
 import '../../features/dashboard/widgets/dashboard_stat_card_v2.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 class HrDashboardPage extends StatefulWidget {
   const HrDashboardPage({super.key});
 
@@ -106,7 +107,7 @@ class _HrDashboardPageState extends State<HrDashboardPage> {
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(48),
-                child: CircularProgressIndicator(),
+                child: HudooriLoader(),
               ),
             )
           else ...[

@@ -13,6 +13,7 @@ import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 
+import '../mobile/hudoori_loader.dart';
 class HiringAppointmentsPage extends StatefulWidget {
   const HiringAppointmentsPage({super.key});
 
@@ -617,7 +618,7 @@ class _HiringAppointmentsPageState extends State<HiringAppointmentsPage> {
           const SizedBox(height: 16),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: HudooriLoader())
                 : _items.isEmpty
                     ? SellixCard(
                         child: Padding(

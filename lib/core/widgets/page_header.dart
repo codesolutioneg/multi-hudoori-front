@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/l10n_extension.dart';
+import '../../features/mobile/mobile_page_header.dart';
 import '../layout/breakpoints.dart';
+import '../platform/mobile_platform.dart';
 import '../theme/app_theme_v2.dart';
 
 /// Page title block — delegates to v2 glass styling.
@@ -49,6 +51,22 @@ class PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) {
+      return MobilePageHeader(
+        title: title,
+        subtitle: subtitle,
+        icon: icon,
+        onBack: onBack,
+        actions: [
+          if (actions != null) ...actions!,
+          if (showRefresh)
+            IconButton(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+        ],
+      );
+    }
     final mobile = isMobile(context);
     final actionRow = <Widget>[
       if (actions != null) ...actions!,

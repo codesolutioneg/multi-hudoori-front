@@ -12,6 +12,7 @@ import '../../core/utils/file_download.dart';
 import '../../core/widgets/page_header.dart';
 import '../../l10n/l10n_extension.dart';
 
+import '../mobile/hudoori_loader.dart';
 class AdminSalesRequestsPage extends StatefulWidget {
   const AdminSalesRequestsPage({super.key});
 
@@ -434,7 +435,7 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
           const Gap(16),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: HudooriLoader())
                 : _error != null
                     ? Center(child: Text(_error!))
                     : _rows.isEmpty

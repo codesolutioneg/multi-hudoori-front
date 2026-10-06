@@ -23,6 +23,8 @@ import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/employee_search_field.dart';
 import '../auth/auth_cubit.dart';
+import '../../core/platform/mobile_platform.dart';
+import '../mobile/mobile_ui.dart';
 import 'employee_detail_tabs.dart';
 import 'job_title_suggestions.dart';
 
@@ -734,12 +736,101 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     );
   }
 
+  Widget? _mIcon(IconData icon) => isNativeMobile ? Icon(icon, size: 21) : null;
+
+  Widget _mobileSwitchCard({
+    required String title,
+    required String hint,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Material(
+      color: value ? MobileUi.primarySoft : const Color(0xFFF6F8FC),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(14, 8, 8, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: MobileUi.text(13.5, weight: FontWeight.w700, height: 1.3)),
+                    Text(
+                      hint,
+                      style: MobileUi.text(11.5, weight: FontWeight.w500, color: MobileUi.muted, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(value: value, onChanged: onChanged),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileInfoTile({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F8FC),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: MobileUi.text(11, weight: FontWeight.w600, color: MobileUi.muted, height: 1.2),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    value,
+                    style: MobileUi.text(14, weight: FontWeight.w800, height: 1.25),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _dropdown<T>({
     required String label,
     required T? value,
     required List<DropdownMenuItem<T>> items,
     ValueChanged<T?>? onChanged,
     bool allowEmpty = true,
+    IconData? icon,
   }) {
     final allItems = [
       if (allowEmpty) DropdownMenuItem<T>(value: null, child: const Text('—')),
@@ -753,7 +844,11 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
     return DropdownButtonFormField<T>(
       value: safeValue,
-      decoration: InputDecoration(labelText: label),
+      isExpanded: isNativeMobile,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: icon == null ? null : _mIcon(icon),
+      ),
       items: allItems,
       onChanged: onChanged,
     );
@@ -939,12 +1034,14 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isMobile(context) ? 12 : 24,
-        isMobile(context) ? 12 : 20,
-        isMobile(context) ? 12 : 24,
-        isMobile(context) ? 12 : 24,
-      ),
+      padding: isNativeMobile
+          ? EdgeInsets.fromLTRB(16, 6, 16, keyboardOpen ? 8 : 40)
+          : EdgeInsets.fromLTRB(
+              isMobile(context) ? 12 : 24,
+              isMobile(context) ? 12 : 20,
+              isMobile(context) ? 12 : 24,
+              isMobile(context) ? 12 : 24,
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1090,6 +1187,14 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           Expanded(
             child: FilledButton.icon(
               onPressed: _saving ? null : _save,
+              style: isNativeMobile
+                  ? FilledButton.styleFrom(
+                      backgroundColor: MobileUi.primary,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      textStyle: MobileUi.text(14.5, weight: FontWeight.w800),
+                    )
+                  : null,
               icon: _saving
                   ? const SizedBox(
                       width: 16,
@@ -1099,14 +1204,28 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.save, size: 18),
+                  : Icon(isNativeMobile ? Icons.check_circle_rounded : Icons.save, size: isNativeMobile ? 20 : 18),
               label: Text(context.t('employees.action.save')),
             ),
           ),
           const SizedBox(width: 8),
           PopupMenuButton<String>(
             tooltip: context.t('common.more'),
-            icon: const Icon(Icons.more_vert),
+            icon: isNativeMobile
+                ? Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: MobileUi.primarySoft,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.more_horiz_rounded, color: MobileUi.primary),
+                  )
+                : const Icon(Icons.more_vert),
+            padding: isNativeMobile ? EdgeInsets.zero : const EdgeInsets.all(8),
+            shape: isNativeMobile
+                ? RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
+                : null,
             onSelected: (v) {
               switch (v) {
                 case 'push':
@@ -1195,11 +1314,13 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           ],
           EmployeeTabSection(
             title: context.t('employees.section.personal'),
+            icon: Icons.badge_rounded,
             children: [
               TextField(
                 controller: _code,
                 decoration: InputDecoration(
                   labelText: context.t('employees.field.empCode'),
+                  prefixIcon: _mIcon(Icons.fingerprint_rounded),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1207,6 +1328,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 controller: _name,
                 decoration: InputDecoration(
                   labelText: context.t('employees.field.name'),
+                  prefixIcon: _mIcon(Icons.person_outline_rounded),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1221,6 +1343,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                     : [FilteringTextInputFormatter.digitsOnly],
                 decoration: InputDecoration(
                   labelText: context.t('employees.field.nationalId'),
+                  prefixIcon: _mIcon(Icons.badge_outlined),
                   counterText: '',
                   helperText: _isForeigner
                       ? context.t('employees.field.isForeignerHint')
@@ -1233,6 +1356,41 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 8),
+              if (isNativeMobile) ...[
+                _mobileSwitchCard(
+                  title: context.t('employees.field.isForeigner'),
+                  hint: context.t('employees.field.isForeignerHint'),
+                  value: _isForeigner,
+                  onChanged: (v) => setState(() => _isForeigner = v),
+                ),
+                const SizedBox(height: 10),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _mobileInfoTile(
+                          icon: Icons.cake_outlined,
+                          color: MobileTone.violet,
+                          label: context.t('employees.field.age'),
+                          value: displayAge == null
+                              ? '—'
+                              : '$displayAge ${context.t('employees.field.ageYears')}',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _mobileInfoTile(
+                          icon: Icons.event_rounded,
+                          color: MobileUi.primary,
+                          label: context.t('employees.field.birthDate'),
+                          value: displayBirthDate ?? '—',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(context.t('employees.field.isForeigner')),
@@ -1272,11 +1430,13 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                   style: const TextStyle(fontSize: 16),
                 ),
               ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
           EmployeeTabSection(
             title: context.t('employees.section.work'),
+            icon: Icons.work_rounded,
             children: [
               Builder(
                 builder: (context) {
@@ -1293,6 +1453,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                       : _locations;
                   return _dropdown<String?>(
                     label: context.t('employees.field.location'),
+                    icon: Icons.storefront_outlined,
                     value: locationLocked ? scopedLocationId : _locationId,
                     items: [
                       for (final l in locationItems)
@@ -1310,6 +1471,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
               const SizedBox(height: 12),
               _dropdown<String?>(
                 label: context.t('employees.department'),
+                icon: Icons.apartment_rounded,
                 value: _departmentId,
                 items: [
                   for (final d in _departments)
@@ -1365,6 +1527,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                         onSubmitted: (_) => onFieldSubmitted(),
                         decoration: InputDecoration(
                           labelText: context.t('employees.field.jobTitle'),
+                          prefixIcon: _mIcon(Icons.work_outline_rounded),
                           helperText: context.t('employees.field.jobTitleHint'),
                         ),
                       );
@@ -1406,6 +1569,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 controller: _email,
                 decoration: InputDecoration(
                   labelText: context.t('employees.field.email'),
+                  prefixIcon: _mIcon(Icons.alternate_email_rounded),
                 ),
               ),
               const SizedBox(height: 12),
@@ -1413,6 +1577,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 controller: _workEmailPassword,
                 decoration: InputDecoration(
                   labelText: context.t('employees.field.workEmailPassword'),
+                  prefixIcon: _mIcon(Icons.key_rounded),
                   helperText: context.t('employees.field.workEmailPasswordHint'),
                   suffixIcon: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1495,6 +1660,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           employeeTabHint(context.t('employees.docs.hint')),
           EmployeeTabSection(
             title: context.t('employees.section.documents'),
+            icon: Icons.folder_copy_rounded,
             children: [
               EmployeeDocumentField(
                 label: context.t('employees.docs.idCard'),
@@ -1632,6 +1798,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           employeeTabHint(context.t('employees.insurance.hint')),
           EmployeeTabSection(
             title: context.t('employees.section.insurance'),
+            icon: Icons.health_and_safety_rounded,
             children: [
               TextField(
                 controller: _insuranceNumber,
@@ -1662,6 +1829,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           const SizedBox(height: 12),
           EmployeeTabSection(
             title: context.t('employees.section.medical'),
+            icon: Icons.medical_services_rounded,
             children: [
               _dropdown<String?>(
                 label: context.t('employees.field.medicalStatus'),
@@ -1694,6 +1862,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         children: [
           EmployeeTabSection(
             title: context.t('employees.section.accounts'),
+            icon: Icons.account_balance_rounded,
             children: [
               EmployeeBoolField(
                 label: 'Fawry',
@@ -1747,6 +1916,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
             const SizedBox(height: 12),
             EmployeeTabSection(
               title: context.t('employees.section.custody'),
+              icon: Icons.inventory_2_rounded,
               children: [
                 for (final type in _custodyTypes.where(
                   (t) => t['active'] != false,
@@ -1782,6 +1952,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           const SizedBox(height: 12),
           EmployeeTabSection(
             title: context.t('employees.section.leave'),
+            icon: Icons.beach_access_rounded,
             children: [
               EmployeeNumberField(
                 label: context.t('employees.field.leaveStart'),

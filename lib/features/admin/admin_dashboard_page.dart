@@ -17,6 +17,7 @@ import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import 'widgets/company_stats_section.dart';
 
+import '../mobile/hudoori_loader.dart';
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
 
@@ -96,7 +97,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           ),
           const Gap(20),
           if (_loading)
-            const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator()))
+            const Center(child: Padding(padding: EdgeInsets.all(48), child: HudooriLoader()))
           else ...[
             if (_stats != null)
               CompanyStatsSection(stats: _stats!, companyName: companyName)

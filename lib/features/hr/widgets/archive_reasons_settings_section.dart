@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/sellix_card.dart';
 import '../../../l10n/l10n_extension.dart';
 
+import '../../mobile/hudoori_loader.dart';
 class ArchiveReasonsSettingsSection extends StatefulWidget {
   const ArchiveReasonsSettingsSection({super.key, this.embedded = false});
 
@@ -175,7 +176,7 @@ class _ArchiveReasonsSettingsSectionState
           const Center(
             child: Padding(
               padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
+              child: HudooriLoader(),
             ),
           )
         else if (_items.isEmpty)
