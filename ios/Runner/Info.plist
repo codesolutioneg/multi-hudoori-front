@@ -70,5 +70,7 @@
 	<string>نحتاج موقعك لتسجيل الحضور والانصراف داخل نطاق الفرع</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>نحتاج موقعك لتسجيل الحضور والانصراف داخل نطاق الفرع</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>نستخدم Face ID لتسجيل دخولك بأمان وسرعة</string>
 </dict>
 </plist>
