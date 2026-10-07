@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "819111793113",
+    "project_id": "odc-chat",
+    "storage_bucket": "odc-chat.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:819111793113:android:54f37861a3e63a232fc9c8",
+        "android_client_info": {
+          "package_name": "com.codesolution.dishflow_reports"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeCLX3DAA5jsYgzVgFfSKAbedKleji3Xc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:819111793113:android:8c8ce2a05335514d2fc9c8",
+        "android_client_info": {
+          "package_name": "com.codesolution.managerops"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeCLX3DAA5jsYgzVgFfSKAbedKleji3Xc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:819111793113:android:ab8ee36dfc9f082d2fc9c8",
+        "android_client_info": {
+          "package_name": "com.codesolutioneg.multibiotimeApp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeCLX3DAA5jsYgzVgFfSKAbedKleji3Xc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:819111793113:android:f67ad3be601e12902fc9c8",
+        "android_client_info": {
+          "package_name": "com.example.chatodc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeCLX3DAA5jsYgzVgFfSKAbedKleji3Xc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:819111793113:android:2775467b9d2484d32fc9c8",
+        "android_client_info": {
+          "package_name": "com.pos.pos_system"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeCLX3DAA5jsYgzVgFfSKAbedKleji3Xc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
