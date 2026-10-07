@@ -16,6 +16,7 @@ import '../../l10n/app_localizations.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import '../auth/biometric_login.dart';
+import '../auth/company_membership_picker.dart';
 import '../mobile/mobile_bottom_bar.dart';
 import '../mobile/mobile_more_page.dart';
 import '../mobile/mobile_top_header.dart';
@@ -37,6 +38,21 @@ class _BioTimeShellState extends State<BioTimeShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _moreOpen = false;
   String? _lastLocation;
+  bool _pickerOpen = false;
+
+  Future<void> _maybeShowCompanyPicker(AuthState auth) async {
+    if (!auth.pendingCompanyPicker || !auth.canSwitchCompany || _pickerOpen) return;
+    _pickerOpen = true;
+    await showCompanyMembershipPicker(
+      context,
+      memberships: auth.memberships,
+      activeCompanyId: auth.activeCompanyId,
+    );
+    if (mounted) {
+      context.read<AuthCubit>().clearPendingCompanyPicker();
+      _pickerOpen = false;
+    }
+  }
 
   @override
   void dispose() {
@@ -55,7 +71,15 @@ class _BioTimeShellState extends State<BioTimeShell> {
     final mobile = isMobile(context);
     final location = GoRouterState.of(context).matchedLocation;
 
-    return BlocBuilder<AuthCubit, AuthState>(
+    return BlocConsumer<AuthCubit, AuthState>(
+      listenWhen: (a, b) =>
+          a.pendingCompanyPicker != b.pendingCompanyPicker ||
+          a.memberships.length != b.memberships.length,
+      listener: (context, auth) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _maybeShowCompanyPicker(auth);
+        });
+      },
       builder: (context, auth) {
         final l10n = AppLocalizations.of(context);
         final navItems = navItemsFromMenus(context, auth.menus);
@@ -614,11 +638,19 @@ class _TopBarState extends State<_TopBar> {
 
   Widget _buildNativeMobile(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final auth = context.watch<AuthCubit>().state;
     return MobileTopHeader(
       flat: widget.flat,
       name: widget.userName,
       role: widget.userRole,
       company: widget.company,
+      onCompanyTap: auth.canSwitchCompany
+          ? () => showCompanyMembershipPicker(
+                context,
+                memberships: auth.memberships,
+                activeCompanyId: auth.activeCompanyId,
+              )
+          : null,
       actions: [
         MobileHeaderButton(
           tooltip: l10n.language,

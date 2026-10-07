@@ -14,6 +14,7 @@ class MobileTopHeader extends StatelessWidget {
     required this.name,
     required this.role,
     this.company,
+    this.onCompanyTap,
     this.actions = const [],
     this.flat = false,
   });
@@ -28,6 +29,8 @@ class MobileTopHeader extends StatelessWidget {
   final String name;
   final String role;
   final String? company;
+  /// When set (multi-company HR), company label is tappable to switch.
+  final VoidCallback? onCompanyTap;
   final List<Widget> actions;
 
   @override
@@ -114,14 +117,36 @@ class MobileTopHeader extends StatelessWidget {
                           if ((company ?? '').isNotEmpty) ...[
                             const SizedBox(width: 6),
                             Flexible(
-                              child: Text(
-                                company!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: MobileUi.text(
-                                  11.5,
-                                  weight: FontWeight.w600,
-                                  color: Colors.white.withValues(alpha: 0.75),
+                              child: InkWell(
+                                onTap: onCompanyTap,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          company!,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: MobileUi.text(
+                                            11.5,
+                                            weight: FontWeight.w600,
+                                            color: Colors.white.withValues(alpha: 0.75),
+                                          ),
+                                        ),
+                                      ),
+                                      if (onCompanyTap != null) ...[
+                                        const SizedBox(width: 2),
+                                        Icon(
+                                          Icons.expand_more_rounded,
+                                          size: 16,
+                                          color: Colors.white.withValues(alpha: 0.85),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

@@ -19,6 +19,7 @@ import '../../core/utils/money_format.dart';
 import '../../core/utils/entity_id.dart';
 import '../../l10n/l10n_extension.dart';
 import '../../core/utils/file_download.dart';
+import '../../core/utils/payroll_month_range.dart';
 import '../../core/utils/file_pick.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/searchable_select_field.dart';
@@ -320,20 +321,16 @@ class _EmployeesPageState extends State<EmployeesPage> {
     }
   }
 
-  (DateTime, DateTime) _defaultPunchReportPeriod() {
-    final now = DateTime.now();
-    if (now.day >= 26) {
-      final from = DateTime(now.year, now.month, 26);
-      final toMonth = now.month == 12 ? 1 : now.month + 1;
-      final toYear = now.month == 12 ? now.year + 1 : now.year;
-      return (from, DateTime(toYear, toMonth, 25));
+  Future<(DateTime, DateTime)> _defaultPunchReportPeriod() async {
+    try {
+      final config = await api.configGet();
+      final startDay = payrollMonthStartDayFromConfig(config);
+      final period = defaultPayrollPeriod(startDay);
+      return (period.dateFrom, period.dateTo);
+    } catch (_) {
+      final period = defaultPayrollPeriod(kDefaultPayrollMonthStartDay);
+      return (period.dateFrom, period.dateTo);
     }
-    final fromMonth = now.month == 1 ? 12 : now.month - 1;
-    final fromYear = now.month == 1 ? now.year - 1 : now.year;
-    return (
-      DateTime(fromYear, fromMonth, 26),
-      DateTime(now.year, now.month, 25),
-    );
   }
 
   String _fmtDate(DateTime d) =>
@@ -382,7 +379,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
   }
 
   Future<void> _exportPunchReport() async {
-    final defaults = _defaultPunchReportPeriod();
+    final defaults = await _defaultPunchReportPeriod();
     final config = await showDialog<_PunchReportExportConfig>(
       context: context,
       builder: (ctx) => _PunchReportExportDialog(
@@ -530,6 +527,19 @@ class _EmployeesPageState extends State<EmployeesPage> {
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
       if (!mounted) return;
+      final usedLocal = r['usedLocal'] == true;
+      final fallbackMsg = r['fallbackMessage']?.toString();
+      if (usedLocal) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              fallbackMsg?.isNotEmpty == true
+                  ? fallbackMsg!
+                  : context.t('reports.punchSyncUsedLocal'),
+            ),
+          ),
+        );
+      }
       await _showMessage(
         context.t('emp.downloaded', {'file': filename}),
         title: context.t('common.done'),
