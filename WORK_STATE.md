@@ -13,6 +13,7 @@
 ## Daily log
 
 ### 2026-10-07
+- **Auto**: Multi-company switch — `/me` memberships in auth state; `switchActiveCompany` reloads profile; switcher in mobile header + «المزيد» company list; sends `activeCompanyId` / `X-Company-Id`. **MULTI**.
 - **Auto**: Mobile request cycle UI — use `openCycle` from `/requests/my` for date defaults + picker bounds; employee create menu = leave/shift/attendance + advance (salary/certificate/loan create removed); loan tab → `/my/advance-request`; `MyPayrollPage` mobile cards + payslip; friendly errors `PERIOD_LOCKED` / `READ_ONLY` / `NO_GRID_COVERAGE`. `flutter analyze` clean on touched files. **MULTI**.
 
 ### 2026-10-05

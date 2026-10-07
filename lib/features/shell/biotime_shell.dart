@@ -19,6 +19,7 @@ import '../auth/biometric_login.dart';
 import '../mobile/mobile_bottom_bar.dart';
 import '../mobile/mobile_more_page.dart';
 import '../mobile/mobile_top_header.dart';
+import 'hr_company_switcher.dart';
 import '../mobile/mobile_ui.dart';
 import '../mobile/my_photo.dart';
 import 'dashboard_notifications_panel.dart';
@@ -669,6 +670,7 @@ class _TopBarState extends State<_TopBar> {
                 backgroundColor: AppThemeV2.surfaceElevated,
               ),
             ),
+          if (mobile) const HrCompanySwitcher(),
           const Spacer(),
           if (!mobile) const LanguageToggle(),
           if (widget.showNotifications) ...[

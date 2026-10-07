@@ -7,6 +7,7 @@ import '../../core/locale/locale_cubit.dart';
 import '../../core/router/app_router.dart';
 import '../../l10n/app_localizations.dart';
 import '../auth/auth_cubit.dart';
+import '../auth/auth_state.dart';
 import '../auth/biometric_login.dart';
 import '../shell/shell_nav.dart';
 import 'mobile_ui.dart';
@@ -120,6 +121,43 @@ class _MobileMorePageState extends State<MobileMorePage> {
               ],
             );
           }),
+          BlocBuilder<AuthCubit, AuthState>(
+            buildWhen: (a, b) => a.memberships != b.memberships || a.activeCompanyId != b.activeCompanyId,
+            builder: (context, auth) {
+              if (!auth.canSwitchCompany) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 26),
+                  Text(l10n.isAr ? 'الشركة النشطة' : 'Active company', style: MobileUi.sectionTitle),
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: MobileUi.card(r: 20),
+                    child: Column(
+                      children: [
+                        for (final m in auth.memberships) ...[
+                          ListTile(
+                            dense: true,
+                            title: Text(m.companyName, style: MobileUi.text(14, weight: FontWeight.w700)),
+                            subtitle: Text(m.companyCode),
+                            trailing: auth.activeCompanyId == m.companyId
+                                ? Icon(Icons.check_circle_rounded, color: MobileUi.primary)
+                                : null,
+                            onTap: () => context.read<AuthCubit>().switchActiveCompany(
+                                  id: m.companyId,
+                                  name: m.companyName,
+                                  code: m.companyCode,
+                                ),
+                          ),
+                          if (m != auth.memberships.last) const _RowDivider(),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 26),
           Text(l10n.t('m.account'), style: MobileUi.sectionTitle),
           const SizedBox(height: 12),

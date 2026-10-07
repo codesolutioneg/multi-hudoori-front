@@ -52,6 +52,30 @@ class BioTimeUser extends Equatable {
   List<Object?> get props => [id, isPlatformAdmin, locationId];
 }
 
+class CompanyMembership extends Equatable {
+  const CompanyMembership({
+    required this.companyId,
+    required this.companyCode,
+    required this.companyName,
+    required this.role,
+  });
+
+  final String companyId;
+  final String companyCode;
+  final String companyName;
+  final String role;
+
+  factory CompanyMembership.fromJson(Map<String, dynamic> json) => CompanyMembership(
+        companyId: json['companyId']?.toString() ?? '',
+        companyCode: json['companyCode']?.toString() ?? '',
+        companyName: json['companyName']?.toString() ?? '',
+        role: json['role']?.toString() ?? '',
+      );
+
+  @override
+  List<Object?> get props => [companyId, companyCode, companyName, role];
+}
+
 class BioTimeRoles extends Equatable {
   const BioTimeRoles({
     this.isEmployee = false,
@@ -110,6 +134,7 @@ class AuthState extends Equatable {
     this.activeCompanyId,
     this.activeCompanyName,
     this.activeCompanyCode,
+    this.memberships = const [],
   });
 
   final AuthStatus status;
@@ -127,8 +152,11 @@ class AuthState extends Equatable {
   final String? activeCompanyId;
   final String? activeCompanyName;
   final String? activeCompanyCode;
+  final List<CompanyMembership> memberships;
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
+
+  bool get canSwitchCompany => !isPlatformAdmin && memberships.length > 1;
 
   bool get hasActiveCompany =>
       activeCompanyId != null && activeCompanyId!.trim().isNotEmpty;
@@ -179,6 +207,7 @@ class AuthState extends Equatable {
     String? activeCompanyId,
     String? activeCompanyName,
     String? activeCompanyCode,
+    List<CompanyMembership>? memberships,
     bool clearError = false,
     bool clearProfileWarning = false,
     bool clearToken = false,
@@ -200,7 +229,17 @@ class AuthState extends Equatable {
       activeCompanyId: clearActiveCompany ? null : (activeCompanyId ?? this.activeCompanyId),
       activeCompanyName: clearActiveCompany ? null : (activeCompanyName ?? this.activeCompanyName),
       activeCompanyCode: clearActiveCompany ? null : (activeCompanyCode ?? this.activeCompanyCode),
+      memberships: memberships ?? this.memberships,
     );
+  }
+
+  static List<CompanyMembership> membershipsFrom(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => CompanyMembership.fromJson(Map<String, dynamic>.from(e)))
+        .where((m) => m.companyId.isNotEmpty)
+        .toList();
   }
 
   @override
@@ -219,6 +258,7 @@ class AuthState extends Equatable {
         activeCompanyId,
         activeCompanyName,
         activeCompanyCode,
+        memberships,
       ];
 }
 
