@@ -13,6 +13,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/app_theme_v2.dart';
 import 'core/theme/app_typography.dart';
 import 'core/utils/web_splash.dart';
+import 'core/push/push_notification_service.dart';
 import 'features/auth/auth_cubit.dart';
 import 'features/auth/auth_state.dart';
 import 'features/mobile/hudoori_splash.dart';
@@ -39,6 +40,7 @@ class _HudooriAppState extends State<HudooriApp> {
     api.configure(baseUrl: ApiUrlResolver.effectiveUrl);
     final auth = sl<AuthCubit>();
     _router = createRouter(auth);
+    PushNotificationService.instance.attachRouter(_router);
     auth.restoreSession();
     sl<LocaleCubit>().load();
   }
@@ -56,6 +58,17 @@ class _HudooriAppState extends State<HudooriApp> {
             next.status != AuthStatus.initial &&
             next.status != AuthStatus.loading,
         listener: (_, _) => notifyWebAppReady(),
+        child: BlocListener<AuthCubit, AuthState>(
+          listenWhen: (prev, next) =>
+              isNativeMobile &&
+              next.status == AuthStatus.authenticated &&
+              (prev.status != AuthStatus.authenticated ||
+                  prev.activeCompanyId != next.activeCompanyId),
+          listener: (_, state) {
+            PushNotificationService.instance.syncSession(
+              companyId: state.activeCompanyId,
+            );
+          },
         child: BlocBuilder<LocaleCubit, Locale>(
           builder: (context, locale) {
             return MaterialApp.router(
@@ -122,6 +135,7 @@ class _HudooriAppState extends State<HudooriApp> {
               routerConfig: _router,
             );
           },
+        ),
         ),
       ),
     );

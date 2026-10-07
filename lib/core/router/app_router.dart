@@ -19,6 +19,7 @@ import '../../features/hr/health_certificates_page.dart';
 import '../../features/attendance/my_schedule_page.dart';
 import '../../features/employee/location_punch_page.dart';
 import '../../features/hr/reports_page.dart';
+import '../../features/notifications/app_notifications_page.dart';
 import '../../features/hr/org_chart_page.dart';
 import '../../features/hr/hr_dashboard_page.dart';
 import '../../features/hr/hr_attendance_page.dart';
@@ -79,6 +80,7 @@ abstract final class AppRoutes {
   static const myAdvanceRequest = '/my/advance-request';
   static const myLocationPunch = '/my/location-punch';
   static const requests = '/requests';
+  static const notifications = '/notifications';
   static const myPayroll = '/payroll/my';
   static const hrDashboard = '/hr/dashboard';
   static const hrAbsentEmployees = '/hr/absent-employees';
@@ -302,6 +304,11 @@ GoRouter createRouter(AuthCubit auth) {
                   ? const MobileHomePage()
                   : const DashboardPageV2(),
             ),
+          ),
+          GoRoute(
+            path: AppRoutes.notifications,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: AppNotificationsPage()),
           ),
           GoRoute(
             path: AppRoutes.accessDenied,

@@ -159,6 +159,34 @@ class BioTimeApiClient {
     );
   }
 
+  Future<void> setFcmToken(String? fcmToken) async {
+    await _call('/api/biotime/me/fcm-token', {'fcmToken': fcmToken});
+  }
+
+  Future<Map<String, dynamic>> appNotificationsList({
+    int limit = 30,
+    int offset = 0,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/notifications/list', {
+        'limit': limit,
+        'offset': offset,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> appNotificationsRead({
+    List<String>? ids,
+    bool all = false,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/notifications/read', {
+        if (ids != null && ids.isNotEmpty) 'ids': ids,
+        if (all) 'all': true,
+      }),
+    );
+  }
+
   Future<Map<String, dynamic>> absencesList() async {
     return _unwrap(await _call('/api/biotime/absences/list', {}));
   }

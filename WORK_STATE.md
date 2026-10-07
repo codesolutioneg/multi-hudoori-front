@@ -13,6 +13,7 @@
 ## Daily log
 
 ### 2026-10-07
+- **Auto**: FCM — subscribe topic الشركة بعد login/switch، مسح token عند logout، صفحة `/notifications` + badge غير مقروء؛ `firebase_messaging` + local notifications. **MULTI**.
 - **Auto**: إعدادات ديناميكية — `payroll_month_range.dart` + فترة export البصمات من config؛ snackbar `usedLocal` بدل خطأ BioTime؛ API client يمرّر fallback من job. **MULTI**.
 - **Auto**: بعد لوجين بأكثر من عضوية — بوب أب «اختر الشركة»؛ اسم الشركة في الهيدر قابل للضغط للتبديل (مع «المزيد»). يحتاج rebuild APK. **MULTI**.
 - **Auto**: Multi-company switch — `/me` memberships in auth state; `switchActiveCompany` reloads profile; switcher in mobile header + «المزيد» company list; sends `activeCompanyId` / `X-Company-Id`. **MULTI**.

@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/config/api_config.dart';
 import '../../core/config/api_url_resolver.dart';
 import '../../core/config/platform_admin_config.dart';
+import '../../core/platform/mobile_platform.dart';
+import '../../core/push/push_notification_service.dart';
 import '../../core/storage/session_storage.dart';
 import '../../core/utils/api_error_message.dart';
 import '../../data/api/biotime_api_client.dart';
@@ -380,6 +382,9 @@ class AuthCubit extends Cubit<AuthState> {
   String _resolveServerUrl(String? baseUrl) => ApiUrlResolver.resolve(baseUrl);
 
   Future<void> signOut() async {
+    if (isNativeMobile) {
+      await PushNotificationService.instance.onLogout();
+    }
     if (!PlatformAdminConfig.isLocalToken(state.token)) {
       try {
         await _api.logout();

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/di/injection.dart';
 import '../../core/layout/breakpoints.dart';
@@ -596,20 +596,29 @@ class _TopBarState extends State<_TopBar> {
     if (!widget.showNotifications || _loadingNotif) return;
     setState(() => _loadingNotif = true);
     try {
-      final data = await api.dashboardNotifications();
-      if (!mounted) return;
-      final sections = ((data['sections'] as List?) ?? [])
-          .whereType<Map>()
-          .map(
-            (e) => DashboardNotificationSection.fromJson(
-              Map<String, dynamic>.from(e),
-            ),
-          )
-          .toList();
-      setState(() {
-        _sections = sections;
-        _notifCount = (data['totalCount'] as num?)?.toInt() ?? 0;
-      });
+      if (widget.nativeMobile) {
+        final data = await api.appNotificationsList(limit: 1, offset: 0);
+        if (!mounted) return;
+        setState(() {
+          _sections = const [];
+          _notifCount = (data['unreadCount'] as num?)?.toInt() ?? 0;
+        });
+      } else {
+        final data = await api.dashboardNotifications();
+        if (!mounted) return;
+        final sections = ((data['sections'] as List?) ?? [])
+            .whereType<Map>()
+            .map(
+              (e) => DashboardNotificationSection.fromJson(
+                Map<String, dynamic>.from(e),
+              ),
+            )
+            .toList();
+        setState(() {
+          _sections = sections;
+          _notifCount = (data['totalCount'] as num?)?.toInt() ?? 0;
+        });
+      }
     } catch (_) {
       // ignore — bell stays without badge
     } finally {
@@ -618,6 +627,12 @@ class _TopBarState extends State<_TopBar> {
   }
 
   Future<void> _openNotifications() async {
+    if (widget.nativeMobile) {
+      if (!mounted) return;
+      await context.push(AppRoutes.notifications);
+      if (mounted) _loadNotifications();
+      return;
+    }
     await _loadNotifications();
     if (!mounted) return;
     await showDashboardNotificationsPanel(
