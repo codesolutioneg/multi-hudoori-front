@@ -22,14 +22,22 @@ class AdminSalesRequestsPage extends StatefulWidget {
 class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
   List<Map<String, dynamic>> _rows = [];
   List<Map<String, dynamic>> _plans = [];
+  Map<String, dynamic>? _analytics;
   bool _loading = true;
   String? _error;
   String _filter = 'PENDING';
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -39,11 +47,15 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
     });
     try {
       final results = await Future.wait([
-        api.adminSalesRequestsList(status: _filter.isEmpty ? null : _filter),
+        api.adminSalesRequestsList(
+          status: _filter.isEmpty ? null : _filter,
+          q: _searchCtrl.text.trim().isEmpty ? null : _searchCtrl.text.trim(),
+        ),
         api.adminPlansList(),
       ]);
       final data = results[0];
       final plansData = results[1];
+      final analyticsRaw = data['analytics'];
       final raw = data['requests'];
       final list = raw is List
           ? raw.map((e) => Map<String, dynamic>.from(e as Map)).toList()
@@ -56,6 +68,7 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
         setState(() {
           _rows = list;
           _plans = plans;
+          _analytics = analyticsRaw is Map ? Map<String, dynamic>.from(analyticsRaw) : null;
           _loading = false;
         });
       }
@@ -300,6 +313,148 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
     }
   }
 
+  Future<void> _openDetail(Map<String, dynamic> row) async {
+    final isAr = context.l10n.isAr;
+    try {
+      final data = await api.adminSalesRequestsGet(id: row['id'].toString());
+      final req = data['request'];
+      if (req is! Map || !mounted) return;
+      final detail = Map<String, dynamic>.from(req);
+      final noteCtrl = TextEditingController();
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(detail['companyName']?.toString() ?? ''),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _copyRow(isAr ? 'الحالة' : 'Status', detail['status']?.toString() ?? ''),
+                  _copyRow(isAr ? 'المعرف' : 'Code', detail['companyCode']?.toString() ?? ''),
+                  _copyRow(isAr ? 'المسؤول' : 'Contact', detail['contactName']?.toString() ?? ''),
+                  _copyRow(isAr ? 'البريد' : 'Email', detail['email']?.toString() ?? ''),
+                  _copyRow(isAr ? 'المصدر' : 'Source', detail['source']?.toString() ?? ''),
+                  const Gap(12),
+                  Text(isAr ? 'الأنشطة' : 'Activity', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const Gap(8),
+                  ...(((detail['activities'] as List?) ?? []).map((a) {
+                    final m = a is Map ? Map<String, dynamic>.from(a) : <String, dynamic>{};
+                    final body = m['body']?.toString() ?? m['kind']?.toString() ?? '';
+                    final at = m['createdAt']?.toString() ?? '';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text('• $body${at.isNotEmpty ? ' — $at' : ''}', style: const TextStyle(fontSize: 12)),
+                    );
+                  })),
+                  const Gap(12),
+                  TextField(
+                    controller: noteCtrl,
+                    decoration: InputDecoration(labelText: isAr ? 'ملاحظة جديدة' : 'New note'),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isAr ? 'إغلاق' : 'Close')),
+            if (detail['status']?.toString() == 'PENDING') ...[
+              TextButton(onPressed: () { Navigator.pop(ctx); _edit(detail); }, child: Text(isAr ? 'تعديل' : 'Edit')),
+              FilledButton(onPressed: () { Navigator.pop(ctx); _approve(detail); }, child: Text(isAr ? 'موافقة' : 'Approve')),
+            ],
+            FilledButton(
+              onPressed: () async {
+                final body = noteCtrl.text.trim();
+                if (body.isEmpty) return;
+                await api.adminSalesRequestsNote(id: detail['id'].toString(), body: body);
+                if (ctx.mounted) Navigator.pop(ctx);
+                _load();
+              },
+              child: Text(isAr ? 'حفظ ملاحظة' : 'Save note'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(context, e))));
+      }
+    }
+  }
+
+  Future<void> _createManual() async {
+    final isAr = context.l10n.isAr;
+    final codeCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
+    final contactCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final empCtrl = TextEditingController(text: '10');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isAr ? 'طلب يدوي' : 'Manual request'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: codeCtrl, decoration: InputDecoration(labelText: isAr ? 'معرف الشركة' : 'Company code')),
+              TextField(controller: nameCtrl, decoration: InputDecoration(labelText: isAr ? 'اسم الشركة' : 'Company name')),
+              TextField(controller: contactCtrl, decoration: InputDecoration(labelText: isAr ? 'المسؤول' : 'Contact')),
+              TextField(controller: emailCtrl, decoration: InputDecoration(labelText: isAr ? 'البريد' : 'Email')),
+              TextField(controller: phoneCtrl, decoration: InputDecoration(labelText: isAr ? 'الهاتف' : 'Phone')),
+              TextField(controller: empCtrl, decoration: InputDecoration(labelText: isAr ? 'عدد الموظفين' : 'Employees'), keyboardType: TextInputType.number),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isAr ? 'إلغاء' : 'Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(isAr ? 'إنشاء' : 'Create')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await api.adminSalesRequestsCreate(
+        companyCode: codeCtrl.text.trim(),
+        companyName: nameCtrl.text.trim(),
+        contactName: contactCtrl.text.trim(),
+        email: emailCtrl.text.trim(),
+        phone: phoneCtrl.text.trim(),
+        requestedEmployees: int.tryParse(empCtrl.text.trim()) ?? 1,
+      );
+      _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(context, e))));
+      }
+    }
+  }
+
+  Widget _kpiTile(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
+            const Gap(4),
+            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _reject(Map<String, dynamic> row) async {
     final isAr = context.l10n.isAr;
     final reasonCtrl = TextEditingController();
@@ -407,6 +562,11 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
                 ? 'عدّل الحقول قبل الموافقة — الحصة تُنشأ من عدد الموظفين المعدّل ويُرسل في الميل'
                 : 'Edit before approve — employee quota uses the edited count and is emailed',
             actions: [
+              FilledButton.icon(
+                onPressed: _createManual,
+                icon: const Icon(Icons.add_rounded),
+                label: Text(isAr ? 'طلب يدوي' : 'Manual'),
+              ),
               OutlinedButton.icon(
                 onPressed: _rows.isEmpty ? null : _exportExcel,
                 icon: const Icon(Icons.file_download_outlined),
@@ -414,6 +574,46 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
               ),
               IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
             ],
+          ),
+          if (_analytics != null) ...[
+            const Gap(12),
+            Row(
+              children: [
+                _kpiTile(
+                  isAr ? 'قيد المراجعة' : 'Pending',
+                  '${(_analytics!['statusCounts'] as Map?)?['PENDING'] ?? 0}',
+                  AppThemeV2.primary,
+                ),
+                const Gap(8),
+                _kpiTile(
+                  isAr ? 'موافق' : 'Approved',
+                  '${(_analytics!['statusCounts'] as Map?)?['APPROVED'] ?? 0}',
+                  const Color(0xFF059669),
+                ),
+                const Gap(8),
+                _kpiTile(
+                  isAr ? 'مرفوض' : 'Rejected',
+                  '${(_analytics!['statusCounts'] as Map?)?['REJECTED'] ?? 0}',
+                  const Color(0xFFDC2626),
+                ),
+                const Gap(8),
+                _kpiTile(
+                  isAr ? 'الإجمالي' : 'Total',
+                  '${_analytics!['total'] ?? _rows.length}',
+                  AppThemeV2.textPrimary,
+                ),
+              ],
+            ),
+          ],
+          const Gap(12),
+          TextField(
+            controller: _searchCtrl,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search_rounded),
+              hintText: isAr ? 'بحث…' : 'Search…',
+              isDense: true,
+            ),
+            onSubmitted: (_) => _load(),
           ),
           const Gap(16),
           Wrap(
@@ -441,100 +641,39 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
                         ? Center(child: Text(isAr ? 'لا توجد طلبات' : 'No requests'))
                         : ListView.separated(
                             itemCount: _rows.length,
-                            separatorBuilder: (_, __) => const Gap(14),
+                            separatorBuilder: (_, __) => const Divider(height: 1),
                             itemBuilder: (_, i) {
                               final r = _rows[i];
-                              final plan = r['plan'];
-                              final planName = plan is Map
-                                  ? (isAr ? plan['nameAr'] : plan['nameEn'])?.toString()
-                                  : null;
                               final status = r['status']?.toString() ?? '';
-                              final pending = status == 'PENDING';
-                              return Card(
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  side: BorderSide(color: Colors.grey.shade200),
+                              return ListTile(
+                                dense: true,
+                                onTap: () => _openDetail(r),
+                                title: Text(
+                                  r['companyName']?.toString() ?? '',
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              '${r['companyName']}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 17,
-                                              ),
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: _statusColor(status).withValues(alpha: 0.12),
-                                              borderRadius: BorderRadius.circular(999),
-                                            ),
-                                            child: Text(
-                                              status,
-                                              style: TextStyle(
-                                                color: _statusColor(status),
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                subtitle: Text(
+                                  '${r['companyCode']} · ${r['contactName']} · ${r['email']}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      status,
+                                      style: TextStyle(
+                                        color: _statusColor(status),
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
                                       ),
-                                      const Gap(12),
-                                      _copyRow(isAr ? 'المعرف' : 'Code', r['companyCode']?.toString() ?? '', emphasize: true),
-                                      _copyRow(isAr ? 'المسؤول' : 'Contact', r['contactName']?.toString() ?? ''),
-                                      _copyRow(isAr ? 'البريد' : 'Email', r['email']?.toString() ?? ''),
-                                      _copyRow(isAr ? 'الهاتف' : 'Phone', r['phone']?.toString() ?? ''),
-                                      _copyRow(
-                                        isAr ? 'الموظفون' : 'Employees',
-                                        r['requestedEmployees']?.toString() ?? '',
-                                        emphasize: true,
-                                      ),
-                                      _copyRow(isAr ? 'الباقة' : 'Plan', planName ?? '—'),
-                                      if ((r['notes']?.toString() ?? '').isNotEmpty)
-                                        _copyRow(isAr ? 'ملاحظات' : 'Notes', r['notes'].toString()),
-                                      if ((r['rejectionReason']?.toString() ?? '').isNotEmpty)
-                                        _copyRow(isAr ? 'سبب الرفض' : 'Reason', r['rejectionReason'].toString()),
-                                      if (pending) ...[
-                                        const Gap(8),
-                                        const Divider(height: 1),
-                                        const Gap(12),
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 8,
-                                          children: [
-                                            FilledButton.icon(
-                                              onPressed: () => _approve(r),
-                                              icon: const Icon(Icons.check_rounded),
-                                              label: Text(isAr ? 'موافقة' : 'Approve'),
-                                            ),
-                                            OutlinedButton.icon(
-                                              onPressed: () => _edit(r),
-                                              icon: const Icon(Icons.edit_outlined),
-                                              label: Text(isAr ? 'تعديل' : 'Edit'),
-                                            ),
-                                            OutlinedButton.icon(
-                                              onPressed: () => _reject(r),
-                                              icon: const Icon(Icons.close_rounded),
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: Colors.red.shade700,
-                                              ),
-                                              label: Text(isAr ? 'رفض' : 'Reject'),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ],
-                                  ),
+                                    ),
+                                    Text(
+                                      r['requestedEmployees']?.toString() ?? '',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                  ],
                                 ),
                               );
                             },

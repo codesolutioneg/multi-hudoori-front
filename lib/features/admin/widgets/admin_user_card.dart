@@ -16,6 +16,7 @@ class AdminUserCard extends StatefulWidget {
     this.onResendEmail,
     this.onDeactivate,
     this.onTap,
+    this.onManageMemberships,
   });
 
   final Map<String, dynamic> user;
@@ -24,6 +25,7 @@ class AdminUserCard extends StatefulWidget {
   final VoidCallback? onResendEmail;
   final VoidCallback? onDeactivate;
   final VoidCallback? onTap;
+  final VoidCallback? onManageMemberships;
 
   @override
   State<AdminUserCard> createState() => _AdminUserCardState();
@@ -144,15 +146,25 @@ class _AdminUserCardState extends State<AdminUserCard> {
                         style: AppThemeV2.caption,
                       ),
                     ],
-                    if (widget.onResendEmail != null) ...[
+                    if (widget.onManageMemberships != null || widget.onResendEmail != null) ...[
                       const Gap(10),
-                      Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: OutlinedButton.icon(
-                          onPressed: widget.onResendEmail,
-                          icon: const Icon(Icons.mark_email_unread_outlined, size: 18),
-                          label: Text(context.t('admin.resendEmail')),
-                        ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (widget.onManageMemberships != null)
+                            OutlinedButton.icon(
+                              onPressed: widget.onManageMemberships,
+                              icon: const Icon(Icons.business_outlined, size: 18),
+                              label: Text(context.l10n.isAr ? 'عضويات شركات' : 'Company access'),
+                            ),
+                          if (widget.onResendEmail != null)
+                            OutlinedButton.icon(
+                              onPressed: widget.onResendEmail,
+                              icon: const Icon(Icons.mark_email_unread_outlined, size: 18),
+                              label: Text(context.t('admin.resendEmail')),
+                            ),
+                        ],
                       ),
                     ],
                   ],

@@ -92,6 +92,10 @@ class AuthCubit extends Cubit<AuthState> {
         ));
         return;
       }
+      final savedActive = await _session.getActiveCompanyId();
+      if (savedActive != null && savedActive.isNotEmpty) {
+        _api.setActiveCompanyId(savedActive);
+      }
       await _loadProfile(baseUrl: baseUrl, token: token);
     } catch (_) {
       emit(state.copyWith(status: AuthStatus.unauthenticated, clearToken: true));
@@ -211,11 +215,15 @@ class AuthCubit extends Cubit<AuthState> {
         loginCompanyCode = companyRaw['code']?.toString();
         loginCompanyId = companyRaw['id']?.toString();
       }
+      final loginMemberships = AuthState.membershipsFrom(data['memberships']);
       if (loginCompanyId != null) {
+        await _session.saveActiveCompanyId(loginCompanyId);
+        _api.setActiveCompanyId(loginCompanyId);
         emit(state.copyWith(
           activeCompanyId: loginCompanyId,
           activeCompanyName: loginCompanyName,
           activeCompanyCode: loginCompanyCode,
+          memberships: loginMemberships,
         ));
       }
       await _loadProfile(baseUrl: server, token: token, loginUser: loginUser);
@@ -300,6 +308,12 @@ class AuthCubit extends Cubit<AuthState> {
         companyCode = companyRaw['code']?.toString();
         companyId = companyRaw['id']?.toString();
       }
+      final memberships = AuthState.membershipsFrom(me['memberships']);
+      final activeId = me['activeCompanyId']?.toString() ?? companyId ?? state.activeCompanyId;
+      if (activeId != null && activeId.isNotEmpty) {
+        await _session.saveActiveCompanyId(activeId);
+        _api.setActiveCompanyId(activeId);
+      }
       emit(AuthState(
         status: AuthStatus.authenticated,
         token: token,
@@ -310,9 +324,10 @@ class AuthCubit extends Cubit<AuthState> {
         menus: menus,
         features: features,
         isPlatformAdmin: roles.isPlatformAdmin,
-        activeCompanyId: companyId ?? state.activeCompanyId,
+        activeCompanyId: activeId,
         activeCompanyName: companyName ?? state.activeCompanyName,
         activeCompanyCode: companyCode ?? state.activeCompanyCode,
+        memberships: memberships.isNotEmpty ? memberships : state.memberships,
         profileWarning: menus.length <= 1
             ? tr('auth.menusInsufficient')
             : null,
@@ -376,6 +391,20 @@ class AuthCubit extends Cubit<AuthState> {
       activeCompanyName: name,
       activeCompanyCode: code,
     ));
+  }
+
+  /// HR multi-company: switch context and reload menus/entitlements from /me.
+  Future<void> switchActiveCompany({
+    required String id,
+    String? name,
+    String? code,
+  }) async {
+    await setActiveCompany(id: id, name: name, code: code);
+    if (state.isPlatformAdmin) return;
+    final baseUrl = ApiUrlResolver.resolve(await _session.getBaseUrl());
+    final token = state.token;
+    if (token == null || token.isEmpty) return;
+    await _loadProfile(baseUrl: baseUrl, token: token);
   }
 
   Future<void> clearActiveCompany() async {

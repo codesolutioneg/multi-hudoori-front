@@ -4058,6 +4058,7 @@ class BioTimeApiClient {
     required String name,
     required int maxEmployees,
     required int maxUsers,
+    String? parentCompanyId,
     String? hrManagerName,
     String? hrManagerLogin,
     String? hrManagerPassword,
@@ -4068,6 +4069,7 @@ class BioTimeApiClient {
         'name': name,
         'maxEmployees': maxEmployees,
         'maxUsers': maxUsers,
+        if (parentCompanyId != null && parentCompanyId.isNotEmpty) 'parentCompanyId': parentCompanyId,
         if (hrManagerName != null) 'hrManagerName': hrManagerName,
         if (hrManagerLogin != null) 'hrManagerLogin': hrManagerLogin,
         if (hrManagerPassword != null) 'hrManagerPassword': hrManagerPassword,
@@ -4079,12 +4081,16 @@ class BioTimeApiClient {
     required String id,
     String? name,
     bool? active,
+    String? parentCompanyId,
+    bool clearParentCompany = false,
   }) async {
     return _unwrap(
       await _call('/api/admin/companies/update', {
         'id': id,
         if (name != null) 'name': name,
         if (active != null) 'active': active,
+        if (clearParentCompany) 'parentCompanyId': null,
+        if (!clearParentCompany && parentCompanyId != null) 'parentCompanyId': parentCompanyId,
       }),
     );
   }
@@ -4111,12 +4117,80 @@ class BioTimeApiClient {
     );
   }
 
-  Future<Map<String, dynamic>> adminSalesRequestsList({String? status}) async {
+  Future<Map<String, dynamic>> adminSalesRequestsList({String? status, String? q}) async {
     return _unwrap(
       await _call('/api/admin/sales-requests/list', {
         if (status != null && status.isNotEmpty) 'status': status,
+        if (q != null && q.isNotEmpty) 'q': q,
       }),
     );
+  }
+
+  Future<Map<String, dynamic>> adminSalesRequestsCreate({
+    required String companyCode,
+    required String companyName,
+    required String contactName,
+    required String email,
+    required String phone,
+    required int requestedEmployees,
+    String? planId,
+    String? notes,
+    String? nextFollowUpAt,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/sales-requests/create', {
+        'companyCode': companyCode,
+        'companyName': companyName,
+        'contactName': contactName,
+        'email': email,
+        'phone': phone,
+        'requestedEmployees': requestedEmployees,
+        if (planId != null) 'planId': planId,
+        if (notes != null) 'notes': notes,
+        if (nextFollowUpAt != null) 'nextFollowUpAt': nextFollowUpAt,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminSalesRequestsNote({
+    required String id,
+    required String body,
+  }) async {
+    return _unwrap(await _call('/api/admin/sales-requests/note', {'id': id, 'body': body}));
+  }
+
+  Future<Map<String, dynamic>> adminMembershipsList({required String userId}) async {
+    return _unwrap(await _call('/api/admin/memberships/list', {'userId': userId}));
+  }
+
+  Future<Map<String, dynamic>> adminMembershipsAdd({
+    required String userId,
+    required String companyId,
+    String? role,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/memberships/add', {
+        'userId': userId,
+        'companyId': companyId,
+        if (role != null) 'role': role,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminMembershipsRemove({
+    required String userId,
+    required String companyId,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/memberships/remove', {
+        'userId': userId,
+        'companyId': companyId,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminSalesRequestsGet({required String id}) async {
+    return _unwrap(await _call('/api/admin/sales-requests/get', {'id': id}));
   }
 
   Future<Map<String, dynamic>> adminSalesRequestsApprove({required String id}) async {

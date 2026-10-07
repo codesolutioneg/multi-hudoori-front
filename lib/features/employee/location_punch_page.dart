@@ -230,6 +230,32 @@ class _LocationPunchPageState extends State<LocationPunchPage> {
                   style: AppThemeV2.caption,
                 ),
               ),
+            Builder(builder: (_) {
+              final raw = _context?['todayPunches'];
+              final punches = raw is List ? raw.whereType<Map>().toList() : const <Map>[];
+              if (punches.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      isAr ? 'بصمات اليوم' : "Today's punches",
+                      style: AppThemeV2.title,
+                    ),
+                    const SizedBox(height: 8),
+                    for (final p in punches)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          '${p['isCheckIn'] == true ? (isAr ? 'حضور' : 'In') : (isAr ? 'انصراف' : 'Out')} — ${p['punchTime'] ?? ''}',
+                          style: AppThemeV2.caption,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 24),
             Row(
               children: [

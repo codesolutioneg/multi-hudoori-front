@@ -19,6 +19,7 @@ import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import 'widgets/admin_role_badge.dart';
 import 'widgets/admin_user_card.dart';
+import 'widgets/admin_user_memberships_dialog.dart';
 import '../../l10n/l10n_extension.dart';
 
 class AdminUsersPage extends StatefulWidget {
@@ -431,6 +432,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                   onResendEmail: u['active'] == false ? null : () => _resetPassword(u),
                   onDeactivate: u['active'] == false ? null : () => _confirmDeactivate(u),
                   onTap: () => _showUserDetails(u),
+                  onManageMemberships: () => showAdminUserMembershipsDialog(context, user: u),
                 ),
               ),
             ),

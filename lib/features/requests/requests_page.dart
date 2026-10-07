@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/di/injection.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
+import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/api_error_message.dart';
 import '../../core/widgets/api_error_view.dart';
 import '../../core/widgets/list_picker_field.dart';
@@ -140,6 +141,10 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
       reasonCtrl.dispose();
       return;
     }
+    if (!mounted) {
+      reasonCtrl.dispose();
+      return;
+    }
     final reason = reasonCtrl.text.trim().isEmpty ? context.t('req.rejected') : reasonCtrl.text.trim();
     reasonCtrl.dispose();
     try {
@@ -198,6 +203,38 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
     }
   }
 
+  int _pendingTotal(Map<String, dynamic> data) {
+    final apiCount = data['count'];
+    if (apiCount is num) return apiCount.toInt();
+    int n = 0;
+    for (final key in ['leave', 'loan', 'shiftChange', 'salary', 'certificate', 'attendanceEdit']) {
+      final list = data[key];
+      if (list is List) {
+        n += list.where((r) => (r as Map)['state']?.toString() == 'pending').length;
+      }
+    }
+    return n;
+  }
+
+  String _kindLabel(String kind) {
+    switch (kind) {
+      case 'leave':
+        return context.t('requests.kind.leave');
+      case 'loan':
+        return context.t('requests.kind.loan');
+      case 'shiftChange':
+        return context.t('requests.kind.shiftChange');
+      case 'salary':
+        return context.t('requests.kind.salary');
+      case 'certificate':
+        return context.t('requests.kind.certificate');
+      case 'attendanceEdit':
+        return context.t('requests.kind.attendanceEdit');
+      default:
+        return kind;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -212,16 +249,27 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
     final salary = (_data['salary'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final certificate = (_data['certificate'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     final attendanceEdit = (_data['attendanceEdit'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+    final pendingTotal = _hrReview ? _pendingTotal(_data) : 0;
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.all(AppDimensions.spaceMd),
           child: PageHeader(
-            title: context.t('requests.title'),
-            subtitle: _hrReview ? context.t('requests.subtitle') : context.t('requests.mySubtitle'),
-            icon: Icons.assignment_outlined,
+            title: _hrReview ? context.t('requests.hrTitle') : context.t('requests.title'),
+            subtitle: _hrReview ? context.t('requests.hrSubtitle') : context.t('requests.mySubtitle'),
+            icon: _hrReview ? Icons.pending_actions_outlined : Icons.assignment_outlined,
             actions: [
+              if (_hrReview && pendingTotal > 0)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: Chip(
+                    avatar: Icon(Icons.hourglass_top_rounded, size: 18, color: AppThemeV2.primary),
+                    label: Text(context.t('requests.pendingCount', {'count': pendingTotal})),
+                    backgroundColor: AppThemeV2.primarySoft,
+                    side: BorderSide(color: AppThemeV2.primary.withValues(alpha: 0.25)),
+                  ),
+                ),
               IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
               if (!_hrReview)
                 FilledButton.icon(
@@ -232,6 +280,34 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
             ],
           ),
         ),
+        if (_hrReview)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppDimensions.spaceMd, 0, AppDimensions.spaceMd, 8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppThemeV2.primarySoft,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppThemeV2.primary.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.inbox_outlined, size: 20, color: AppThemeV2.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.t('requests.hrBanner'),
+                      style: AppThemeV2.cardSubtitle.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppThemeV2.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         TabBar(
           controller: _tabs,
           labelColor: AppColors.primary,
@@ -276,37 +352,109 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
         final r = items[i];
         final state = r['state']?.toString() ?? '';
         final emp = _employeeLabel(r);
+        final summary = subtitle(r);
+        final reason = r['reason']?.toString() ?? '';
+        final canReview = _hrReview && state == 'pending';
+
+        if (canReview) {
+          return SellixCard(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (emp.isNotEmpty)
+                              Text(
+                                emp,
+                                style: AppThemeV2.cardTitle().copyWith(fontSize: 15),
+                              ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: AppThemeV2.primarySoft,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _kindLabel(kind),
+                                    style: AppThemeV2.caption.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppThemeV2.primary,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  summary,
+                                  style: AppThemeV2.cardSubtitle.copyWith(fontSize: 13),
+                                ),
+                              ],
+                            ),
+                            if (reason.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                reason,
+                                style: AppThemeV2.caption.copyWith(color: AppThemeV2.textSecondary),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      StatusTag(label: _stateAr(state), type: _stateTag(state)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => _approve(kind, r),
+                        icon: const Icon(Icons.check_rounded, size: 18),
+                        label: Text(context.t('req.approve')),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: () => _reject(kind, r),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.danger,
+                          side: const BorderSide(color: AppColors.danger),
+                        ),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: Text(context.t('req.reject')),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return SellixCard(
           child: ListTile(
             title: Text(
-              emp.isNotEmpty ? emp : subtitle(r),
+              emp.isNotEmpty ? emp : summary,
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (emp.isNotEmpty) Text(subtitle(r)),
-                if (r['reason'] != null && r['reason'].toString().isNotEmpty)
-                  Text(r['reason'].toString(), style: const TextStyle(fontSize: 12)),
+                if (emp.isNotEmpty) Text(summary),
+                if (reason.isNotEmpty)
+                  Text(reason, style: const TextStyle(fontSize: 12)),
               ],
             ),
-            trailing: _hrReview && state == 'pending'
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: context.t('req.approve'),
-                        icon: const Icon(Icons.check_circle_outline, color: AppColors.primary),
-                        onPressed: () => _approve(kind, r),
-                      ),
-                      IconButton(
-                        tooltip: context.t('req.reject'),
-                        icon: const Icon(Icons.cancel_outlined, color: AppColors.danger),
-                        onPressed: () => _reject(kind, r),
-                      ),
-                    ],
-                  )
-                : StatusTag(label: _stateAr(state), type: _stateTag(state)),
+            trailing: StatusTag(label: _stateAr(state), type: _stateTag(state)),
           ),
         );
       },

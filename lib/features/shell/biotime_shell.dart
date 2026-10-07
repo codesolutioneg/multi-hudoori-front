@@ -15,6 +15,7 @@ import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import 'dashboard_notifications_panel.dart';
 import 'shell_nav.dart';
+import 'hr_company_switcher.dart';
 
 class BioTimeShell extends StatefulWidget {
   const BioTimeShell({super.key, required this.child});
@@ -432,6 +433,7 @@ class _TopBarState extends State<_TopBar> {
                 backgroundColor: AppThemeV2.surfaceElevated,
               ),
             ),
+          const HrCompanySwitcher(),
           const Spacer(),
           if (!mobile) const LanguageToggle(),
           if (widget.showNotifications) ...[

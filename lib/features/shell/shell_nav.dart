@@ -29,6 +29,7 @@ IconData menuIconFor(String icon) => switch (icon) {
       'settings' => Icons.settings_outlined,
       'account_tree' => Icons.account_tree_outlined,
       'request_quote' => Icons.request_quote_outlined,
+      'pending_actions' => Icons.pending_actions_outlined,
       'my_location' => Icons.my_location_outlined,
       _ => Icons.dashboard_outlined,
     };

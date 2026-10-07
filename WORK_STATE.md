@@ -12,7 +12,13 @@
 
 ## Daily log
 
+### 2026-10-07
+- **Auto**: Companies page — parent company dropdown on create + «شركة أم» per row; subtitle «تابعة لـ …»; web rebuild. **MULTI**.
+- **Auto**: HR company switcher (membership-scoped) in shell header; admin user «عضويات شركات» dialog (link/unlink). Sales requests CRM UI — KPI strip, search, dense list, detail dialog with activity timeline + manual create + notes. **MULTI**.
+- **Auto**: HR request approval UX — sidebar menu `hr_requests` (موافقة الطلبات → `/requests`); HR page title/banner/pending chip; denser approve/reject cards. Backend menu + entitlements; web rebuild. **MULTI**.
+
 ### 2026-10-05
+- **Auto**: Location punch screen lists today's punches from API `todayPunches`. **MULTI**.
 - **Auto**: Mobile matches web dashboard UX — drawer-only (removed bottom nav), same `/me` menus + `/hr` routes; Platform Admin gets web-only message; HR home → `/hr/dashboard` with entitlement-filtered KPIs/shortcuts. **MULTI**.
 - **Auto**: Settings always visible for HR managers (no longer gated by `advanced_permissions`); inside Settings hide Odoo/advances/payroll/tips/team sections by entitlement. Access-denied shows friendly feature name (not raw key). Backend menu map + client maps updated; rebuilt web + restarted backend/dashboard. **MULTI**.
 - **Auto**: Hide Home shortcuts + KPI tiles (and related sections) when plan feature is off — uses `/me` entitlements with menus fallback so UI matches sidebar. Deep links still hit `/access-denied`. Rebuilt web + restarted `hudoori-multi-dashboard`. **MULTI**.

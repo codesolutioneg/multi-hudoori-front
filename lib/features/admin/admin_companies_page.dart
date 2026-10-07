@@ -69,9 +69,11 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
     final hrNameCtrl = TextEditingController(text: 'HR Manager');
     final isAr = context.l10n.isAr;
 
+    String? parentCompanyId;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
         title: Text(isAr ? 'إضافة شركة' : 'Add company'),
         content: SizedBox(
           width: 420,
@@ -92,6 +94,13 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
                   decoration: InputDecoration(
                     labelText: isAr ? 'اسم الشركة' : 'Company name',
                   ),
+                ),
+                const Gap(12),
+                _ParentCompanyDropdown(
+                  companies: _companies,
+                  value: parentCompanyId,
+                  isAr: isAr,
+                  onChanged: (v) => setLocal(() => parentCompanyId = v),
                 ),
                 const Gap(16),
                 Align(
@@ -140,6 +149,7 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(isAr ? 'إنشاء' : 'Create')),
         ],
       ),
+      ),
     );
 
     if (ok != true || !mounted) return;
@@ -164,6 +174,7 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
         name: nameCtrl.text.trim(),
         maxEmployees: maxEmployees,
         maxUsers: maxUsers,
+        parentCompanyId: parentCompanyId,
         hrManagerName: hrNameCtrl.text.trim().isEmpty ? null : hrNameCtrl.text.trim(),
         hrManagerLogin: hrLoginCtrl.text.trim().isEmpty ? null : hrLoginCtrl.text.trim(),
         hrManagerPassword: hrPassCtrl.text.isEmpty ? null : hrPassCtrl.text,
@@ -180,6 +191,79 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
         SnackBar(content: Text(friendlyApiError(context, e)), backgroundColor: Colors.red.shade700),
       );
     }
+  }
+
+  Future<void> _editParentCompany(Map<String, dynamic> c) async {
+    final id = c['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    final isAr = context.l10n.isAr;
+    String? parentCompanyId = c['parentCompanyId']?.toString();
+    if (parentCompanyId != null && parentCompanyId.isEmpty) parentCompanyId = null;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(isAr ? 'الشركة الرئيسية — ${c['name'] ?? ''}' : 'Main company — ${c['name'] ?? ''}'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  isAr
+                      ? 'للتنظيم في قائمة الشركات فقط — الفرع يبقى بليميته وبياناته المنفصلة.'
+                      : 'Organizational grouping only — branches keep separate limits and data.',
+                  style: AppThemeV2.caption,
+                ),
+                const Gap(12),
+                _ParentCompanyDropdown(
+                  companies: _companies,
+                  excludeCompanyId: id,
+                  value: parentCompanyId,
+                  isAr: isAr,
+                  onChanged: (v) => setLocal(() => parentCompanyId = v),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isAr ? 'إلغاء' : 'Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(isAr ? 'حفظ' : 'Save')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await api.adminCompaniesUpdate(
+        id: id,
+        parentCompanyId: parentCompanyId,
+        clearParentCompany: parentCompanyId == null,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isAr ? 'تم تحديث الشركة الرئيسية' : 'Main company updated')),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(context, e)), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
+  String? _parentSummary(Map<String, dynamic> c, bool isAr) {
+    final parent = c['parentCompany'];
+    if (parent is Map) {
+      final name = parent['name']?.toString() ?? '';
+      final code = parent['code']?.toString() ?? '';
+      if (name.isEmpty && code.isEmpty) return null;
+      return isAr ? 'تابعة للشركة الرئيسية: $name ($code)' : 'Main company: $name ($code)';
+    }
+    return null;
   }
 
   Future<void> _editQuota(Map<String, dynamic> c) async {
@@ -466,6 +550,7 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
                   : (c['planNameEn']?.toString().trim().isNotEmpty == true
                       ? c['planNameEn'].toString()
                       : c['planNameAr']?.toString());
+              final parentLine = _parentSummary(c, isAr);
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 color: selected ? AppThemeV2.primarySoft : AppThemeV2.surface,
@@ -480,6 +565,7 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
                   ),
                   subtitle: Text(
                     [
+                      if (parentLine != null) parentLine,
                       if (planSnap != null && planSnap.isNotEmpty)
                         isAr ? 'الباقة: $planSnap' : 'Plan: $planSnap',
                       isAr
@@ -498,6 +584,10 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
                       TextButton(
                         onPressed: () => _selectCompany(c),
                         child: Text(isAr ? 'اختيار' : 'Select'),
+                      ),
+                      TextButton(
+                        onPressed: () => _editParentCompany(c),
+                        child: Text(isAr ? 'شركة رئيسية' : 'Main'),
                       ),
                       TextButton(
                         onPressed: () => _editQuota(c),
@@ -533,6 +623,53 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
   CompanyQuota _quotaOf(Map<String, dynamic> c) {
     final q = c['quota'];
     return CompanyQuota.fromJson(q is Map ? Map<String, dynamic>.from(q) : null);
+  }
+}
+
+class _ParentCompanyDropdown extends StatelessWidget {
+  const _ParentCompanyDropdown({
+    required this.companies,
+    required this.value,
+    required this.isAr,
+    required this.onChanged,
+    this.excludeCompanyId,
+  });
+
+  final List<Map<String, dynamic>> companies;
+  final String? value;
+  final bool isAr;
+  final ValueChanged<String?> onChanged;
+  final String? excludeCompanyId;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = companies.where((c) {
+      final id = c['id']?.toString() ?? '';
+      if (id.isEmpty || id == excludeCompanyId) return false;
+      if (c['active'] == false && id != value) return false;
+      return true;
+    }).toList()
+      ..sort((a, b) => (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? ''));
+
+    return DropdownButtonFormField<String?>(
+      value: value != null && value!.isNotEmpty ? value : null,
+      decoration: InputDecoration(
+        labelText: isAr ? 'الشركة الرئيسية (اختياري)' : 'Main company (optional)',
+        helperText: isAr ? 'اخترها إذا هذا الفرع تابع لمجموعة — للعرض والتنظيم فقط' : 'Pick if this branch belongs to a group (display only)',
+      ),
+      items: [
+        DropdownMenuItem<String?>(
+          value: null,
+          child: Text(isAr ? '— مستقلة (بدون شركة رئيسية) —' : '— Standalone (no main company) —'),
+        ),
+        for (final c in options)
+          DropdownMenuItem<String?>(
+            value: c['id']?.toString(),
+            child: Text('${c['name']} (${c['code']})'),
+          ),
+      ],
+      onChanged: onChanged,
+    );
   }
 }
 

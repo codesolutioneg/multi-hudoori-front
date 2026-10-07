@@ -26,7 +26,8 @@ const Map<String, String> kRouteFeatureMap = {
   AppRoutes.hrHealthCertificates: 'hr_employees',
   AppRoutes.orgChart: 'hr_employees',
   AppRoutes.hrReports: 'hr_reports',
-  AppRoutes.requests: 'hr_requests',
+  // Resolved in isRouteEntitled: HR inbox vs employee self-service.
+  AppRoutes.requests: 'employee_app',
   // Settings stay available for HR managers — sections inside are gated.
 };
 
@@ -41,6 +42,9 @@ const Map<String, String> kMenuFeatureMap = {
   'my_attendance': 'employee_app',
   'my_schedule': 'employee_app',
   'my_advance_request': 'advances',
+  'my_requests': 'employee_app',
+  'my_payroll': 'payroll',
+  'hr_requests': 'hr_requests',
   'advance_requests': 'advances',
   'advances': 'advances',
   'deductions': 'deductions',
@@ -132,6 +136,11 @@ bool isFeatureEnabled(AuthState state, String featureKey) {
 
 /// Whether a UI entry that opens [route] should be shown.
 bool isRouteEntitled(AuthState state, String route) {
+  final path = route.split('?').first;
+  if (path == AppRoutes.requests || path.startsWith('${AppRoutes.requests}/')) {
+    return isFeatureEnabled(state, 'hr_requests') ||
+        isFeatureEnabled(state, 'employee_app');
+  }
   final feat = featureKeyForRoute(route);
   if (feat == null) return true;
   return isFeatureEnabled(state, feat);

@@ -201,16 +201,6 @@ GoRouter createRouter(AuthCubit auth) {
           !s.isPlatformAdmin) {
         return AppRoutes.accessDeniedRole();
       }
-      // Pure EMPLOYEE: attendance + schedule only (no requests/payslip writes or views).
-      final isPureEmployee = s.roles.isEmployee &&
-          !s.roles.isHrStaff &&
-          !s.roles.isBranchManager &&
-          !s.isPlatformAdmin;
-      if (loggedIn &&
-          isPureEmployee &&
-          (location == AppRoutes.requests || location == AppRoutes.myPayroll)) {
-        return AppRoutes.accessDeniedRole();
-      }
       // Plan entitlements: blocked modules show a clear page instead of a blank API error.
       if (loggedIn && !isAdminRoute) {
         final feat = featureKeyForRoute(location);
