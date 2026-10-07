@@ -435,7 +435,9 @@ String formatClock(AppLocalizations l10n, DateTime? t) {
   final h12 = t.hour % 12 == 0 ? 12 : t.hour % 12;
   final mm = t.minute.toString().padLeft(2, '0');
   final suffix = t.hour < 12 ? l10n.t('m.am') : l10n.t('m.pm');
-  return '$h12:$mm $suffix';
+  // LRI…PDI keeps the digits in one LTR run so ص/م stay on the reading side
+  // and ranges like "10:00 ص – 7:00 م" don't get reordered in RTL.
+  return '\u2066$h12:$mm\u2069 $suffix';
 }
 
 String formatDuration(AppLocalizations l10n, Duration d) {

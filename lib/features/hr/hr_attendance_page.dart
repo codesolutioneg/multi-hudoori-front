@@ -560,8 +560,7 @@ class _HrAttendancePageState extends State<HrAttendancePage> {
 
     Widget body;
     if (_loading && _records.isEmpty) {
-      body = SliverFillRemaining(
-        hasScrollBody: false,
+      body = SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.only(top: 40),
           child: Column(

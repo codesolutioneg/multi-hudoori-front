@@ -569,7 +569,6 @@ class _MySchedulePageState extends State<MySchedulePage> {
                           const SizedBox(width: 4),
                           Text(
                             '${formatClock(l10n, start)} – ${formatClock(l10n, end)}',
-                            textDirection: TextDirection.ltr,
                             style: MobileUi.text(12.5, weight: FontWeight.w700, color: const Color(0xFF475569)),
                           ),
                         ],

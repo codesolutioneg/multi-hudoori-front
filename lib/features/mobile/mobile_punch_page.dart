@@ -368,7 +368,6 @@ class _MobilePunchPageState extends State<MobilePunchPage>
             children: [
               Text(
                 formatClock(l10n, at),
-                textDirection: TextDirection.ltr,
                 style: MobileUi.text(15, weight: FontWeight.w800),
               ),
               if (at != null)

@@ -34,11 +34,17 @@ class _SwipeToPunchState extends State<SwipeToPunch>
   static const _pad = 6.0;
 
   double _progress = 0;
-  late final AnimationController _settle = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 280),
-  )..addListener(() => setState(() => _progress = _settleAnim.value));
+  late final AnimationController _settle;
   late Animation<double> _settleAnim = const AlwaysStoppedAnimation(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _settle = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    )..addListener(() => setState(() => _progress = _settleAnim.value));
+  }
 
   @override
   void didUpdateWidget(covariant SwipeToPunch oldWidget) {

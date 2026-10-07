@@ -344,7 +344,6 @@ class _MobileHomePageState extends State<MobileHomePage> {
               children: [
                 Text(
                   formatClock(l10n, DateTime.now()),
-                  textDirection: TextDirection.ltr,
                   style: const TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
@@ -1132,7 +1131,6 @@ class _HeroStat extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value,
-              textDirection: TextDirection.ltr,
               style: MobileUi.text(16, weight: FontWeight.w800, height: 1.15),
             ),
           ),
@@ -1207,7 +1205,6 @@ class _ActivityRow extends StatelessWidget {
             children: [
               Text(
                 formatClock(l10n, e.time),
-                textDirection: TextDirection.ltr,
                 style: MobileUi.text(15, weight: FontWeight.w800),
               ),
               const SizedBox(height: 2),
