@@ -12,6 +12,9 @@
 
 ## Daily log
 
+### 2026-10-07
+- **Auto**: Mobile request cycle UI — use `openCycle` from `/requests/my` for date defaults + picker bounds; employee create menu = leave/shift/attendance + advance (salary/certificate/loan create removed); loan tab → `/my/advance-request`; `MyPayrollPage` mobile cards + payslip; friendly errors `PERIOD_LOCKED` / `READ_ONLY` / `NO_GRID_COVERAGE`. `flutter analyze` clean on touched files. **MULTI**.
+
 ### 2026-10-05
 - **Auto**: Mobile matches web dashboard UX — drawer-only (removed bottom nav), same `/me` menus + `/hr` routes; Platform Admin gets web-only message; HR home → `/hr/dashboard` with entitlement-filtered KPIs/shortcuts. **MULTI**.
 - **Auto**: Settings always visible for HR managers (no longer gated by `advanced_permissions`); inside Settings hide Odoo/advances/payroll/tips/team sections by entitlement. Access-denied shows friendly feature name (not raw key). Backend menu map + client maps updated; rebuilt web + restarted backend/dashboard. **MULTI**.

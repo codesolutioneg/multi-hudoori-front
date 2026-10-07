@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
+import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
 import '../../core/utils/api_error_message.dart';
@@ -52,6 +54,20 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
 
   bool _isHr(AuthState auth) => auth.roles.isHrUser || auth.roles.isHrManager;
 
+  Map<String, dynamic>? get _openCycle {
+    final raw = _data['openCycle'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : null;
+  }
+
+  String? get _openCycleLabel {
+    final cycle = _openCycle;
+    if (cycle == null) return null;
+    final from = cycle['dateFrom']?.toString() ?? '';
+    final to = cycle['dateTo']?.toString() ?? '';
+    if (from.isEmpty || to.isEmpty) return null;
+    return context.t('requests.openCycle', {'from': from, 'to': to});
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -66,12 +82,13 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
   }
 
   Future<String?> _pickTypeMobile() {
+    // Employee create menu: leave / shift / attendance + advance (money path).
+    // Salary/certificate/loan create stay closed on the API (READ_ONLY).
     final types = <(String, String, IconData, Color)>[
       ('leave', context.t('req.leave'), Icons.beach_access_rounded, const Color(0xFF0D9488)),
       ('shift', context.t('req.shiftChange'), Icons.swap_horiz_rounded, MobileTone.violet),
-      ('salary', context.t('req.salaryRequest'), Icons.payments_rounded, MobileUi.primary),
-      ('certificate', context.t('req.certificate'), Icons.workspace_premium_rounded, const Color(0xFFEA580C)),
       ('attendance', context.t('req.attendanceEdit'), Icons.edit_calendar_rounded, MobileTone.info),
+      ('advance', context.t('req.advance'), Icons.savings_outlined, const Color(0xFF16A34A)),
     ];
     return showModalBottomSheet<String>(
       context: context,
@@ -101,9 +118,19 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Text(context.t('req.new'), style: MobileUi.text(18, weight: FontWeight.w800)),
               ),
+              if (_openCycleLabel != null) ...[
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    _openCycleLabel!,
+                    style: MobileUi.text(12.5, weight: FontWeight.w600, color: MobileUi.muted),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               LayoutBuilder(builder: (context, c) {
-                final w = c.maxWidth / 3;
+                final w = c.maxWidth / 2;
                 return Wrap(
                   children: [
                     for (final (id, label, icon, color) in types)
@@ -126,15 +153,24 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
     );
   }
 
+  Future<void> _openCreateForm(String type) async {
+    if (type == 'advance') {
+      if (!mounted) return;
+      await context.push(AppRoutes.myAdvanceRequest);
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => _RequestFormDialog(type: type, openCycle: _openCycle),
+    );
+    if (ok == true) await _load();
+  }
+
   Future<void> _openCreateMenu() async {
     if (isNativeMobile) {
       final type = await _pickTypeMobile();
       if (type == null || !mounted) return;
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (_) => _RequestFormDialog(type: type),
-      );
-      if (ok == true) await _load();
+      await _openCreateForm(type);
       return;
     }
     final type = await showDialog<String>(
@@ -144,25 +180,22 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(leading: Icon(Icons.beach_access), title: Text(context.t('req.leave')), onTap: () => Navigator.pop(ctx, 'leave')),
-            // «قرض» is gone from this menu: money on the salary now goes through
-            // «طلب سلفة», which checks entitlement and lands in payroll. Existing
-            // loan rows still show in their tab so they can be closed out.
-            ListTile(leading: Icon(Icons.schedule), title: Text(context.t('req.shiftChange')), onTap: () => Navigator.pop(ctx, 'shift')),
-            ListTile(leading: Icon(Icons.payments), title: Text(context.t('req.salaryRequest')), onTap: () => Navigator.pop(ctx, 'salary')),
-            ListTile(leading: Icon(Icons.description), title: Text(context.t('req.certificate')), onTap: () => Navigator.pop(ctx, 'certificate')),
-            ListTile(leading: Icon(Icons.edit_calendar), title: Text(context.t('req.attendanceEdit')), onTap: () => Navigator.pop(ctx, 'attendance')),
+            if (_openCycleLabel != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(_openCycleLabel!, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              ),
+            ListTile(leading: const Icon(Icons.beach_access), title: Text(context.t('req.leave')), onTap: () => Navigator.pop(ctx, 'leave')),
+            ListTile(leading: const Icon(Icons.schedule), title: Text(context.t('req.shiftChange')), onTap: () => Navigator.pop(ctx, 'shift')),
+            ListTile(leading: const Icon(Icons.edit_calendar), title: Text(context.t('req.attendanceEdit')), onTap: () => Navigator.pop(ctx, 'attendance')),
+            // Money advances go through «طلب سلفة»; legacy loan create is READ_ONLY.
+            ListTile(leading: const Icon(Icons.savings_outlined), title: Text(context.t('req.advance')), onTap: () => Navigator.pop(ctx, 'advance')),
           ],
         ),
       ),
     );
     if (type == null || !mounted) return;
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => _RequestFormDialog(type: type),
-    );
-    if (ok == true) await _load();
+    await _openCreateForm(type);
   }
 
   Future<void> _approve(String kind, Map<String, dynamic> item) async {
@@ -213,6 +246,10 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
       ),
     );
     if (ok != true) {
+      reasonCtrl.dispose();
+      return;
+    }
+    if (!mounted) {
       reasonCtrl.dispose();
       return;
     }
@@ -312,7 +349,9 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
           padding: const EdgeInsets.all(AppDimensions.spaceMd),
           child: PageHeader(
             title: context.t('requests.title'),
-            subtitle: _hrReview ? context.t('requests.subtitle') : context.t('requests.mySubtitle'),
+            subtitle: _hrReview
+                ? context.t('requests.subtitle')
+                : (_openCycleLabel ?? context.t('requests.mySubtitle')),
             icon: Icons.assignment_outlined,
             actions: [
               IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
@@ -439,6 +478,32 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
             ],
           ),
         ),
+        if (_openCycleLabel != null) ...[
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE6EBF3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.date_range_rounded, size: 18, color: MobileUi.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _openCycleLabel!,
+                      style: MobileUi.text(12.5, weight: FontWeight.w700, color: MobileUi.ink),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         AnimatedBuilder(
           animation: _tabs,
@@ -506,10 +571,26 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
 
   Widget _mobileList(_ReqType t) {
     if (t.items.isEmpty) {
+      final isLoanTab = t.kind == 'loan';
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
         children: [
-          MobileEmptyState(message: context.t('requests.empty'), icon: t.icon),
+          MobileEmptyState(
+            message: isLoanTab ? context.t('requests.loanLegacyHint') : context.t('requests.empty'),
+            icon: t.icon,
+          ),
+          if (isLoanTab && !_hrReview) ...[
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: () => context.push(AppRoutes.myAdvanceRequest),
+              icon: const Icon(Icons.savings_outlined, size: 20),
+              label: Text(context.t('advReq.myTitle')),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
         ],
       );
     }
@@ -670,6 +751,25 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
 
   Widget _list(String kind, List<Map<String, dynamic>> items, String Function(Map<String, dynamic>) subtitle) {
     if (items.isEmpty) {
+      if (kind == 'loan' && !_hrReview) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimensions.spaceMd),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(context.t('requests.loanLegacyHint'), textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => context.push(AppRoutes.myAdvanceRequest),
+                  icon: const Icon(Icons.savings_outlined, size: 18),
+                  label: Text(context.t('advReq.myTitle')),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return Center(
         child: Text(context.t('requests.empty')),
       );
@@ -731,8 +831,9 @@ class _ReqType {
 }
 
 class _RequestFormDialog extends StatefulWidget {
-  const _RequestFormDialog({required this.type});
+  const _RequestFormDialog({required this.type, this.openCycle});
   final String type;
+  final Map<String, dynamic>? openCycle;
 
   @override
   State<_RequestFormDialog> createState() => _RequestFormDialogState();
@@ -744,15 +845,39 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
   final _months = TextEditingController(text: '3');
   String _leaveType = 'annual';
   String? _shiftId;
-  DateTime _from = DateTime.now();
-  DateTime _to = DateTime.now().add(const Duration(days: 1));
+  late DateTime _from;
+  late DateTime _to;
+  DateTime? _cycleFrom;
+  DateTime? _cycleTo;
   List<Map<String, dynamic>> _shifts = [];
   bool _loadingShifts = false;
   bool _saving = false;
 
+  static DateTime? _parseYmd(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final parsed = DateTime.tryParse(raw.length == 10 ? '${raw}T00:00:00' : raw);
+    if (parsed == null) return null;
+    return DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
+  static DateTime _clampDay(DateTime day, DateTime? min, DateTime? max) {
+    var d = DateTime(day.year, day.month, day.day);
+    if (min != null && d.isBefore(min)) d = min;
+    if (max != null && d.isAfter(max)) d = max;
+    return d;
+  }
+
   @override
   void initState() {
     super.initState();
+    _cycleFrom = _parseYmd(widget.openCycle?['dateFrom']?.toString());
+    _cycleTo = _parseYmd(widget.openCycle?['dateTo']?.toString());
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    _from = _clampDay(today, _cycleFrom, _cycleTo);
+    var to = _from.add(const Duration(days: 1));
+    if (_cycleTo != null && to.isAfter(_cycleTo!)) to = _cycleTo!;
+    _to = to;
     if (widget.type == 'shift') _loadShifts();
   }
 
@@ -784,13 +909,25 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
   }
 
   Future<void> _pickDate(bool isFrom) async {
+    final first = _cycleFrom ?? DateTime(2020);
+    final last = _cycleTo ?? DateTime(2035);
+    final initial = _clampDay(isFrom ? _from : _to, first, last);
     final picked = await showDatePicker(
       context: context,
-      initialDate: isFrom ? _from : _to,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last.isBefore(first) ? first : last,
     );
-    if (picked != null) setState(() => isFrom ? _from = picked : _to = picked);
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _from = picked;
+        if (_to.isBefore(_from)) _to = _from;
+      } else {
+        _to = picked;
+        if (_from.isAfter(_to)) _from = _to;
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -861,6 +998,9 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final cycleHint = (_cycleFrom != null && _cycleTo != null)
+        ? context.t('requests.openCycle', {'from': _fmt(_cycleFrom!), 'to': _fmt(_cycleTo!)})
+        : null;
     return AlertDialog(
       title: Text(_title),
       content: SizedBox(
@@ -868,7 +1008,20 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (cycleHint != null) ...[
+                Text(
+                  cycleHint,
+                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  context.t('requests.openCycleHint'),
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 10),
+              ],
               if (widget.type == 'leave') ...[
                 ListPickerField<String>(
                   label: context.t('req.leaveType'),

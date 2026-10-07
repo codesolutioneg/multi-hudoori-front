@@ -21,7 +21,20 @@ String friendlyApiErrorL10n(AppLocalizations l10n, Object error) {
       case 'INVALID_TOKEN':
         return t('errors.sessionExpired');
       case 'ACCESS_DENIED':
+      case 'FORBIDDEN':
         return t('errors.accessDenied');
+      case 'READ_ONLY':
+        final msg = error.message.trim();
+        if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;
+        return t('errors.readOnly');
+      case 'PERIOD_LOCKED':
+        final msg = error.message.trim();
+        if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;
+        return t('errors.periodLocked');
+      case 'NO_GRID_COVERAGE':
+        final msg = error.message.trim();
+        if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;
+        return t('errors.noGridCoverage');
       case 'FEATURE_DISABLED':
         final msg = error.message.trim();
         if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;

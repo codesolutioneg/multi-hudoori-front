@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../core/di/injection.dart';
+import '../../core/platform/mobile_platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_dimensions.dart';
+import '../../core/utils/api_error_message.dart';
 import '../../core/utils/file_download.dart';
 import '../../core/utils/money_format.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
-
 import '../mobile/hudoori_loader.dart';
+import '../mobile/mobile_ui.dart';
+
 class MyPayrollPage extends StatefulWidget {
   const MyPayrollPage({super.key});
 
@@ -20,6 +23,7 @@ class MyPayrollPage extends StatefulWidget {
 class _MyPayrollPageState extends State<MyPayrollPage> {
   List<Map<String, dynamic>> _items = [];
   bool _loading = true;
+  Object? _error;
 
   @override
   void initState() {
@@ -28,12 +32,25 @@ class _MyPayrollPageState extends State<MyPayrollPage> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final items = await api.myPayroll();
-      if (mounted) setState(() { _items = items; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _items = items;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e;
+        });
+      }
     }
   }
 
@@ -74,12 +91,18 @@ class _MyPayrollPageState extends State<MyPayrollPage> {
         builder: (ctx) => _PayslipBreakdownDialog(detail: detail, lineId: lineId),
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyApiError(context, e))),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (isNativeMobile) return _buildMobile();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppDimensions.spaceMd),
       child: Column(
@@ -92,6 +115,8 @@ class _MyPayrollPageState extends State<MyPayrollPage> {
           const SizedBox(height: 16),
           if (_loading)
             const Center(child: HudooriLoader())
+          else if (_error != null)
+            SellixCard(child: Text(friendlyApiError(context, _error!)))
           else if (_items.isEmpty)
             SellixCard(child: Text(context.t('payroll.emptyMy')))
           else
@@ -116,6 +141,121 @@ class _MyPayrollPageState extends State<MyPayrollPage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMobile() {
+    return ColoredBox(
+      color: MobileUi.background,
+      child: RefreshIndicator(
+        color: MobileUi.primary,
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 48),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.t('payroll.myTitle'),
+                        style: MobileUi.text(22, weight: FontWeight.w800),
+                      ),
+                      Text(
+                        context.t('payroll.mySubtitle'),
+                        style: MobileUi.text(13, weight: FontWeight.w500, color: MobileUi.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh_rounded),
+                  color: MobileUi.primary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(48),
+                child: Center(child: HudooriLoader()),
+              )
+            else if (_error != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: MobileUi.card(),
+                child: Text(
+                  friendlyApiError(context, _error!),
+                  style: MobileUi.text(13, color: MobileTone.danger),
+                ),
+              )
+            else if (_items.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: MobileUi.card(),
+                child: Text(
+                  context.t('payroll.emptyMy'),
+                  textAlign: TextAlign.center,
+                  style: MobileUi.text(14, weight: FontWeight.w500, color: MobileUi.muted),
+                ),
+              )
+            else
+              for (final item in _items)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _openPayslip(item),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Ink(
+                        padding: const EdgeInsets.all(14),
+                        decoration: MobileUi.card(r: 20),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: MobileUi.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(Icons.payments_rounded, color: MobileUi.primary),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _payrollTitle(item),
+                                    style: MobileUi.text(15, weight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${_periodFrom(item)} → ${_periodTo(item)}',
+                                    style: MobileUi.text(12.5, weight: FontWeight.w500, color: MobileUi.muted),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              _fmtMoney(_netSalary(item)),
+                              style: MobileUi.text(15, weight: FontWeight.w800, color: MobileUi.primary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+          ],
+        ),
       ),
     );
   }
@@ -160,17 +300,20 @@ class _PayslipBreakdownDialog extends StatelessWidget {
   Future<void> _downloadPdf(BuildContext context) async {
     try {
       final r = await api.payrollPayslipPdf(lineId);
+      if (!context.mounted) return;
       final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
       final filename = r['filename']?.toString() ?? 'payslip.pdf';
       if (base64.isEmpty) throw Exception(context.t('set.emptyFile'));
       downloadBase64File(base64, filename, r['mimeType']?.toString() ?? 'application/pdf');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t('emp.downloaded', {'file': filename}))));
-      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t('emp.downloaded', {'file': filename}))),
+      );
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyApiError(context, e))),
+      );
     }
   }
 

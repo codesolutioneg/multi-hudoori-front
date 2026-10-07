@@ -26,7 +26,7 @@ const Map<String, String> kRouteFeatureMap = {
   AppRoutes.hrHealthCertificates: 'hr_employees',
   AppRoutes.orgChart: 'hr_employees',
   AppRoutes.hrReports: 'hr_reports',
-  AppRoutes.requests: 'hr_requests',
+  AppRoutes.requests: 'employee_app',
   // Settings stay available for HR managers — sections inside are gated.
 };
 
@@ -41,6 +41,8 @@ const Map<String, String> kMenuFeatureMap = {
   'my_attendance': 'employee_app',
   'my_schedule': 'employee_app',
   'my_advance_request': 'advances',
+  'my_requests': 'employee_app',
+  'my_payroll': 'payroll',
   'advance_requests': 'advances',
   'advances': 'advances',
   'deductions': 'deductions',
