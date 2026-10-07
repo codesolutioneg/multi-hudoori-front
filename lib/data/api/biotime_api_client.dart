@@ -918,12 +918,28 @@ class BioTimeApiClient {
     if (jobId == null || jobId.isEmpty) {
       throw BioTimeApiException(tr('api.noJobId'));
     }
-    await _waitForJob(jobId, onProgress: onProgress, maxSeconds: 1800);
-    return _unwrap(
+    final jobStatus = await _waitForJob(
+      jobId,
+      onProgress: onProgress,
+      maxSeconds: 1800,
+    );
+    final download = _unwrap(
       await _call('/api/biotime/employees/punch-report-export/download', {
         'jobId': jobId,
       }),
     );
+    final result = jobStatus['result'];
+    if (result is Map) {
+      final meta = Map<String, dynamic>.from(result);
+      if (meta['usedLocal'] == true) {
+        download['usedLocal'] = true;
+        final msg = meta['fallbackMessage']?.toString();
+        if (msg != null && msg.isNotEmpty) {
+          download['fallbackMessage'] = msg;
+        }
+      }
+    }
+    return download;
   }
 
   Future<Map<String, dynamic>> employeeGet(Object employeeId) async {

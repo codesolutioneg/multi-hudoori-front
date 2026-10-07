@@ -135,6 +135,7 @@ class AuthState extends Equatable {
     this.activeCompanyName,
     this.activeCompanyCode,
     this.memberships = const [],
+    this.pendingCompanyPicker = false,
   });
 
   final AuthStatus status;
@@ -153,6 +154,8 @@ class AuthState extends Equatable {
   final String? activeCompanyName;
   final String? activeCompanyCode;
   final List<CompanyMembership> memberships;
+  /// True after a fresh login when the user can pick among memberships.
+  final bool pendingCompanyPicker;
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
 
@@ -208,6 +211,7 @@ class AuthState extends Equatable {
     String? activeCompanyName,
     String? activeCompanyCode,
     List<CompanyMembership>? memberships,
+    bool? pendingCompanyPicker,
     bool clearError = false,
     bool clearProfileWarning = false,
     bool clearToken = false,
@@ -230,6 +234,7 @@ class AuthState extends Equatable {
       activeCompanyName: clearActiveCompany ? null : (activeCompanyName ?? this.activeCompanyName),
       activeCompanyCode: clearActiveCompany ? null : (activeCompanyCode ?? this.activeCompanyCode),
       memberships: memberships ?? this.memberships,
+      pendingCompanyPicker: pendingCompanyPicker ?? this.pendingCompanyPicker,
     );
   }
 
@@ -259,6 +264,7 @@ class AuthState extends Equatable {
         activeCompanyName,
         activeCompanyCode,
         memberships,
+        pendingCompanyPicker,
       ];
 }
 

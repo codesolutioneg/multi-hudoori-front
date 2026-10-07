@@ -224,9 +224,15 @@ class AuthCubit extends Cubit<AuthState> {
           activeCompanyName: loginCompanyName,
           activeCompanyCode: loginCompanyCode,
           memberships: loginMemberships,
+          pendingCompanyPicker: loginMemberships.length > 1,
         ));
       }
-      await _loadProfile(baseUrl: server, token: token, loginUser: loginUser);
+      await _loadProfile(
+        baseUrl: server,
+        token: token,
+        loginUser: loginUser,
+        offerCompanyPicker: loginMemberships.length > 1,
+      );
     } on BioTimeApiException catch (e) {
       emit(state.copyWith(status: AuthStatus.error, errorMessage: _mapLoginError(e, l10n)));
     } catch (e) {
@@ -267,6 +273,7 @@ class AuthCubit extends Cubit<AuthState> {
     required String baseUrl,
     required String token,
     dynamic loginUser,
+    bool offerCompanyPicker = false,
   }) async {
     _api.configure(baseUrl: baseUrl, token: token);
     BioTimeUser? user;
@@ -310,6 +317,8 @@ class AuthCubit extends Cubit<AuthState> {
         companyId = companyRaw['id']?.toString();
       }
       final memberships = AuthState.membershipsFrom(me['memberships']);
+      final resolvedMemberships =
+          memberships.isNotEmpty ? memberships : state.memberships;
       final activeId = me['activeCompanyId']?.toString() ?? companyId ?? state.activeCompanyId;
       if (activeId != null && activeId.isNotEmpty) {
         await _session.saveActiveCompanyId(activeId);
@@ -329,7 +338,9 @@ class AuthCubit extends Cubit<AuthState> {
         activeCompanyId: activeId,
         activeCompanyName: companyName ?? state.activeCompanyName,
         activeCompanyCode: companyCode ?? state.activeCompanyCode,
-        memberships: memberships.isNotEmpty ? memberships : state.memberships,
+        memberships: resolvedMemberships,
+        pendingCompanyPicker:
+            offerCompanyPicker && resolvedMemberships.length > 1,
         profileWarning: menus.length <= 1
             ? tr('auth.menusInsufficient')
             : null,
@@ -393,6 +404,11 @@ class AuthCubit extends Cubit<AuthState> {
       activeCompanyName: name,
       activeCompanyCode: code,
     ));
+  }
+
+  void clearPendingCompanyPicker() {
+    if (!state.pendingCompanyPicker) return;
+    emit(state.copyWith(pendingCompanyPicker: false));
   }
 
   Future<void> switchActiveCompany({
