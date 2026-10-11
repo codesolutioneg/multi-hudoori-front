@@ -2180,8 +2180,24 @@ abstract final class AppStrings {
     'settings.defaultEarlyCheckinHours': 'ساعات قبل بداية الشيفت التالي',
     'settings.defaultEarlyCheckinHoursHelp':
         'البصمة داخل هذه النافذة قبل بداية شيفت نهاري تُحتسب للشيفت الجديد، وليس للشيفت الليلي الذي قبله.',
+    'settings.punchReportMinLateCheckoutHours':
+        'حد أدنى ساعات بعد الشيفت (تقرير البصمة)',
+    'settings.punchReportMinLateCheckoutHoursHelp':
+        'في تقرير البصمة فقط: بصمة الانصراف لحد هذه الساعات بعد نهاية الشيفت تفضل على نفس اليوم (افتراضي 10 زي حضوري).',
+    'settings.punchReportMinEarlyCheckinHours':
+        'حد أدنى ساعات قبل الشيفت (تقرير البصمة)',
+    'settings.punchReportMinEarlyCheckinHoursHelp':
+        'في تقرير البصمة فقط: بصمة الحضور لحد هذه الساعات قبل بداية الشيفت تُحتسب لنفس اليوم (افتراضي 5).',
+    'settings.punchReportCalendarDayFloorHour':
+        'ساعة بداية يوم التقويم (تقرير البصمة)',
+    'settings.punchReportCalendarDayFloorHourHelp':
+        'أي بصمة من هذه الساعة فصاعدًا في يوم العمل تفضل على نفس اليوم (افتراضي 6 = السادسة صباحًا).',
     'settings.overnightWindowInvalid':
         'ساعات نافذة الشيفت الليلي يجب أن تكون من 0 إلى 12',
+    'settings.punchReportWindowInvalid':
+        'حدود تقرير البصمة (ساعات) يجب أن تكون من 0 إلى 24',
+    'settings.punchReportCalendarFloorInvalid':
+        'ساعة بداية يوم التقويم يجب أن تكون من 0 إلى 23',
     'settings.lateQuarterMax': 'حد خصم ربع اليوم (دقيقة)',
     'settings.lateQuarterMaxHelp': 'بعد السماح وحتى هذا الحد يُخصم ربع يوم',
     'settings.lateHalfMax': 'حد خصم نص اليوم (دقيقة)',
@@ -5212,8 +5228,24 @@ abstract final class AppStrings {
     'settings.defaultEarlyCheckinHours': 'Hours before next shift start',
     'settings.defaultEarlyCheckinHoursHelp':
         'Punches inside this early window for a day shift belong to the new shift, not the previous overnight.',
+    'settings.punchReportMinLateCheckoutHours':
+        'Min hours after shift (punch report)',
+    'settings.punchReportMinLateCheckoutHoursHelp':
+        'Punch report only: a checkout up to this many hours after shift end still closes that day (default 10, Hudoori parity).',
+    'settings.punchReportMinEarlyCheckinHours':
+        'Min hours before shift (punch report)',
+    'settings.punchReportMinEarlyCheckinHoursHelp':
+        'Punch report only: a check-in up to this many hours before shift start still counts for that day (default 5).',
+    'settings.punchReportCalendarDayFloorHour':
+        'Calendar-day floor hour (punch report)',
+    'settings.punchReportCalendarDayFloorHourHelp':
+        'Same-day punches from this hour onward stay on that work date (default 6 = 06:00).',
     'settings.overnightWindowInvalid':
         'Overnight window hours must be between 0 and 12',
+    'settings.punchReportWindowInvalid':
+        'Punch-report window hours must be between 0 and 24',
+    'settings.punchReportCalendarFloorInvalid':
+        'Calendar-day floor hour must be between 0 and 23',
     'settings.lateQuarterMax': 'Quarter-day threshold (minutes)',
     'settings.lateQuarterMaxHelp':
         'Above the grace and up to this costs a quarter day',

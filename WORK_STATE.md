@@ -13,6 +13,8 @@
 ## Daily log
 
 ### 2026-10-11
+- **Auto**: مودال تصدير تقرير البصمات — البحث يشمل المؤرشفين (`includeInactive`) + وسم «مؤرشف» في النتائج/الـ chips. **MULTI**.
+- **Auto**: إعدادات التأخير — 3 حقول لتقرير البصمة (حد أدنى late/early + ساعة يوم التقويم، افتراضي 10/5/6) + l10n؛ rebuild web deploy. **MULTI**.
 - **Auto**: كل رسائل SnackBar (نجاح/خطأ) → بوب أب عبر `PopupScaffoldMessenger` في `app.dart` + `appRootNavigatorKey`. **MULTI**.
 - **Auto**: شركات — عرض حصة الشركة الأم المتبقية عند إنشاء/تعديل فرع؛ نص يوضح أن مجموع حدود الفروع من حد الرئيسية. **MULTI**.
 - **Auto**: Deploy Multi web — إصلاح تكرار دوال في `shift_grid_list_page`؛ `build-dashboard.sh prod` + PM2 restart `hudoori-multi-dashboard`؛ `hr.hudoori` = 200. **MULTI**.

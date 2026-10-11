@@ -76,6 +76,9 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _latePermissionCapEnabled = true;
   final _defaultLateCheckoutHoursCtrl = TextEditingController(text: '4');
   final _defaultEarlyCheckinHoursCtrl = TextEditingController(text: '2');
+  final _punchReportMinLateCheckoutHoursCtrl = TextEditingController(text: '10');
+  final _punchReportMinEarlyCheckinHoursCtrl = TextEditingController(text: '5');
+  final _punchReportCalendarDayFloorHourCtrl = TextEditingController(text: '6');
   final _payrollMonthStartDayCtrl = TextEditingController(text: '26');
   bool _payrollFixedMonthDaysEnabled = false;
   final _payrollFixedMonthDaysCtrl = TextEditingController(text: '30');
@@ -112,6 +115,9 @@ class _SettingsPageState extends State<SettingsPage> {
     _latePermissionCapCtrl.dispose();
     _defaultLateCheckoutHoursCtrl.dispose();
     _defaultEarlyCheckinHoursCtrl.dispose();
+    _punchReportMinLateCheckoutHoursCtrl.dispose();
+    _punchReportMinEarlyCheckinHoursCtrl.dispose();
+    _punchReportCalendarDayFloorHourCtrl.dispose();
     _payrollMonthStartDayCtrl.dispose();
     _payrollFixedMonthDaysCtrl.dispose();
     _absentForgivenDaysCtrl.dispose();
@@ -211,6 +217,12 @@ class _SettingsPageState extends State<SettingsPage> {
               '${(config['defaultLateCheckoutHours'] as num?)?.toDouble() ?? 4}';
           _defaultEarlyCheckinHoursCtrl.text =
               '${(config['defaultEarlyCheckinHours'] as num?)?.toDouble() ?? 2}';
+          _punchReportMinLateCheckoutHoursCtrl.text =
+              '${(config['punchReportMinLateCheckoutHours'] as num?)?.toDouble() ?? 10}';
+          _punchReportMinEarlyCheckinHoursCtrl.text =
+              '${(config['punchReportMinEarlyCheckinHours'] as num?)?.toDouble() ?? 5}';
+          _punchReportCalendarDayFloorHourCtrl.text =
+              '${(config['punchReportCalendarDayFloorHour'] as num?)?.toInt() ?? 6}';
           _payrollMonthStartDayCtrl.text =
               '${(config['payrollMonthStartDay'] as num?)?.toInt() ?? 26}';
           _payrollFixedMonthDaysEnabled =
@@ -343,6 +355,34 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       return;
     }
+    final punchMinLateH = double.tryParse(
+      _punchReportMinLateCheckoutHoursCtrl.text.trim(),
+    );
+    final punchMinEarlyH = double.tryParse(
+      _punchReportMinEarlyCheckinHoursCtrl.text.trim(),
+    );
+    final punchFloorHour = int.tryParse(
+      _punchReportCalendarDayFloorHourCtrl.text.trim(),
+    );
+    if (punchMinLateH == null ||
+        punchMinEarlyH == null ||
+        punchMinLateH < 0 ||
+        punchMinLateH > 24 ||
+        punchMinEarlyH < 0 ||
+        punchMinEarlyH > 24) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t('settings.punchReportWindowInvalid'))),
+      );
+      return;
+    }
+    if (punchFloorHour == null || punchFloorHour < 0 || punchFloorHour > 23) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t('settings.punchReportCalendarFloorInvalid')),
+        ),
+      );
+      return;
+    }
 
     setState(() => _busy = true);
     try {
@@ -357,6 +397,9 @@ class _SettingsPageState extends State<SettingsPage> {
         'latePermissionCapEnabled': _latePermissionCapEnabled,
         'defaultLateCheckoutHours': lateCheckoutH,
         'defaultEarlyCheckinHours': earlyCheckinH,
+        'punchReportMinLateCheckoutHours': punchMinLateH,
+        'punchReportMinEarlyCheckinHours': punchMinEarlyH,
+        'punchReportCalendarDayFloorHour': punchFloorHour,
       });
       if (mounted) {
         setState(() {
@@ -1880,6 +1923,49 @@ class _SettingsPageState extends State<SettingsPage> {
                     decimal: true,
                   ),
                   controller: _defaultEarlyCheckinHoursCtrl,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: InputDecoration(
+                    labelText: context.t(
+                      'settings.punchReportMinLateCheckoutHours',
+                    ),
+                    helperText: context.t(
+                      'settings.punchReportMinLateCheckoutHoursHelp',
+                    ),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  controller: _punchReportMinLateCheckoutHoursCtrl,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: InputDecoration(
+                    labelText: context.t(
+                      'settings.punchReportMinEarlyCheckinHours',
+                    ),
+                    helperText: context.t(
+                      'settings.punchReportMinEarlyCheckinHoursHelp',
+                    ),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  controller: _punchReportMinEarlyCheckinHoursCtrl,
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  decoration: InputDecoration(
+                    labelText: context.t(
+                      'settings.punchReportCalendarDayFloorHour',
+                    ),
+                    helperText: context.t(
+                      'settings.punchReportCalendarDayFloorHourHelp',
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                  controller: _punchReportCalendarDayFloorHourCtrl,
                 ),
                 const SizedBox(height: 8),
                 TextField(

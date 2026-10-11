@@ -1999,7 +1999,7 @@ class _PunchReportExportDialogState extends State<_PunchReportExportDialog> {
       try {
         final page = await api.employeesList(
           search: q,
-          active: true,
+          includeInactive: true,
           limit: 40,
           offset: 0,
         );
@@ -2108,7 +2108,12 @@ class _PunchReportExportDialogState extends State<_PunchReportExportDialog> {
                                 m?['name']?.toString() ??
                                 m?['displayName']?.toString() ??
                                 id;
-                            return code.isNotEmpty ? '$code — $name' : name;
+                            final base =
+                                code.isNotEmpty ? '$code — $name' : name;
+                            final archived = m?['active'] == false;
+                            return archived
+                                ? '$base (${context.t('search.archived')})'
+                                : base;
                           }(), style: const TextStyle(fontSize: 12)),
                           onDeleted: () => setState(() {
                             _selectedIds.remove(id);
@@ -2135,11 +2140,15 @@ class _PunchReportExportDialogState extends State<_PunchReportExportDialog> {
                             emp['name']?.toString() ??
                             emp['displayName']?.toString() ??
                             '';
+                        final isArchived = emp['active'] == false;
+                        final label = code.isNotEmpty ? '$code — $name' : name;
                         return CheckboxListTile(
                           dense: true,
                           value: selected,
                           title: Text(
-                            code.isNotEmpty ? '$code — $name' : name,
+                            isArchived
+                                ? '$label (${context.t('search.archived')})'
+                                : label,
                             style: const TextStyle(fontSize: 13),
                           ),
                           onChanged: (v) {
