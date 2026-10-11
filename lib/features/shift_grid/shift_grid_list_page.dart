@@ -17,6 +17,7 @@ import '../../core/widgets/searchable_select_field.dart';
 import 'shift_grid_helpers.dart';
 import 'shift_grid_merge_dialog.dart';
 import 'monthly_reports_dialog.dart';
+import 'employee_grids_search_dialog.dart';
 import '../../core/widgets/status_badge.dart';
 import '../auth/auth_cubit.dart';
 import '../../l10n/l10n_extension.dart';
@@ -43,6 +44,7 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
   bool _exporting = false;
   int _offset = 0;
   final ScrollController _scrollCtrl = ScrollController();
+  final TextEditingController _empSearchCtrl = TextEditingController();
 
   /// Period keys currently expanded in the grouped list (all collapsed by default).
   final Set<String> _expandedPeriods = {};
@@ -107,6 +109,7 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
   @override
   void dispose() {
     _scrollCtrl.dispose();
+    _empSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -215,6 +218,42 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
       builder: (_) => const _CreateAllLocationsGridDialog(),
     );
     if (created == true) _load(reset: true);
+  }
+
+  /// Load every page, then export selected grids.
+  Future<void> _searchEmployeeGrids() async {
+    final query = _empSearchCtrl.text.trim();
+    if (query.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.t('grid.empSearch.tooShort'))),
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (_) => EmployeeGridsSearchDialog(query: query),
+    );
+  }
+
+  Widget _buildEmployeeSearch() {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: TextField(
+        controller: _empSearchCtrl,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => _searchEmployeeGrids(),
+        decoration: InputDecoration(
+          hintText: context.t('grid.empSearch.hint'),
+          prefixIcon: const Icon(Icons.person_search_outlined),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.search_rounded),
+            onPressed: _searchEmployeeGrids,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          isDense: true,
+        ),
+      ),
+    );
   }
 
   /// Load every page, then export selected grids.
@@ -356,6 +395,8 @@ class _ShiftGridListPageState extends State<ShiftGridListPage> {
               _buildHeader(),
               const SizedBox(height: 16),
               _buildLocationFilter(),
+              const SizedBox(height: 16),
+              _buildEmployeeSearch(),
               const SizedBox(height: 24),
               Skeletonizer(
                 enabled: _loading,

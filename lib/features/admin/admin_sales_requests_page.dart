@@ -25,7 +25,7 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
   Map<String, dynamic>? _analytics;
   bool _loading = true;
   String? _error;
-  String _filter = 'PENDING';
+  String _filter = '';
   final _searchCtrl = TextEditingController();
 
   @override
@@ -331,7 +331,10 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _copyRow(isAr ? 'الحالة' : 'Status', detail['status']?.toString() ?? ''),
+                  _copyRow(
+                    isAr ? 'الحالة' : 'Status',
+                    _statusLabel(detail['status']?.toString() ?? '', isAr),
+                  ),
                   _copyRow(isAr ? 'المعرف' : 'Code', detail['companyCode']?.toString() ?? ''),
                   _copyRow(isAr ? 'المسؤول' : 'Contact', detail['contactName']?.toString() ?? ''),
                   _copyRow(isAr ? 'البريد' : 'Email', detail['email']?.toString() ?? ''),
@@ -511,6 +514,24 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
     }
   }
 
+  String _statusLabel(String status, bool isAr) {
+    switch (status.toUpperCase()) {
+      case 'APPROVED':
+        return isAr ? 'موافق' : 'Approved';
+      case 'REJECTED':
+        return isAr ? 'مرفوض' : 'Rejected';
+      case 'PENDING':
+        return isAr ? 'قيد المراجعة' : 'Pending';
+      default:
+        return status;
+    }
+  }
+
+  String _filterChipLabel(String filterKey, bool isAr) {
+    if (filterKey.isEmpty) return isAr ? 'الكل' : 'All';
+    return _statusLabel(filterKey, isAr);
+  }
+
   Widget _copyRow(String label, String value, {bool emphasize = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -620,9 +641,9 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final s in ['PENDING', 'APPROVED', 'REJECTED', ''])
+              for (final s in ['', 'PENDING', 'APPROVED', 'REJECTED'])
                 ChoiceChip(
-                  label: Text(s.isEmpty ? (isAr ? 'الكل' : 'All') : s),
+                  label: Text(_filterChipLabel(s, isAr)),
                   selected: _filter == s,
                   onSelected: (_) {
                     setState(() => _filter = s);
@@ -662,7 +683,7 @@ class _AdminSalesRequestsPageState extends State<AdminSalesRequestsPage> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      status,
+                                      _statusLabel(status, isAr),
                                       style: TextStyle(
                                         color: _statusColor(status),
                                         fontWeight: FontWeight.w700,

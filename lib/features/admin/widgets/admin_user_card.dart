@@ -12,6 +12,7 @@ class AdminUserCard extends StatefulWidget {
     super.key,
     required this.user,
     required this.onCopyLogin,
+    this.companyCode,
     this.onCopyPassword,
     this.onResendEmail,
     this.onDeactivate,
@@ -20,6 +21,7 @@ class AdminUserCard extends StatefulWidget {
   });
 
   final Map<String, dynamic> user;
+  final String? companyCode;
   final VoidCallback onCopyLogin;
   final VoidCallback? onCopyPassword;
   final VoidCallback? onResendEmail;
@@ -97,6 +99,15 @@ class _AdminUserCardState extends State<AdminUserCard> {
                       ],
                     ),
                     const Gap(8),
+                    if (widget.companyCode != null && widget.companyCode!.trim().isNotEmpty) ...[
+                      _CredentialRow(
+                        icon: Icons.business_outlined,
+                        label: context.t('admin.companyCode'),
+                        value: widget.companyCode!.trim(),
+                        obscure: false,
+                      ),
+                      const Gap(4),
+                    ],
                     _CredentialRow(
                       icon: Icons.login_rounded,
                       label: context.t('admin.login'),

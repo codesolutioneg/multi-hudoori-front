@@ -24,6 +24,7 @@ import 'shift_grid_helpers.dart';
 import 'shift_grid_import_untracked_panel.dart';
 import 'shift_grid_manual_ot_panel.dart';
 import 'shift_grid_setup_panel.dart';
+import '../advances/long_advance_archive_warning.dart';
 
 class ShiftGridDetailPage extends StatefulWidget {
   const ShiftGridDetailPage({super.key, required this.gridId});
@@ -967,6 +968,9 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
     try {
       final r = await fn();
       if (r['grid'] is Map) _grid = Map<String, dynamic>.from(r['grid'] as Map);
+      if (mounted) {
+        showLongAdvanceWarningsFromResponse(context, _snack, response: r);
+      }
       if (reload)
         await _load(reset: true);
       else if (mounted)
@@ -1095,6 +1099,9 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
         applyShiftGridCellUpdate(cell, r, shifts: _shifts);
         cells[date] = cell;
       });
+      if (mounted) {
+        showLongAdvanceWarningsFromResponse(context, _snack, response: r);
+      }
     } catch (e) {
       _snack(e.toString());
     }

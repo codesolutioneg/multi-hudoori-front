@@ -159,6 +159,51 @@ class BioTimeApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> pushNotificationsBroadcast({
+    required String title,
+    required String body,
+    String? imageUrl,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/notifications/broadcast', {
+        'title': title,
+        'body': body,
+        if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> pushNotificationsSend({
+    required String title,
+    required String body,
+    List<String>? employeeIds,
+    List<String>? userIds,
+    String? imageUrl,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/notifications/send', {
+        'title': title,
+        'body': body,
+        if (employeeIds != null && employeeIds.isNotEmpty)
+          'employeeIds': employeeIds,
+        if (userIds != null && userIds.isNotEmpty) 'userIds': userIds,
+        if (imageUrl != null && imageUrl.isNotEmpty) 'imageUrl': imageUrl,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> pushNotificationsAdminList({
+    int limit = 40,
+    int offset = 0,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/notifications/admin-list', {
+        'limit': limit,
+        'offset': offset,
+      }),
+    );
+  }
+
   Future<Map<String, dynamic>> absencesList() async {
     return _unwrap(await _call('/api/biotime/absences/list', {}));
   }
@@ -271,6 +316,13 @@ class BioTimeApiClient {
       hasMore: data['hasMore'] == true,
       offset: (data['offset'] as num?)?.toInt() ?? offset,
     );
+  }
+
+  Future<List<Map<String, dynamic>>> shiftGridSearchEmployee(String query) async {
+    final data = _unwrap(
+      await _call('/api/biotime/shift-grid/search-employee', {'query': query}),
+    );
+    return _listFrom(data['employees']);
   }
 
   Future<Map<String, dynamic>> shiftGridGet(
@@ -918,12 +970,28 @@ class BioTimeApiClient {
     if (jobId == null || jobId.isEmpty) {
       throw BioTimeApiException(tr('api.noJobId'));
     }
-    await _waitForJob(jobId, onProgress: onProgress, maxSeconds: 1800);
-    return _unwrap(
+    final jobStatus = await _waitForJob(
+      jobId,
+      onProgress: onProgress,
+      maxSeconds: 1800,
+    );
+    final download = _unwrap(
       await _call('/api/biotime/employees/punch-report-export/download', {
         'jobId': jobId,
       }),
     );
+    final result = jobStatus['result'];
+    if (result is Map) {
+      final meta = Map<String, dynamic>.from(result);
+      if (meta['usedLocal'] == true) {
+        download['usedLocal'] = true;
+        final msg = meta['fallbackMessage']?.toString();
+        if (msg != null && msg.isNotEmpty) {
+          download['fallbackMessage'] = msg;
+        }
+      }
+    }
+    return download;
   }
 
   Future<Map<String, dynamic>> employeeGet(Object employeeId) async {
@@ -1392,10 +1460,12 @@ class BioTimeApiClient {
   Future<Map<String, dynamic>> employeeCreate(
     Map<String, dynamic> fields, {
     bool pushToBiotime = false,
+    bool confirmTakeArchivedCode = false,
   }) async {
     final data = _unwrap(
       await _call('/api/biotime/employees/create', {
         'pushToBiotime': pushToBiotime,
+        if (confirmTakeArchivedCode) 'confirmTakeArchivedCode': true,
         ...fields,
       }),
     );
@@ -1406,15 +1476,21 @@ class BioTimeApiClient {
     Object employeeId,
     Map<String, dynamic> fields, {
     bool pushToBiotime = false,
+    bool confirmTakeArchivedCode = false,
   }) async {
     final data = _unwrap(
       await _call('/api/biotime/employees/update', {
         'employeeId': employeeId,
         'pushToBiotime': pushToBiotime,
+        if (confirmTakeArchivedCode) 'confirmTakeArchivedCode': true,
         ...fields,
       }),
     );
-    return Map<String, dynamic>.from(data['employee'] as Map? ?? {});
+    final employee = Map<String, dynamic>.from(data['employee'] as Map? ?? {});
+    if (data['longAdvanceWarning'] != null) {
+      employee['longAdvanceWarning'] = data['longAdvanceWarning'];
+    }
+    return employee;
   }
 
   Future<Map<String, dynamic>> employeeDelete(Object employeeId) async {
@@ -1423,12 +1499,20 @@ class BioTimeApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> employeeArchivePreview(Object employeeId) async {
+    return _unwrap(
+      await _call('/api/biotime/employees/archive-preview', {
+        'employeeId': employeeId,
+      }),
+    );
+  }
+
   Future<Map<String, dynamic>> employeeArchive(
     Object employeeId,
     String reason, {
     DateTime? archivedAt,
   }) async {
-    final data = _unwrap(
+    return _unwrap(
       await _call('/api/biotime/employees/archive', {
         'employeeId': employeeId,
         'reason': reason,
@@ -1436,7 +1520,6 @@ class BioTimeApiClient {
           'archivedAt': archivedAt.toUtc().toIso8601String(),
       }),
     );
-    return Map<String, dynamic>.from(data['employee'] as Map? ?? {});
   }
 
   Future<Map<String, dynamic>> employeeRestore(Object employeeId) async {
@@ -1444,6 +1527,22 @@ class BioTimeApiClient {
       await _call('/api/biotime/employees/restore', {'employeeId': employeeId}),
     );
     return Map<String, dynamic>.from(data['employee'] as Map? ?? {});
+  }
+
+  Future<Map<String, dynamic>> employeesBulkRestoreExportXlsx() async {
+    return _unwrap(
+      await _call('/api/biotime/employees/bulk-restore/export-xlsx', const {}),
+    );
+  }
+
+  Future<Map<String, dynamic>> employeesBulkRestoreImportXlsx(
+    String base64,
+  ) async {
+    return _unwrap(
+      await _call('/api/biotime/employees/bulk-restore/import-xlsx', {
+        'base64': base64,
+      }),
+    );
   }
 
   Future<Map<String, dynamic>> employeePushBiotime(Object employeeId) async {
@@ -2164,6 +2263,32 @@ class BioTimeApiClient {
         'dateFrom': dateFrom,
         'dateTo': dateTo,
       }),
+    );
+  }
+
+  Future<Map<String, dynamic>> payrollPeriodPayrollXlsxExportZip({
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/payroll/period/payroll-xlsx/export-zip', {
+        'dateFrom': dateFrom,
+        'dateTo': dateTo,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> payrollPeriodPayslipsExportXlsx({
+    required String dateFrom,
+    required String dateTo,
+    required List<Map<String, String>> selections,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/payroll/period/payslips/export-xlsx', {
+        'dateFrom': dateFrom,
+        'dateTo': dateTo,
+        'selections': selections,
+      }, timeout: const Duration(seconds: 180)),
     );
   }
 
@@ -3486,6 +3611,18 @@ class BioTimeApiClient {
       await _call('/api/admin/users/reset-password', {
         'userId': userId,
         if (password != null && password.isNotEmpty) 'password': password,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> adminUserSetPassword({
+    required Object userId,
+    required String password,
+  }) async {
+    return _unwrap(
+      await _call('/api/admin/users/set-password', {
+        'userId': userId,
+        'password': password,
       }),
     );
   }

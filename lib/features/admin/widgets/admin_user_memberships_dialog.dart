@@ -13,10 +13,16 @@ Future<void> showAdminUserMembershipsDialog(
   final isAr = context.l10n.isAr;
   final userId = user['id']?.toString() ?? '';
   if (userId.isEmpty) return;
+  final homeCompanyId = user['companyId']?.toString() ?? '';
 
   await showDialog<void>(
     context: context,
-    builder: (ctx) => _MembershipsDialog(userId: userId, userName: user['name']?.toString() ?? '', isAr: isAr),
+    builder: (ctx) => _MembershipsDialog(
+      userId: userId,
+      userName: user['name']?.toString() ?? '',
+      homeCompanyId: homeCompanyId,
+      isAr: isAr,
+    ),
   );
 }
 
@@ -24,11 +30,13 @@ class _MembershipsDialog extends StatefulWidget {
   const _MembershipsDialog({
     required this.userId,
     required this.userName,
+    required this.homeCompanyId,
     required this.isAr,
   });
 
   final String userId;
   final String userName;
+  final String homeCompanyId;
   final bool isAr;
 
   @override
@@ -80,12 +88,91 @@ class _MembershipsDialogState extends State<_MembershipsDialog> {
     }
   }
 
-  Future<void> _addCompany() async {
+  bool _isChildUnderHome(String companyId) {
+    if (widget.homeCompanyId.isEmpty) return false;
+    final byId = {
+      for (final c in _companies) c['id']?.toString() ?? '': c,
+    };
+    var cur = companyId;
+    for (var i = 0; i < 32; i++) {
+      final row = byId[cur];
+      if (row == null) return false;
+      final parentId = row['parentCompanyId']?.toString();
+      if (parentId == null || parentId.isEmpty) return false;
+      if (parentId == widget.homeCompanyId) return true;
+      cur = parentId;
+    }
+    return false;
+  }
+
+  List<Map<String, dynamic>> _linkableChildCompanies() {
     final linked = _items.map((e) => e['companyId']?.toString()).toSet();
-    final available = _companies.where((c) => !linked.contains(c['id']?.toString())).toList();
+    return _companies.where((c) {
+      final id = c['id']?.toString() ?? '';
+      if (id.isEmpty || id == widget.homeCompanyId) return false;
+      final parentId = c['parentCompanyId']?.toString();
+      if (parentId == null || parentId.isEmpty) return false;
+      if (linked.contains(id)) return false;
+      return _isChildUnderHome(id);
+    }).toList()
+      ..sort((a, b) => (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? ''));
+  }
+
+  String _childLabel(Map<String, dynamic> c) {
+    final parent = c['parentCompany'];
+    if (parent is Map) {
+      final pn = parent['name']?.toString();
+      if (pn != null && pn.isNotEmpty) {
+        return '${c['name']} (${c['code']}) — ${widget.isAr ? 'تابعة لـ' : 'under'} $pn';
+      }
+    }
+    return '${c['name']} (${c['code']})';
+  }
+
+  Future<void> _addCompany() async {
+    if (widget.homeCompanyId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isAr
+                ? 'المستخدم بدون شركة منزل — أنشئه على الشركة الرئيسية أولاً'
+                : 'User has no home company',
+          ),
+        ),
+      );
+      return;
+    }
+
+    Map<String, dynamic>? home;
+    for (final c in _companies) {
+      if (c['id']?.toString() == widget.homeCompanyId) {
+        home = c;
+        break;
+      }
+    }
+    if (home != null && home['parentCompanyId']?.toString().isNotEmpty == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isAr
+                ? 'ضع HR على الشركة الرئيسية (بدون شركة أم) ثم اربط الفروع'
+                : 'Move HR to the parent company first, then link branches',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final available = _linkableChildCompanies();
     if (available.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.isAr ? 'لا شركات إضافية' : 'No more companies')),
+        SnackBar(
+          content: Text(
+            widget.isAr
+                ? 'لا فروع متاحة تحت الشركة الرئيسية لهذا المستخدم'
+                : 'No branch companies available under this parent',
+          ),
+        ),
       );
       return;
     }
@@ -94,17 +181,31 @@ class _MembershipsDialogState extends State<_MembershipsDialog> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
-          title: Text(widget.isAr ? 'ربط شركة' : 'Link company'),
-          content: DropdownButtonFormField<String>(
-            value: picked,
-            items: [
-              for (final c in available)
-                DropdownMenuItem(
-                  value: c['id']?.toString(),
-                  child: Text('${c['name']} (${c['code']})'),
-                ),
+          title: Text(widget.isAr ? 'ربط شركة فرعية' : 'Link branch company'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.isAr
+                    ? 'يظهر الفروع فقط (شركات لها شركة رئيسية).'
+                    : 'Only branch companies (with a parent) are listed.',
+                style: AppThemeV2.caption,
+              ),
+              const Gap(12),
+              DropdownButtonFormField<String>(
+                value: picked,
+                isExpanded: true,
+                items: [
+                  for (final c in available)
+                    DropdownMenuItem(
+                      value: c['id']?.toString(),
+                      child: Text(_childLabel(c)),
+                    ),
+                ],
+                onChanged: (v) => setLocal(() => picked = v),
+              ),
             ],
-            onChanged: (v) => setLocal(() => picked = v),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(widget.isAr ? 'إلغاء' : 'Cancel')),
@@ -125,6 +226,7 @@ class _MembershipsDialogState extends State<_MembershipsDialog> {
   }
 
   Future<void> _remove(String companyId, String label) async {
+    if (companyId == widget.homeCompanyId) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -149,6 +251,14 @@ class _MembershipsDialogState extends State<_MembershipsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    String? homeName;
+    for (final c in _companies) {
+      if (c['id']?.toString() == widget.homeCompanyId) {
+        homeName = c['name']?.toString();
+        break;
+      }
+    }
+
     return AlertDialog(
       title: Text(widget.isAr ? 'عضويات — ${widget.userName}' : 'Memberships — ${widget.userName}'),
       content: SizedBox(
@@ -161,18 +271,26 @@ class _MembershipsDialogState extends State<_MembershipsDialog> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (homeName != null)
+                        Text(
+                          widget.isAr ? 'الشركة المنزل: $homeName' : 'Home company: $homeName',
+                          style: AppThemeV2.caption.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      const Gap(8),
                       for (final m in _items)
                         ListTile(
                           dense: true,
                           title: Text(m['companyName']?.toString() ?? ''),
                           subtitle: Text('${m['companyCode']} · ${m['role']}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.link_off_rounded),
-                            onPressed: () => _remove(
-                              m['companyId']?.toString() ?? '',
-                              m['companyName']?.toString() ?? '',
-                            ),
-                          ),
+                          trailing: m['companyId']?.toString() == widget.homeCompanyId
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.link_off_rounded),
+                                  onPressed: () => _remove(
+                                    m['companyId']?.toString() ?? '',
+                                    m['companyName']?.toString() ?? '',
+                                  ),
+                                ),
                         ),
                       if (_items.isEmpty) Text(widget.isAr ? 'لا عضويات' : 'No memberships'),
                     ],
@@ -183,7 +301,7 @@ class _MembershipsDialogState extends State<_MembershipsDialog> {
         FilledButton.icon(
           onPressed: _loading ? null : _addCompany,
           icon: const Icon(Icons.add_link_rounded),
-          label: Text(widget.isAr ? 'ربط شركة' : 'Link company'),
+          label: Text(widget.isAr ? 'ربط فرع' : 'Link branch'),
         ),
       ],
     );

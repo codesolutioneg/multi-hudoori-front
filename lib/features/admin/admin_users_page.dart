@@ -101,6 +101,80 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     return p;
   }
 
+  String _roleFilterLabel(String role) {
+    if (role == 'HR') return context.t('admin.filter.hrTeam');
+    return switch (role) {
+      'EMPLOYEE' => context.t('admin.role.employee'),
+      'HR_USER' => context.t('admin.role.hrUser'),
+      'HR_SUPERVISOR' => context.t('admin.role.hrSupervisor'),
+      'HR_MANAGER' => context.t('admin.role.hrManager'),
+      'BRANCH_MANAGER' => context.t('admin.role.branchManager'),
+      'DEVICE_MANAGER' => context.t('admin.role.deviceManager'),
+      _ => role,
+    };
+  }
+
+  Future<void> _setPassword(Map<String, dynamic> user) async {
+    final id = user['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final ctrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.l10n.isAr ? 'تعيين كلمة المرور' : 'Set password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ctrl,
+              obscureText: true,
+              decoration: InputDecoration(labelText: context.t('admin.password')),
+            ),
+            const Gap(8),
+            TextField(
+              controller: confirmCtrl,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: context.l10n.isAr ? 'تأكيد كلمة المرور' : 'Confirm password',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(context.t('common.cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(context.t('common.save'))),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final p1 = ctrl.text.trim();
+    final p2 = confirmCtrl.text.trim();
+    if (p1.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t('admin.passwordMin'))));
+      return;
+    }
+    if (p1 != p2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.isAr ? 'كلمتا المرور غير متطابقتين' : 'Passwords do not match')),
+      );
+      return;
+    }
+    try {
+      await api.adminUserSetPassword(userId: id, password: p1);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.isAr ? 'تم حفظ كلمة المرور — سجّل الدخول بها' : 'Password saved — use it to sign in'),
+        ),
+      );
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyApiError(context, e))));
+    }
+  }
+
   Future<void> _resetPassword(Map<String, dynamic> user) async {
     final id = user['id']?.toString();
     if (id == null || id.isEmpty) return;
@@ -176,10 +250,11 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     }
   }
 
-  void _showUserDetails(Map<String, dynamic> user) {
+  void _showUserDetails(Map<String, dynamic> user, {String? companyCode}) {
     final login = _userLogin(user);
     final password = _userPassword(user);
     var showPassword = false;
+    final code = companyCode?.trim() ?? '';
 
     showModalBottomSheet<void>(
       context: context,
@@ -213,6 +288,8 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                 ],
               ),
               const Gap(20),
+              if (code.isNotEmpty)
+                _DetailRow(label: context.t('admin.companyCode'), value: code),
               _DetailRow(
                 label: context.t('admin.login'),
                 value: login,
@@ -220,6 +297,16 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
               ),
               if (user['email'] != null && user['email'].toString().isNotEmpty && user['email'].toString() != login)
                 _DetailRow(label: context.t('admin.email'), value: user['email']?.toString() ?? ''),
+              if (password != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    context.l10n.isAr
+                        ? 'كلمة المرور المعروضة للنسخ — استخدم «تعيين كلمة المرور» لتفعيل دخول جديد.'
+                        : 'Shown password is for copy — use Set password to apply a login password.',
+                    style: AppThemeV2.caption,
+                  ),
+                ),
               _DetailRow(
                 label: context.t('admin.password'),
                 value: password == null
@@ -247,6 +334,15 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                 },
                 icon: const Icon(Icons.mark_email_unread_outlined, size: 18),
                 label: Text(context.t('admin.resendEmail')),
+              ),
+              const Gap(10),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _setPassword(user);
+                },
+                icon: const Icon(Icons.password_rounded, size: 18),
+                label: Text(context.l10n.isAr ? 'تعيين كلمة المرور' : 'Set password'),
               ),
               const Gap(10),
               Row(
@@ -300,7 +396,9 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
-    final companyName = context.watch<AuthCubit>().state.activeCompanyName;
+    final auth = context.watch<AuthCubit>().state;
+    final companyName = auth.activeCompanyName;
+    final companyCode = auth.activeCompanyCode;
 
     return BlocListener<AuthCubit, AuthState>(
       listenWhen: (a, b) => a.activeCompanyId != b.activeCompanyId,
@@ -312,7 +410,10 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
           PageHeader(
             title: context.t('admin.users'),
             subtitle: [
-              if (companyName != null && companyName.trim().isNotEmpty) companyName.trim(),
+              if (companyName != null && companyName.trim().isNotEmpty)
+                companyCode != null && companyCode.trim().isNotEmpty
+                    ? '${companyName.trim()} (${companyCode.trim()})'
+                    : companyName.trim(),
               context.t('admin.usersSubtitle', {
                 'total': _users.length,
                 'active': _users.where((u) => u['active'] != false).length,
@@ -371,13 +472,13 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                       onTap: () => setState(() => _roleFilter = null),
                     ),
                     _FilterChip(
-                      label: 'HR',
+                      label: _roleFilterLabel('HR'),
                       selected: _roleFilter == 'HR',
                       onTap: () => setState(() => _roleFilter = _roleFilter == 'HR' ? null : 'HR'),
                     ),
                     for (final role in ['EMPLOYEE', 'HR_USER', 'HR_SUPERVISOR', 'HR_MANAGER', 'BRANCH_MANAGER', 'DEVICE_MANAGER'])
                       _FilterChip(
-                        label: role,
+                        label: _roleFilterLabel(role),
                         selected: _roleFilter == role,
                         onTap: () => setState(() => _roleFilter = _roleFilter == role ? null : role),
                       ),
@@ -425,13 +526,14 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: AdminUserCard(
                   user: u,
+                  companyCode: companyCode,
                   onCopyLogin: () => _copyLogin(_userLogin(u)),
                   onCopyPassword: _userPassword(u) == null
                       ? null
                       : () => _copyText(_userPassword(u)!, context.t('admin.password')),
                   onResendEmail: u['active'] == false ? null : () => _resetPassword(u),
                   onDeactivate: u['active'] == false ? null : () => _confirmDeactivate(u),
-                  onTap: () => _showUserDetails(u),
+                  onTap: () => _showUserDetails(u, companyCode: companyCode),
                   onManageMemberships: () => showAdminUserMembershipsDialog(context, user: u),
                 ),
               ),

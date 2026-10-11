@@ -24,6 +24,7 @@ import '../../features/hr/hr_dashboard_page.dart';
 import '../../features/hr/hr_attendance_page.dart';
 import '../../features/hr/overtime_page.dart';
 import '../../features/hr/settings_page.dart';
+import '../../features/hr/push_notifications_page.dart';
 import '../../features/requests/requests_page.dart';
 import '../../features/advances/advance_loan_import_page.dart';
 import '../../features/advances/advance_requests_queue_page.dart';
@@ -52,6 +53,9 @@ import '../../features/common/access_denied_page.dart';
 import '../../features/shell/biotime_shell.dart';
 import '../utils/feature_entitlements.dart';
 
+/// Root navigator for app-wide dialogs (e.g. snackbar → popup bridge).
+final GlobalKey<NavigatorState> appRootNavigatorKey = GlobalKey<NavigatorState>();
+
 abstract final class AppRoutes {
   static const splash = '/splash';
   static const signIn = '/sign-in';
@@ -67,6 +71,7 @@ abstract final class AppRoutes {
   static const adminPlans = '/admin/plans';
   static const adminUsers = '/admin/users';
   static const adminCreateUser = '/admin/users/create';
+  static const adminPushNotifications = '/admin/push-notifications';
   static const adminAuditAccess = '/admin/audit-access';
   static const adminAssistantAccess = '/admin/assistant-access';
   static const adminEmployeeDeleteAccess = '/admin/employee-delete-access';
@@ -93,6 +98,7 @@ abstract final class AppRoutes {
   static const hrTipImport = '/hr/tips/import';
   static const hrPayroll = '/hr/payroll';
   static const hrSettings = '/hr/settings';
+  static const hrPushNotifications = '/hr/push-notifications';
   static const hrHealthCertificates = '/hr/health-certificates';
   static const hrReports = '/hr/reports';
   static const hrAudit = '/hr/audit';
@@ -111,6 +117,7 @@ abstract final class AppRoutes {
 
 GoRouter createRouter(AuthCubit auth) {
   return GoRouter(
+    navigatorKey: appRootNavigatorKey,
     initialLocation: AppRoutes.splash,
     refreshListenable: _AuthRefresh(auth),
     redirect: (context, state) {
@@ -243,6 +250,11 @@ GoRouter createRouter(AuthCubit auth) {
             path: AppRoutes.adminCompanies,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: AdminCompaniesPage()),
+          ),
+          GoRoute(
+            path: AppRoutes.adminPushNotifications,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: PushNotificationsPage()),
           ),
           GoRoute(
             path: AppRoutes.adminSalesRequests,
@@ -463,6 +475,11 @@ GoRouter createRouter(AuthCubit auth) {
             path: AppRoutes.hrSettings,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: SettingsPage()),
+          ),
+          GoRoute(
+            path: AppRoutes.hrPushNotifications,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: PushNotificationsPage()),
           ),
           GoRoute(
             path: AppRoutes.hrHealthCertificates,

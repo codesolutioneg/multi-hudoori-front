@@ -30,6 +30,7 @@ class AdminNavItem {
 const _adminNavItemDefs = [
   (id: 'dashboard', key: 'admin.shell.dashboard', icon: Icons.admin_panel_settings_outlined, route: AppRoutes.adminDashboard),
   (id: 'companies', key: 'admin.companies', icon: Icons.apartment_outlined, route: AppRoutes.adminCompanies),
+  (id: 'push_notifications', key: 'admin.pushNotifications', icon: Icons.notifications_active_outlined, route: AppRoutes.adminPushNotifications),
   (id: 'sales_requests', key: 'admin.salesRequests', icon: Icons.request_quote_outlined, route: AppRoutes.adminSalesRequests),
   (id: 'plans', key: 'admin.plans', icon: Icons.local_offer_outlined, route: AppRoutes.adminPlans),
   (id: 'users', key: 'admin.users', icon: Icons.people_outline_rounded, route: AppRoutes.adminUsers),

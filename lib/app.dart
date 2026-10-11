@@ -12,6 +12,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/app_theme_v2.dart';
 import 'core/theme/app_typography.dart';
 import 'core/utils/web_splash.dart';
+import 'core/widgets/popup_scaffold_messenger.dart';
 import 'features/auth/auth_cubit.dart';
 import 'features/auth/auth_state.dart';
 import 'l10n/app_localizations.dart';
@@ -76,6 +77,8 @@ class _HudooriAppState extends State<HudooriApp> {
                 if (isNativeMobile) {
                   content = SafeArea(bottom: false, child: content);
                 }
+                // Route all SnackBars (success/error) through modal popups.
+                content = PopupScaffoldMessenger(child: content);
                 return Directionality(
                   textDirection: isAr ? TextDirection.rtl : TextDirection.ltr,
                   child: content,

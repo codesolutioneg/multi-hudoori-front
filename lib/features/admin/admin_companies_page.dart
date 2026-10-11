@@ -102,6 +102,13 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
                   isAr: isAr,
                   onChanged: (v) => setLocal(() => parentCompanyId = v),
                 ),
+                if (parentCompanyId != null && _poolForParent(parentCompanyId) != null) ...[
+                  const Gap(8),
+                  Text(
+                    _parentPoolHint(_poolForParent(parentCompanyId)!, isAr),
+                    style: AppThemeV2.caption.copyWith(color: AppThemeV2.primary),
+                  ),
+                ],
                 const Gap(16),
                 Align(
                   alignment: AlignmentDirectional.centerStart,
@@ -271,6 +278,8 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
     if (id.isEmpty) return;
     final isAr = context.l10n.isAr;
     final quota = _quotaOf(c);
+    final parentId = c['parentCompanyId']?.toString();
+    final parentPool = _parentPoolOf(c) ?? _poolForParent(parentId, excludeCompanyId: id);
     final maxEmployeesCtrl = TextEditingController(
       text: quota.employeesMax?.toString() ?? '',
     );
@@ -291,11 +300,18 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
               Text(
                 isAr
                     ? 'المستخدم حالياً: ${quota.employeesUsed} موظف · ${quota.usersUsed} مستخدم. '
-                        'اترك الحقل فارغاً = بلا حد. تقليل الحد تحت المستخدم الحالي يمنع الإضافة فقط ولا يحذف بيانات.'
+                        'اترك الحقل فارغاً = بلا حد (للشركات المستقلة فقط). تقليل الحد تحت المستخدم الحالي يمنع الإضافة فقط ولا يحذف بيانات.'
                     : 'In use: ${quota.employeesUsed} employees · ${quota.usersUsed} users. '
-                        'Leave empty = unlimited. Lowering below usage only blocks new rows; nothing is deleted.',
+                        'Leave empty = unlimited (standalone companies only). Lowering below usage only blocks new rows; nothing is deleted.',
                 style: AppThemeV2.caption,
               ),
+              if (parentPool != null) ...[
+                const Gap(10),
+                Text(
+                  _parentPoolHint(parentPool, isAr),
+                  style: AppThemeV2.caption.copyWith(color: AppThemeV2.primary),
+                ),
+              ],
               const Gap(12),
               _QuotaFields(
                 maxEmployeesCtrl: maxEmployeesCtrl,
@@ -510,8 +526,8 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
           PageHeader(
             title: isAr ? 'الشركات' : 'Companies',
             subtitle: isAr
-                ? 'أضف الشركات واختر واحدة للتحكم في مستخدميها وإعداداتها'
-                : 'Add companies and select one to manage users and settings',
+                ? 'الشركات التابعة تظهر تحت الشركة الرئيسية. HR على أكثر من شركة: المستخدمون → عضويات شركات.'
+                : 'Subsidiaries nest under their main company. One HR on multiple companies: Users → company access.',
             icon: Icons.apartment_outlined,
             showRefresh: true,
             onRefresh: _load,
@@ -534,87 +550,14 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
               style: AppThemeV2.caption,
             )
           else
-            ..._companies.map((c) {
-              final id = c['id']?.toString() ?? '';
-              final selected = id == activeId;
-              final quota = _quotaOf(c);
-              String seats(int used, int? max) => max == null
-                  ? '$used / ${isAr ? 'بلا حد' : 'unlimited'}'
-                  : '$used / $max';
-              final active = c['active'] != false;
-              final full = quota.employeesFull || quota.usersFull;
-              final planSnap = isAr
-                  ? (c['planNameAr']?.toString().trim().isNotEmpty == true
-                      ? c['planNameAr'].toString()
-                      : c['planNameEn']?.toString())
-                  : (c['planNameEn']?.toString().trim().isNotEmpty == true
-                      ? c['planNameEn'].toString()
-                      : c['planNameAr']?.toString());
-              final parentLine = _parentSummary(c, isAr);
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                color: selected ? AppThemeV2.primarySoft : AppThemeV2.surface,
-                child: ListTile(
-                  leading: Icon(
-                    selected ? Icons.check_circle : Icons.business_outlined,
-                    color: selected ? AppThemeV2.primary : AppThemeV2.textMuted,
-                  ),
-                  title: Text(
-                    '${c['name'] ?? ''} (${c['code'] ?? ''})',
-                    style: AppThemeV2.cardTitle(),
-                  ),
-                  subtitle: Text(
-                    [
-                      if (parentLine != null) parentLine,
-                      if (planSnap != null && planSnap.isNotEmpty)
-                        isAr ? 'الباقة: $planSnap' : 'Plan: $planSnap',
-                      isAr
-                          ? 'موظفون: ${seats(quota.employeesUsed, quota.employeesMax)} · '
-                              'مستخدمون: ${seats(quota.usersUsed, quota.usersMax)} · '
-                              '${active ? 'نشطة' : 'موقوفة'}'
-                          : 'Employees: ${seats(quota.employeesUsed, quota.employeesMax)} · '
-                              'Users: ${seats(quota.usersUsed, quota.usersMax)} · '
-                              '${active ? 'Active' : 'Inactive'}',
-                    ].join(' · '),
-                    style: full ? TextStyle(color: Colors.orange.shade800) : null,
-                  ),
-                  trailing: Wrap(
-                    spacing: 8,
-                    children: [
-                      TextButton(
-                        onPressed: () => _selectCompany(c),
-                        child: Text(isAr ? 'اختيار' : 'Select'),
-                      ),
-                      TextButton(
-                        onPressed: () => _editParentCompany(c),
-                        child: Text(isAr ? 'شركة رئيسية' : 'Main'),
-                      ),
-                      TextButton(
-                        onPressed: () => _editQuota(c),
-                        child: Text(isAr ? 'تعديل الحصة' : 'Edit limits'),
-                      ),
-                      TextButton(
-                        onPressed: () => _manageFeatures(c),
-                        child: Text(isAr ? 'الميزات' : 'Features'),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          await _selectCompany(c);
-                          if (!context.mounted) return;
-                          context.go(AppRoutes.hrSettings);
-                        },
-                        child: Text(isAr ? 'الإعدادات' : 'Settings'),
-                      ),
-                      TextButton(
-                        onPressed: () => _toggleActive(c),
-                        child: Text(active ? (isAr ? 'إيقاف' : 'Disable') : (isAr ? 'تفعيل' : 'Enable')),
-                      ),
-                    ],
-                  ),
-                  onTap: () => _selectCompany(c),
-                ),
-              );
-            }),
+            ..._companiesTreeOrder().map(
+              (row) => _companyCard(
+                row.company,
+                depth: row.depth,
+                isAr: isAr,
+                activeId: activeId,
+              ),
+            ),
         ],
       ),
     );
@@ -623,6 +566,198 @@ class _AdminCompaniesPageState extends State<AdminCompaniesPage> {
   CompanyQuota _quotaOf(Map<String, dynamic> c) {
     final q = c['quota'];
     return CompanyQuota.fromJson(q is Map ? Map<String, dynamic>.from(q) : null);
+  }
+
+  ParentPoolSnapshot? _parentPoolOf(Map<String, dynamic> c) {
+    final p = c['parentPool'];
+    if (p is! Map) return null;
+    return ParentPoolSnapshot.fromJson(Map<String, dynamic>.from(p));
+  }
+
+  /// Remaining employee seats a new/edited child may take from [parentId]'s pool.
+  ParentPoolSnapshot? _poolForParent(String? parentId, {String? excludeCompanyId}) {
+    if (parentId == null || parentId.isEmpty) return null;
+    Map<String, dynamic>? parent;
+    for (final c in _companies) {
+      if (c['id']?.toString() == parentId) {
+        parent = c;
+        break;
+      }
+    }
+    if (parent == null) return null;
+    final parentQuota = _quotaOf(parent);
+    var allocatedEmp = 0;
+    var allocatedUsers = 0;
+    for (final c in _companies) {
+      final id = c['id']?.toString() ?? '';
+      if (id == excludeCompanyId) continue;
+      if (c['parentCompanyId']?.toString() != parentId) continue;
+      if (c['active'] == false) continue;
+      final q = _quotaOf(c);
+      if (q.employeesMax != null) allocatedEmp += q.employeesMax!;
+      if (q.usersMax != null) allocatedUsers += q.usersMax!;
+    }
+    final empMax = parentQuota.employeesMax;
+    final userMax = parentQuota.usersMax;
+    return ParentPoolSnapshot(
+      parentCompanyId: parentId,
+      parentMaxEmployees: empMax,
+      parentMaxUsers: userMax,
+      siblingsAllocatedEmployees: allocatedEmp,
+      siblingsAllocatedUsers: allocatedUsers,
+      remainingEmployees: empMax == null ? null : (empMax - allocatedEmp).clamp(0, empMax),
+      remainingUsers: userMax == null ? null : (userMax - allocatedUsers).clamp(0, userMax),
+    );
+  }
+
+  String _parentPoolHint(ParentPoolSnapshot pool, bool isAr) {
+    final emp = pool.parentMaxEmployees == null
+        ? (isAr ? 'موظفين: بلا حد عند الرئيسية' : 'Employees: unlimited at parent')
+        : (isAr
+            ? 'موظفين: متبقي للتوزيع ${pool.remainingEmployees} من ${pool.parentMaxEmployees} (موزّع على الفروع: ${pool.siblingsAllocatedEmployees})'
+            : 'Employees: ${pool.remainingEmployees} left of ${pool.parentMaxEmployees} (siblings: ${pool.siblingsAllocatedEmployees})');
+    final users = pool.parentMaxUsers == null
+        ? (isAr ? 'مستخدمين: بلا حد عند الرئيسية' : 'Users: unlimited at parent')
+        : (isAr
+            ? 'مستخدمين: متبقي ${pool.remainingUsers} من ${pool.parentMaxUsers}'
+            : 'Users: ${pool.remainingUsers} left of ${pool.parentMaxUsers}');
+    return isAr
+        ? 'حصة الشركة الرئيسية تُوزَّع على الفروع — $emp · $users. لا يُسمح بـ «بلا حد» للفرع إذا الرئيسية محدودة.'
+        : 'Parent pool is shared across branches — $emp · $users. Child cannot be unlimited when parent is capped.';
+  }
+
+  /// Roots first, then branches indented by [depth] (main company → subsidiaries).
+  List<({Map<String, dynamic> company, int depth})> _companiesTreeOrder() {
+    final byId = <String, Map<String, dynamic>>{
+      for (final c in _companies)
+        if ((c['id']?.toString() ?? '').isNotEmpty) c['id'].toString(): c,
+    };
+    final childrenByParent = <String, List<Map<String, dynamic>>>{};
+    final roots = <Map<String, dynamic>>[];
+
+    for (final c in _companies) {
+      final pid = c['parentCompanyId']?.toString();
+      if (pid != null && pid.isNotEmpty && byId.containsKey(pid)) {
+        childrenByParent.putIfAbsent(pid, () => []).add(c);
+      } else {
+        roots.add(c);
+      }
+    }
+
+    int compareNames(Map<String, dynamic> a, Map<String, dynamic> b) =>
+        (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? '');
+
+    roots.sort(compareNames);
+    for (final list in childrenByParent.values) {
+      list.sort(compareNames);
+    }
+
+    final ordered = <({Map<String, dynamic> company, int depth})>[];
+    void walk(Map<String, dynamic> c, int depth) {
+      ordered.add((company: c, depth: depth));
+      final id = c['id']?.toString() ?? '';
+      for (final child in childrenByParent[id] ?? const []) {
+        walk(child, depth + 1);
+      }
+    }
+    for (final r in roots) {
+      walk(r, 0);
+    }
+    return ordered;
+  }
+
+  Widget _companyCard(
+    Map<String, dynamic> c, {
+    required int depth,
+    required bool isAr,
+    required String? activeId,
+  }) {
+    final id = c['id']?.toString() ?? '';
+    final selected = id == activeId;
+    final quota = _quotaOf(c);
+    String seats(int used, int? max) => max == null
+        ? '$used / ${isAr ? 'بلا حد' : 'unlimited'}'
+        : '$used / $max';
+    final active = c['active'] != false;
+    final full = quota.employeesFull || quota.usersFull;
+    final planSnap = isAr
+        ? (c['planNameAr']?.toString().trim().isNotEmpty == true
+            ? c['planNameAr'].toString()
+            : c['planNameEn']?.toString())
+        : (c['planNameEn']?.toString().trim().isNotEmpty == true
+            ? c['planNameEn'].toString()
+            : c['planNameAr']?.toString());
+    final parentLine = depth == 0 ? null : _parentSummary(c, isAr);
+    final parentPool = depth == 0 ? null : (_parentPoolOf(c) ?? _poolForParent(c['parentCompanyId']?.toString(), excludeCompanyId: id));
+    final poolLine = parentPool?.parentMaxEmployees != null
+        ? (isAr
+            ? 'حصة الأم: متبقي ${parentPool!.remainingEmployees} / ${parentPool.parentMaxEmployees}'
+            : 'Parent pool left: ${parentPool!.remainingEmployees} / ${parentPool.parentMaxEmployees}')
+        : null;
+    final indent = depth * 28.0;
+
+    return Card(
+      margin: EdgeInsets.only(bottom: 12, right: indent),
+      color: selected ? AppThemeV2.primarySoft : AppThemeV2.surface,
+      child: ListTile(
+        leading: depth == 0
+            ? Icon(
+                selected ? Icons.check_circle : Icons.account_tree_outlined,
+                color: selected ? AppThemeV2.primary : AppThemeV2.textMuted,
+              )
+            : Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Icon(
+                  Icons.subdirectory_arrow_left,
+                  color: AppThemeV2.textMuted,
+                  size: 22,
+                ),
+              ),
+        title: Text(
+          '${c['name'] ?? ''} (${c['code'] ?? ''})',
+          style: AppThemeV2.cardTitle().copyWith(
+            fontWeight: depth == 0 ? FontWeight.w700 : FontWeight.w600,
+          ),
+        ),
+        subtitle: Text(
+          [
+            if (parentLine != null) parentLine,
+            if (poolLine != null) poolLine,
+            if (planSnap != null && planSnap.isNotEmpty) isAr ? 'الباقة: $planSnap' : 'Plan: $planSnap',
+            isAr
+                ? 'موظفون: ${seats(quota.employeesUsed, quota.employeesMax)} · '
+                    'مستخدمون: ${seats(quota.usersUsed, quota.usersMax)} · '
+                    '${active ? 'نشطة' : 'موقوفة'}'
+                : 'Employees: ${seats(quota.employeesUsed, quota.employeesMax)} · '
+                    'Users: ${seats(quota.usersUsed, quota.usersMax)} · '
+                    '${active ? 'Active' : 'Inactive'}',
+          ].join(' · '),
+          style: full ? TextStyle(color: Colors.orange.shade800) : null,
+        ),
+        trailing: Wrap(
+          spacing: 8,
+          children: [
+            TextButton(onPressed: () => _selectCompany(c), child: Text(isAr ? 'اختيار' : 'Select')),
+            TextButton(onPressed: () => _editParentCompany(c), child: Text(isAr ? 'شركة رئيسية' : 'Main')),
+            TextButton(onPressed: () => _editQuota(c), child: Text(isAr ? 'تعديل الحصة' : 'Edit limits')),
+            TextButton(onPressed: () => _manageFeatures(c), child: Text(isAr ? 'الميزات' : 'Features')),
+            TextButton(
+              onPressed: () async {
+                await _selectCompany(c);
+                if (!context.mounted) return;
+                context.go(AppRoutes.hrSettings);
+              },
+              child: Text(isAr ? 'الإعدادات' : 'Settings'),
+            ),
+            TextButton(
+              onPressed: () => _toggleActive(c),
+              child: Text(active ? (isAr ? 'إيقاف' : 'Disable') : (isAr ? 'تفعيل' : 'Enable')),
+            ),
+          ],
+        ),
+        onTap: () => _selectCompany(c),
+      ),
+    );
   }
 }
 
@@ -655,7 +790,9 @@ class _ParentCompanyDropdown extends StatelessWidget {
       value: value != null && value!.isNotEmpty ? value : null,
       decoration: InputDecoration(
         labelText: isAr ? 'الشركة الرئيسية (اختياري)' : 'Main company (optional)',
-        helperText: isAr ? 'اخترها إذا هذا الفرع تابع لمجموعة — للعرض والتنظيم فقط' : 'Pick if this branch belongs to a group (display only)',
+        helperText: isAr
+            ? 'الفرع يأخذ حصته من حد موظفي/مستخدمي الشركة الرئيسية (مجموع الفروع ≤ حد الرئيسية)'
+            : 'Branch quotas come from the main company pool (sum of branches ≤ parent limit)',
       ),
       items: [
         DropdownMenuItem<String?>(

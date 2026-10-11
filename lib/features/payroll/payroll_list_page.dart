@@ -288,6 +288,17 @@ class _PayrollListPageState extends State<PayrollListPage> {
             ),
             OutlinedButton.icon(
               onPressed: () => _downloadPeriodFile(
+                call: () => api.payrollPeriodPayrollXlsxExportZip(
+                  dateFrom: from,
+                  dateTo: to,
+                ),
+                successLabel: context.t('payL.payrollXlsxDownloaded'),
+              ),
+              icon: const Icon(Icons.file_download_outlined, size: 16),
+              label: Text(context.t('payL.payrollXlsxCycle')),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _downloadPeriodFile(
                 call: () => api.payrollPeriodSummaryExportXlsx(
                   dateFrom: from,
                   dateTo: to,
@@ -296,6 +307,14 @@ class _PayrollListPageState extends State<PayrollListPage> {
               ),
               icon: const Icon(Icons.summarize_outlined, size: 16),
               label: Text(context.t('payL.payrollSummary')),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _openPeriodPayslipExport(
+                dateFrom: from,
+                dateTo: to,
+              ),
+              icon: const Icon(Icons.receipt_long_outlined, size: 16),
+              label: Text(context.t('payL.payslipSelected')),
             ),
           ],
         ),
@@ -316,7 +335,7 @@ class _PayrollListPageState extends State<PayrollListPage> {
       if (base64.isEmpty) throw Exception(context.t('payL.emptyFile'));
       downloadBase64File(base64, filename, mime ?? 'application/octet-stream');
       if (!mounted) return;
-      final count = data['fileCount'];
+      final count = data['fileCount'] ?? data['count'];
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -334,6 +353,196 @@ class _PayrollListPageState extends State<PayrollListPage> {
         messenger.showSnackBar(SnackBar(content: Text(e.toString())));
       }
     }
+  }
+
+  Future<void> _openPeriodPayslipExport({
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    final selected = <String, Map<String, dynamic>>{};
+    final searchCtrl = TextEditingController();
+    var results = <Map<String, dynamic>>[];
+    var searching = false;
+    var exporting = false;
+
+    String selKey(Map<String, dynamic> r) =>
+        '${r['payrollId']}|${r['employeeId']}';
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialog) {
+            Future<void> runSearch() async {
+              final q = searchCtrl.text.trim();
+              if (q.isEmpty) {
+                setDialog(() {
+                  results = [];
+                  searching = false;
+                });
+                return;
+              }
+              setDialog(() => searching = true);
+              try {
+                final data = await api.payrollPeriodEmployeeSearch(
+                  dateFrom: dateFrom,
+                  dateTo: dateTo,
+                  search: q,
+                );
+                final items = (data['items'] as List? ?? const [])
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
+                if (!ctx.mounted) return;
+                setDialog(() {
+                  results = items;
+                  searching = false;
+                });
+              } catch (e) {
+                if (!ctx.mounted) return;
+                setDialog(() => searching = false);
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(e.toString())),
+                );
+              }
+            }
+
+            Future<void> download() async {
+              if (selected.isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(ctx.t('payL.payslipSelectedEmpty'))),
+                );
+                return;
+              }
+              setDialog(() => exporting = true);
+              try {
+                Navigator.pop(ctx);
+                await _downloadPeriodFile(
+                  call: () => api.payrollPeriodPayslipsExportXlsx(
+                    dateFrom: dateFrom,
+                    dateTo: dateTo,
+                    selections: selected.values
+                        .map(
+                          (r) => {
+                            'payrollId': r['payrollId']?.toString() ?? '',
+                            'employeeId': r['employeeId']?.toString() ?? '',
+                          },
+                        )
+                        .toList(),
+                  ),
+                  successLabel: context.t('payL.payslipSelectedDownloaded'),
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(e.toString())),
+                  );
+                }
+              }
+            }
+
+            return AlertDialog(
+              title: Text(ctx.t('payL.payslipSelectedTitle')),
+              content: SizedBox(
+                width: 520,
+                height: 480,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      ctx.t('payL.payslipSelectedHint'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: searchCtrl,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => runSearch(),
+                            decoration: InputDecoration(
+                              hintText: ctx.t('payL.searchCycleEmployee'),
+                              prefixIcon: const Icon(Icons.search),
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: searching ? null : runSearch,
+                          child: Text(ctx.t('common.search')),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      ctx.t('payL.payslipSelectedCount', {
+                        'count': selected.length,
+                      }),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: searching
+                          ? const Center(child: CircularProgressIndicator())
+                          : ListView(
+                              children: [
+                                for (final r in results)
+                                  CheckboxListTile(
+                                    dense: true,
+                                    value: selected.containsKey(selKey(r)),
+                                    onChanged: (v) {
+                                      setDialog(() {
+                                        final k = selKey(r);
+                                        if (v == true) {
+                                          selected[k] = r;
+                                        } else {
+                                          selected.remove(k);
+                                        }
+                                      });
+                                    },
+                                    title: Text(
+                                      r['employeeName']?.toString() ?? '',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      ctx.t('payL.employeeMatchLine', {
+                                        'code': r['employeeCode'] ?? '',
+                                        'branch': r['branchName'] ?? '',
+                                      }),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(ctx.t('common.cancel')),
+                ),
+                FilledButton.icon(
+                  onPressed: exporting ? null : download,
+                  icon: const Icon(Icons.download_outlined, size: 18),
+                  label: Text(ctx.t('payL.downloadExcel')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    searchCtrl.dispose();
   }
 
   Future<void> _openPeriodReportDialog({

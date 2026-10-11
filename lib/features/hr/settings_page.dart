@@ -576,7 +576,10 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   bool _configBool(String key) {
-    if (key == 'scheduledAutoSyncEnabled') return _config[key] != false;
+    if (key == 'scheduledAutoSyncEnabled' ||
+        key == 'loanNotificationEmailsEnabled') {
+      return _config[key] != false;
+    }
     return _config[key] == true;
   }
 
@@ -612,7 +615,8 @@ class _SettingsPageState extends State<SettingsPage> {
       final payload = {key: value};
       appLog('SettingsToggle', 'api.configUpdate request', payload);
       final config = await api.configUpdate(payload);
-      final serverBool = key == 'scheduledAutoSyncEnabled'
+      final serverBool = key == 'scheduledAutoSyncEnabled' ||
+              key == 'loanNotificationEmailsEnabled'
           ? config[key] != false
           : config[key] == true;
       appLog('SettingsToggle', 'api.configUpdate response', {
@@ -1350,6 +1354,20 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 10),
           SettingsAccordionSection(
+            title: context.t('pushNotif.title'),
+            subtitle: context.t('pushNotif.subtitle'),
+            icon: Icons.notifications_active_outlined,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.icon(
+                onPressed: () => context.push(AppRoutes.hrPushNotifications),
+                icon: const Icon(Icons.send_outlined),
+                label: Text(context.t('pushNotif.openManager')),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SettingsAccordionSection(
             title: context.t('set.title'),
             subtitle: context.t('setPg.settingsHint'),
             icon: Icons.tune_outlined,
@@ -1582,6 +1600,22 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(context.t('setPg.advEmailsEnable')),
+                  subtitle: Text(
+                    context.t('setPg.advEmailsEnableHint'),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  value: _configBool('loanNotificationEmailsEnabled'),
+                  onChanged: _togglingKey != null
+                      ? null
+                      : (v) => _toggle('loanNotificationEmailsEnabled', v),
+                ),
+                const SizedBox(height: 12),
                 Text(
                   context.t('setPg.advEmailsNote'),
                   style: TextStyle(

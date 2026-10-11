@@ -13,6 +13,7 @@ import '../../features/dashboard/widgets/dashboard_page_background.dart';
 import '../../l10n/app_localizations.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
+import '../auth/company_membership_picker.dart';
 import 'dashboard_notifications_panel.dart';
 import 'shell_nav.dart';
 import 'hr_company_switcher.dart';
@@ -27,13 +28,36 @@ class BioTimeShell extends StatefulWidget {
 
 class _BioTimeShellState extends State<BioTimeShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _pickerOpen = false;
+
+  Future<void> _maybeShowCompanyPicker(AuthState auth) async {
+    if (!auth.pendingCompanyPicker || !auth.canSwitchCompany || _pickerOpen) return;
+    _pickerOpen = true;
+    await showCompanyMembershipPicker(
+      context,
+      memberships: auth.memberships,
+      activeCompanyId: auth.activeCompanyId,
+    );
+    if (mounted) {
+      context.read<AuthCubit>().clearPendingCompanyPicker();
+      _pickerOpen = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final mobile = isMobile(context);
     final location = GoRouterState.of(context).matchedLocation;
 
-    return BlocBuilder<AuthCubit, AuthState>(
+    return BlocConsumer<AuthCubit, AuthState>(
+      listenWhen: (a, b) =>
+          a.pendingCompanyPicker != b.pendingCompanyPicker ||
+          a.memberships.length != b.memberships.length,
+      listener: (context, auth) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _maybeShowCompanyPicker(auth);
+        });
+      },
       builder: (context, auth) {
         final l10n = AppLocalizations.of(context);
         final navItems = navItemsFromMenus(context, auth.menus);

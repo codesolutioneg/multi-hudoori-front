@@ -23,6 +23,8 @@ import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/employee_search_field.dart';
 import '../auth/auth_cubit.dart';
+import '../advances/long_advance_archive_warning.dart';
+import 'employee_code_conflict.dart';
 import 'employee_detail_tabs.dart';
 import 'job_title_suggestions.dart';
 
@@ -428,10 +430,43 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
 
     setState(() => _saving = true);
     try {
-      final updated = await api.employeeUpdate(
-        widget.employeeId,
-        _buildUpdatePayload(),
-      );
+      Future<Map<String, dynamic>> run({required bool confirmTakeArchivedCode}) {
+        return api.employeeUpdate(
+          widget.employeeId,
+          _buildUpdatePayload(),
+          confirmTakeArchivedCode: confirmTakeArchivedCode,
+        );
+      }
+
+      Map<String, dynamic> updated;
+      try {
+        updated = await run(confirmTakeArchivedCode: false);
+      } catch (e) {
+        if (!mounted) return;
+        if (isArchivedCodeConflict(e)) {
+          setState(() => _saving = false);
+          final agreed = await confirmTakeArchivedEmployeeCode(
+            context,
+            code: archivedConflictCode(e, fallback: _code.text.trim()),
+            conflictName: archivedConflictName(e),
+          );
+          if (!agreed || !mounted) return;
+          setState(() => _saving = true);
+          updated = await run(confirmTakeArchivedCode: true);
+        } else if (isActiveCodeDuplicate(e)) {
+          setState(() => _saving = false);
+          await _showMessage(
+            context.t('emp.codeTakenActive', {
+              'code': archivedConflictCode(e, fallback: _code.text.trim()),
+            }),
+            title: context.t('common.notice'),
+          );
+          return;
+        } else {
+          rethrow;
+        }
+      }
+
       final detail = await api.employeeGetDetail(widget.employeeId);
       if (mounted) {
         setState(() {
@@ -440,7 +475,27 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
           _applyLeaveSummary(detail.leaveSummary);
           _saving = false;
         });
-        await _showMessage(context.t('employees.saved'), title: context.t('common.done'));
+        final warningBanner = buildLongAdvanceArchiveWarningBanner(
+          context,
+          updated['longAdvanceWarning'],
+        );
+        if (warningBanner != null) {
+          await showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(context.t('employees.saved')),
+              content: warningBanner,
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(context.t('common.ok')),
+                ),
+              ],
+            ),
+          );
+        } else {
+          await _showMessage(context.t('employees.saved'), title: context.t('common.done'));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -521,12 +576,15 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         .toList();
     if (!mounted) return null;
 
+    final previewFuture = initialReason == null
+        ? api.employeeArchivePreview(widget.employeeId)
+        : null;
+
     return showDialog<({String reason, DateTime archivedAt})>(
       context: context,
       builder: (ctx) {
         String? selected = initialReason;
         if (selected != null && !reasonNames.contains(selected)) {
-          // Keep a legacy free-text reason selectable while editing.
           reasonNames.insert(0, selected);
         }
         if (selected == null && reasonNames.isNotEmpty) {
@@ -534,49 +592,64 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
         }
         var archivedAt = initialArchivedAt ?? DateTime.now();
         final dateCtrl = TextEditingController(text: _fmtArchiveDateTime(archivedAt));
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
+
+        AlertDialog buildDialog(
+          void Function(void Function()) setDialogState, {
+          dynamic longAdvancePreview,
+        }) {
+          return AlertDialog(
             title: Text(title),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (initialReason == null)
-                  Text(ctx.t('employees.archive.body')),
-                if (initialReason == null) const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  key: ValueKey(selected),
-                  initialValue: selected,
-                  decoration: InputDecoration(
-                    labelText: ctx.t('employees.archive.reasonLabel'),
-                    hintText: ctx.t('employees.archive.reasonHint'),
-                    border: const OutlineInputBorder(),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (initialReason == null)
+                    Text(ctx.t('employees.archive.body')),
+                  if (initialReason == null) const SizedBox(height: 16),
+                  if (buildLongAdvanceArchiveWarningBanner(
+                        ctx,
+                        longAdvancePreview,
+                      ) !=
+                      null)
+                    buildLongAdvanceArchiveWarningBanner(
+                      ctx,
+                      longAdvancePreview,
+                    )!,
+                  DropdownButtonFormField<String>(
+                    key: ValueKey(selected),
+                    initialValue: selected,
+                    decoration: InputDecoration(
+                      labelText: ctx.t('employees.archive.reasonLabel'),
+                      hintText: ctx.t('employees.archive.reasonHint'),
+                      border: const OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final name in reasonNames)
+                        DropdownMenuItem(value: name, child: Text(name)),
+                    ],
+                    onChanged: (value) => setDialogState(() => selected = value),
                   ),
-                  items: [
-                    for (final name in reasonNames)
-                      DropdownMenuItem(value: name, child: Text(name)),
-                  ],
-                  onChanged: (value) => setDialogState(() => selected = value),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  readOnly: true,
-                  controller: dateCtrl,
-                  decoration: InputDecoration(
-                    labelText: ctx.t('employees.archive.departureLabel'),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: const Icon(Icons.event_outlined),
+                  const SizedBox(height: 12),
+                  TextField(
+                    readOnly: true,
+                    controller: dateCtrl,
+                    decoration: InputDecoration(
+                      labelText: ctx.t('employees.archive.departureLabel'),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: const Icon(Icons.event_outlined),
+                    ),
+                    onTap: () async {
+                      final picked = await _pickArchiveDateTime(archivedAt);
+                      if (picked == null) return;
+                      setDialogState(() {
+                        archivedAt = picked;
+                        dateCtrl.text = _fmtArchiveDateTime(picked);
+                      });
+                    },
                   ),
-                  onTap: () async {
-                    final picked = await _pickArchiveDateTime(archivedAt);
-                    if (picked == null) return;
-                    setDialogState(() {
-                      archivedAt = picked;
-                      dateCtrl.text = _fmtArchiveDateTime(picked);
-                    });
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -597,7 +670,25 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
                 ),
               ),
             ],
-          ),
+          );
+        }
+
+        if (previewFuture == null) {
+          return StatefulBuilder(
+            builder: (ctx, setDialogState) => buildDialog(setDialogState),
+          );
+        }
+
+        return FutureBuilder<Map<String, dynamic>>(
+          future: previewFuture,
+          builder: (ctx, snapshot) {
+            return StatefulBuilder(
+              builder: (ctx, setDialogState) => buildDialog(
+                setDialogState,
+                longAdvancePreview: snapshot.data?['longAdvanceWarning'],
+              ),
+            );
+          },
         );
       },
     );

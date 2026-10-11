@@ -12,6 +12,7 @@ import '../../core/widgets/hr_local_data_info.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
+import '../../core/utils/api_error_message.dart';
 import '../../l10n/l10n_extension.dart';
 
 class HrAttendancePage extends StatefulWidget {
@@ -108,7 +109,12 @@ class _HrAttendancePageState extends State<HrAttendancePage> {
         _loadingMore = false;
       });
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = friendlyApiError(context, e);
+          _loading = false;
+        });
+      }
     }
   }
 

@@ -458,7 +458,9 @@ class _PayrollDetailPageState extends State<PayrollDetailPage> {
               ),
               const SizedBox(height: 10),
               Text(
-                emails.isEmpty
+                preview['notificationEmailsEnabled'] == false
+                    ? context.t('pay.emailsDisabled')
+                    : emails.isEmpty
                     ? context.t('pay.noBranchEmails')
                     : context.t('pay.willEmail', {'count': emails.length}),
                 style: TextStyle(

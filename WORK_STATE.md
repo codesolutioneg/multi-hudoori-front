@@ -12,7 +12,22 @@
 
 ## Daily log
 
+### 2026-10-11
+- **Auto**: كل رسائل SnackBar (نجاح/خطأ) → بوب أب عبر `PopupScaffoldMessenger` في `app.dart` + `appRootNavigatorKey`. **MULTI**.
+- **Auto**: شركات — عرض حصة الشركة الأم المتبقية عند إنشاء/تعديل فرع؛ نص يوضح أن مجموع حدود الفروع من حد الرئيسية. **MULTI**.
+- **Auto**: Deploy Multi web — إصلاح تكرار دوال في `shift_grid_list_page`؛ `build-dashboard.sh prod` + PM2 restart `hudoori-multi-dashboard`؛ `hr.hudoori` = 200. **MULTI**.
+- **Auto**: Port hodouri: سويتش إيميلات السلف؛ تحذير سلف عند الأرشفة (preview + grid)؛ Payslip picker للدورة + ZIP اكسيل رواتب؛ نص دمج = فرع بطاقة الموظف؛ bulk unarchive + بحث موظف في الجريدات + l10n؛ إنشاء موظف — `CODE_ARCHIVED_CONFLICT` + `emp.codeTakenActive`. **MULTI**.
+
 ### 2026-10-07
+- **Auto**: FCM أفراد — رسالة فارغة في «إضافة موظف» + يعتمد على `userId` من API. **MULTI**.
+- **Auto**: HR attendance — رسائل خطأ عربية (`friendlyApiError`) بدل «Company context required». **MULTI**.
+- **Auto**: Dashboard — إصلاح شاشة بيضاء (`AppPageScaffold scrollable: false`)؛ `/admin/push-notifications` للسوبر أدمن + اختيار شركة. **MULTI**.
+- **Auto**: Dashboard — `/hr/push-notifications` (بث شركة + إرسال أفراد + سجل) من الإعدادات؛ APIs `send` و`admin-list`. **MULTI**.
+- **Auto**: `payroll_month_range.dart` + فترة تقرير البصمات من `payrollMonthStartDay`؛ snackbar عند `usedLocal` بعد export؛ web rebuild + pm2. **MULTI**.
+- **Auto**: بعد لوجين HR بأكثر من عضوية — بوب أب «اختر الشركة» + سويتشر الهيدر؛ memberships من API تعمل (mostafa+mandara). **MULTI**.
+- **Auto**: طلبات المبيعات — فلتر افتراضي «الكل» + حالات AR؛ المستخدمون — كود الشركة في العنوان/الكارت + فلاتر أدوار مترجمة. **MULTI**.
+- **Auto**: Admin users — «تعيين كلمة المرور» (set-password API); عضويات شركات: ربط **فروع** فقط تحت الشركة المنزل؛ web rebuild. **MULTI**.
+- **Auto**: Companies page — tree order (رئيسية ثم التابعة مع مسافة بصرية)، hint HR عضويات؛ web rebuild + pm2. **MULTI**.
 - **Auto**: Companies page — parent company dropdown on create + «شركة أم» per row; subtitle «تابعة لـ …»; web rebuild. **MULTI**.
 - **Auto**: HR company switcher (membership-scoped) in shell header; admin user «عضويات شركات» dialog (link/unlink). Sales requests CRM UI — KPI strip, search, dense list, detail dialog with activity timeline + manual create + notes. **MULTI**.
 - **Auto**: HR request approval UX — sidebar menu `hr_requests` (موافقة الطلبات → `/requests`); HR page title/banner/pending chip; denser approve/reject cards. Backend menu + entitlements; web rebuild. **MULTI**.

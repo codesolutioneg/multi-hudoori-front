@@ -19,6 +19,7 @@ import '../../core/utils/money_format.dart';
 import '../../core/utils/entity_id.dart';
 import '../../l10n/l10n_extension.dart';
 import '../../core/utils/file_download.dart';
+import '../../core/utils/payroll_month_range.dart';
 import '../../core/utils/file_pick.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/searchable_select_field.dart';
@@ -27,6 +28,8 @@ import '../../core/widgets/skeleton_box.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../data/api/biotime_api_client.dart';
 import '../auth/auth_cubit.dart';
+import 'bulk_unarchive_dialog.dart';
+import 'employee_code_conflict.dart';
 
 class EmployeesPage extends StatefulWidget {
   const EmployeesPage({super.key});
@@ -315,20 +318,16 @@ class _EmployeesPageState extends State<EmployeesPage> {
     }
   }
 
-  (DateTime, DateTime) _defaultPunchReportPeriod() {
-    final now = DateTime.now();
-    if (now.day >= 26) {
-      final from = DateTime(now.year, now.month, 26);
-      final toMonth = now.month == 12 ? 1 : now.month + 1;
-      final toYear = now.month == 12 ? now.year + 1 : now.year;
-      return (from, DateTime(toYear, toMonth, 25));
+  Future<(DateTime, DateTime)> _defaultPunchReportPeriod() async {
+    try {
+      final config = await api.configGet();
+      final startDay = payrollMonthStartDayFromConfig(config);
+      final period = defaultPayrollPeriod(startDay);
+      return (period.dateFrom, period.dateTo);
+    } catch (_) {
+      final period = defaultPayrollPeriod(kDefaultPayrollMonthStartDay);
+      return (period.dateFrom, period.dateTo);
     }
-    final fromMonth = now.month == 1 ? 12 : now.month - 1;
-    final fromYear = now.month == 1 ? now.year - 1 : now.year;
-    return (
-      DateTime(fromYear, fromMonth, 26),
-      DateTime(now.year, now.month, 25),
-    );
   }
 
   String _fmtDate(DateTime d) =>
@@ -377,7 +376,7 @@ class _EmployeesPageState extends State<EmployeesPage> {
   }
 
   Future<void> _exportPunchReport() async {
-    final defaults = _defaultPunchReportPeriod();
+    final defaults = await _defaultPunchReportPeriod();
     final config = await showDialog<_PunchReportExportConfig>(
       context: context,
       builder: (ctx) => _PunchReportExportDialog(
@@ -525,6 +524,19 @@ class _EmployeesPageState extends State<EmployeesPage> {
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
       if (!mounted) return;
+      final usedLocal = r['usedLocal'] == true;
+      final fallbackMsg = r['fallbackMessage']?.toString();
+      if (usedLocal) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              fallbackMsg?.isNotEmpty == true
+                  ? fallbackMsg!
+                  : context.t('reports.punchSyncUsedLocal'),
+            ),
+          ),
+        );
+      }
       await _showMessage(
         context.t('emp.downloaded', {'file': filename}),
         title: context.t('common.done'),
@@ -657,8 +669,23 @@ class _EmployeesPageState extends State<EmployeesPage> {
     return ids;
   }
 
+  Future<void> _openBulkUnarchive() async {
+    if (!_showArchived) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const BulkUnarchiveDialog(),
+    );
+    await _reload(reset: true);
+  }
+
   List<Widget> _headerActions(BuildContext context) {
     return [
+      if (_showArchived)
+        OutlinedButton.icon(
+          onPressed: _loading ? null : _openBulkUnarchive,
+          icon: const Icon(Icons.unarchive_outlined, size: 18),
+          label: Text(context.t('emp.bulkUnarchive.button')),
+        ),
       IconButton(
         onPressed: () => _reload(reset: true),
         icon: const Icon(Icons.refresh),
@@ -1375,7 +1402,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
       final auth = context.read<AuthCubit>().state;
       final locationId = auth.scopedLocationId ?? _locationId;
       final nid = _nationalId.text.trim();
-      final result = await api.employeeCreate({
+      final fields = <String, dynamic>{
         'name': _name.text.trim(),
         'isForeigner': _isForeigner,
         if (nid.isNotEmpty) 'nationalIdConfirm': nid,
@@ -1385,7 +1412,36 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
         if (locationId != null) 'locationId': locationId,
         if (_phone.text.trim().isNotEmpty) 'workPhone': _phone.text.trim(),
         if (salaryText.isNotEmpty) 'basicSalary': parseMoney(salaryText) ?? 0,
-      }, pushToBiotime: _pushToBiotime);
+      };
+
+      Future<Map<String, dynamic>> run({required bool confirmTakeArchivedCode}) {
+        return api.employeeCreate(
+          fields,
+          pushToBiotime: _pushToBiotime,
+          confirmTakeArchivedCode: confirmTakeArchivedCode,
+        );
+      }
+
+      Map<String, dynamic> result;
+      try {
+        result = await run(confirmTakeArchivedCode: false);
+      } catch (e) {
+        if (!mounted) return;
+        if (isArchivedCodeConflict(e)) {
+          setState(() => _saving = false);
+          final agreed = await confirmTakeArchivedEmployeeCode(
+            context,
+            code: archivedConflictCode(e, fallback: _code.text.trim()),
+            conflictName: archivedConflictName(e),
+          );
+          if (!agreed || !mounted) return;
+          setState(() => _saving = true);
+          result = await run(confirmTakeArchivedCode: true);
+        } else {
+          rethrow;
+        }
+      }
+
       if (!mounted) return;
       final msg = result['message']?.toString() ?? context.t('emp.created');
       Navigator.pop(context, true);
@@ -1411,6 +1467,7 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
           (e is BioTimeApiException &&
               e.code == 'DUPLICATE' &&
               msg.contains('قومي'));
+      final isDuplicateCode = isActiveCodeDuplicate(e);
       setState(() {
         _saving = false;
         if (isDuplicateNid) {
@@ -1426,7 +1483,16 @@ class _EmployeeFormDialogState extends State<_EmployeeFormDialog> {
         builder: (ctx) => AlertDialog(
           title: Text(context.t('emp.createFailed')),
           content: Text(
-            isDuplicateNid ? context.t('emp.nidTakenLong') : msg,
+            isDuplicateNid
+                ? context.t('emp.nidTakenLong')
+                : isDuplicateCode
+                    ? context.t('emp.codeTakenActive', {
+                        'code': archivedConflictCode(
+                          e,
+                          fallback: _code.text.trim(),
+                        ),
+                      })
+                    : msg,
             style: const TextStyle(height: 1.45),
           ),
           actions: [

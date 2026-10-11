@@ -28,11 +28,14 @@ String friendlyApiErrorL10n(AppLocalizations l10n, Object error) {
         return t('errors.featureDisabled');
       case 'COMPANY_CONTEXT_REQUIRED':
         return t('errors.selectCompanyFirst');
+      case 'PARENT_QUOTA_EXCEEDED':
       case 'EMPLOYEE_QUOTA_EXCEEDED':
       case 'USER_QUOTA_EXCEEDED':
         final msg = error.message.trim();
         if (msg.isNotEmpty && !_looksTechnical(msg)) return msg;
-        return t(error.code == 'USER_QUOTA_EXCEEDED' ? 'errors.userQuota' : 'errors.employeeQuota');
+        if (error.code == 'USER_QUOTA_EXCEEDED') return t('errors.userQuota');
+        if (error.code == 'EMPLOYEE_QUOTA_EXCEEDED') return t('errors.employeeQuota');
+        return t('errors.userQuota');
       default:
         if (error.code != null && error.code!.startsWith('ODOO_')) {
           final msg = error.message.trim();
