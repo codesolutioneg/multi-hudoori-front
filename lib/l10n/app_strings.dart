@@ -166,6 +166,11 @@ abstract final class AppStrings {
     'req.certificate': 'شهادة',
     'req.attendanceEdit': 'تعديل حضور',
     'req.approved': 'تمت الموافقة على الطلب',
+    'req.approveFailedTitle': 'تعذّرت الموافقة',
+    'req.noGridForPeriod':
+        'لا يوجد جدول شيفت لفترة هذا الطلب ({period}).\nأنشئ جدول الشيفت لهذه الفترة أولاً، ثم أعد الموافقة.',
+    'req.noGrid':
+        'لا يوجد جدول شيفت يغطي أيام هذا الطلب.\nأنشئ الجدول أولاً ثم أعد الموافقة.',
     'req.rejectTitle': 'رفض الطلب',
     'req.rejectReason': 'سبب الرفض',
     'req.reject': 'رفض',
@@ -3158,6 +3163,11 @@ abstract final class AppStrings {
     'req.certificate': 'Certificate',
     'req.attendanceEdit': 'Attendance correction',
     'req.approved': 'Request approved',
+    'req.approveFailedTitle': 'Approval failed',
+    'req.noGridForPeriod':
+        'No shift schedule covers this request period ({period}).\nCreate the shift schedule for that period first, then approve again.',
+    'req.noGrid':
+        'No shift schedule covers this request’s dates.\nCreate the schedule first, then approve again.',
     'req.rejectTitle': 'Reject request',
     'req.rejectReason': 'Rejection reason',
     'req.reject': 'Reject',

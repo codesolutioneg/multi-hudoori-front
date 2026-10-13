@@ -11,6 +11,7 @@ import '../../core/widgets/list_picker_field.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../core/widgets/status_tag.dart';
+import '../../data/api/biotime_api_client.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
 import '../../l10n/l10n_extension.dart';
@@ -90,6 +91,38 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
     if (ok == true) await _load();
   }
 
+  String _requestPeriodLabel(Map<String, dynamic> item) {
+    final from = item['dateFrom']?.toString() ?? item['date']?.toString() ?? '';
+    final to = item['dateTo']?.toString() ?? '';
+    if (from.isEmpty) return '';
+    if (to.isEmpty || to == from) return from;
+    return '$from → $to';
+  }
+
+  Future<void> _showApproveError(Object e, Map<String, dynamic> item) async {
+    if (!mounted) return;
+    final code = e is BioTimeApiException ? e.code : null;
+    final period = _requestPeriodLabel(item);
+    final message = code == 'NO_GRID_COVERAGE'
+        ? (period.isNotEmpty
+            ? context.t('req.noGridForPeriod', {'period': period})
+            : context.t('req.noGrid'))
+        : friendlyApiError(context, e);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.t('req.approveFailedTitle')),
+        content: Text(message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(context.t('common.ok')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _approve(String kind, Map<String, dynamic> item) async {
     final id = item['id'];
     try {
@@ -106,17 +139,15 @@ class _RequestsPageState extends State<RequestsPage> with SingleTickerProviderSt
           await api.certificateRequestApprove(id);
         case 'attendanceEdit':
           await api.attendanceEditRequestApprove(id);
+        default:
+          throw BioTimeApiException('Unknown request kind: $kind', code: 'VALIDATION');
       }
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.t('req.approved'))));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyApiError(context, e))),
-        );
-      }
+      await _showApproveError(e, item);
     }
   }
 

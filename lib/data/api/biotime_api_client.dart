@@ -1845,7 +1845,8 @@ class BioTimeApiClient {
   }
 
   Future<void> _requestAction(String path, Object id, {String? reason}) async {
-    await _call(path, {'id': id, if (reason != null) 'reason': reason});
+    // JSON-RPC business failures still return HTTP 200 — must unwrap.
+    _unwrap(await _call(path, {'id': id, if (reason != null) 'reason': reason}));
   }
 
   Future<void> leaveRequestApprove(Object id) =>
