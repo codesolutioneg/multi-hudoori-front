@@ -537,12 +537,20 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
       if (mounted) {
         setState(() {
           _shifts = shifts;
-          if (shifts.isNotEmpty) _shiftId = shifts.first['id']?.toString();
+          _shiftId = shifts.isNotEmpty ? shifts.first['id']?.toString() : null;
           _loadingShifts = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loadingShifts = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingShifts = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(friendlyApiError(context, e)),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
     }
   }
 
@@ -591,7 +599,18 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
           requestedCheckOut: '17:00',
         );
       } else if (widget.type == 'shift') {
-        if (_shiftId == null) throw Exception(context.t('req.pickNewShift'));
+        if (_shiftId == null || _shiftId!.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _shifts.isEmpty ? context.t('req.noShifts') : context.t('req.pickNewShift'),
+              ),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          setState(() => _saving = false);
+          return;
+        }
         await api.shiftChangeRequestCreate(
           newShiftId: _shiftId!,
           dateFrom: _fmt(_from),
@@ -604,7 +623,10 @@ class _RequestFormDialogState extends State<_RequestFormDialog> {
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyApiError(context, e))),
+          SnackBar(
+            content: Text(friendlyApiError(context, e)),
+            backgroundColor: AppColors.danger,
+          ),
         );
       }
     }
