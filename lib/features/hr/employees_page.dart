@@ -28,7 +28,7 @@ import '../../core/widgets/skeleton_box.dart';
 import '../../core/widgets/status_tag.dart';
 import '../../data/api/biotime_api_client.dart';
 import '../auth/auth_cubit.dart';
-import 'bulk_unarchive_dialog.dart';
+import 'archived_import_export_dialog.dart';
 import 'employee_code_conflict.dart';
 
 class EmployeesPage extends StatefulWidget {
@@ -669,23 +669,21 @@ class _EmployeesPageState extends State<EmployeesPage> {
     return ids;
   }
 
-  Future<void> _openBulkUnarchive() async {
-    if (!_showArchived) return;
-    await showDialog<void>(
+  Future<void> _openArchivedImportExport() async {
+    final changed = await showDialog<bool>(
       context: context,
-      builder: (_) => const BulkUnarchiveDialog(),
+      builder: (_) => const ArchivedImportExportDialog(),
     );
-    await _reload(reset: true);
+    if (changed == true && mounted) await _reload(reset: true);
   }
 
   List<Widget> _headerActions(BuildContext context) {
     return [
-      if (_showArchived)
-        OutlinedButton.icon(
-          onPressed: _loading ? null : _openBulkUnarchive,
-          icon: const Icon(Icons.unarchive_outlined, size: 18),
-          label: Text(context.t('emp.bulkUnarchive.button')),
-        ),
+      OutlinedButton.icon(
+        onPressed: _loading ? null : _openArchivedImportExport,
+        icon: const Icon(Icons.import_export, size: 18),
+        label: Text(context.t('emp.archivedIo.button')),
+      ),
       IconButton(
         onPressed: () => _reload(reset: true),
         icon: const Icon(Icons.refresh),

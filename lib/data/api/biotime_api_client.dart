@@ -1529,6 +1529,28 @@ class BioTimeApiClient {
     return Map<String, dynamic>.from(data['employee'] as Map? ?? {});
   }
 
+  Future<Map<String, dynamic>> employeesArchivedExportXlsx() async {
+    return _unwrap(
+      await _call('/api/biotime/employees/archived/export-xlsx', const {}),
+    );
+  }
+
+  Future<Map<String, dynamic>> employeesArchivedTemplateXlsx() async {
+    return _unwrap(
+      await _call('/api/biotime/employees/archived/template-xlsx', const {}),
+    );
+  }
+
+  Future<Map<String, dynamic>> employeesArchivedImportXlsx(
+    String base64,
+  ) async {
+    return _unwrap(
+      await _call('/api/biotime/employees/archived/import-xlsx', {
+        'base64': base64,
+      }),
+    );
+  }
+
   Future<Map<String, dynamic>> employeesBulkRestoreExportXlsx() async {
     return _unwrap(
       await _call('/api/biotime/employees/bulk-restore/export-xlsx', const {}),

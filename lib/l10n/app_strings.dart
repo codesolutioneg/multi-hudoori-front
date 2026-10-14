@@ -1022,6 +1022,21 @@ abstract final class AppStrings {
     'emp.linkedBio': 'مرتبط BioTime',
     'emp.notLinked': 'غير مرتبط',
     'emp.archived': 'المؤرشفون',
+    'emp.archivedIo.button': 'تصدير / استيراد مؤرشفين',
+    'emp.archivedIo.title': 'تصدير / استيراد مؤرشفين',
+    'emp.archivedIo.hint':
+        'صدّر بيانات المؤرشفين كاملة، أو نزّل قالب الأرشفة (empcode / التاريخ / السبب) ثم ارفعه. السبب «يعمل» يلغي الأرشفة؛ أي سبب آخر يؤرشف أو يحدّث الأرشفة.',
+    'emp.archivedIo.exportAll': 'تصدير جميع المؤرشفين',
+    'emp.archivedIo.exportTemplate': 'تصدير قالب فارغ',
+    'emp.archivedIo.import': 'استيراد',
+    'emp.archivedIo.exportDone': 'تم تنزيل ملف المؤرشفين',
+    'emp.archivedIo.templateDone': 'تم تنزيل القالب',
+    'emp.archivedIo.result':
+        'أرشفة {archived} · تحديث {updated} · إلغاء أرشفة {restored} · تخطي {skipped}',
+    'emp.archivedIo.actionArchived': 'أرشفة',
+    'emp.archivedIo.actionUpdated': 'تحديث أرشفة',
+    'emp.archivedIo.actionRestored': 'يعمل',
+    'emp.archivedIo.actionSkipped': 'تخطّي',
     'emp.bulkUnarchive.button': 'إلغاء الأرشفة',
     'emp.bulkUnarchive.title': 'إلغاء الأرشفة الجماعي',
     'emp.bulkUnarchive.hint':
@@ -4041,6 +4056,21 @@ abstract final class AppStrings {
     'emp.linkedBio': 'Linked to BioTime',
     'emp.notLinked': 'Not linked',
     'emp.archived': 'Archived',
+    'emp.archivedIo.button': 'Export / import archived',
+    'emp.archivedIo.title': 'Export / import archived',
+    'emp.archivedIo.hint':
+        'Export full archived employee data, or download the archive template (empcode / date / reason) and import it. Reason «يعمل» unarchives; any other reason archives or updates the archive.',
+    'emp.archivedIo.exportAll': 'Export all archived',
+    'emp.archivedIo.exportTemplate': 'Export empty template',
+    'emp.archivedIo.import': 'Import',
+    'emp.archivedIo.exportDone': 'Archived employees file downloaded',
+    'emp.archivedIo.templateDone': 'Template downloaded',
+    'emp.archivedIo.result':
+        'Archived {archived} · Updated {updated} · Restored {restored} · Skipped {skipped}',
+    'emp.archivedIo.actionArchived': 'Archived',
+    'emp.archivedIo.actionUpdated': 'Archive updated',
+    'emp.archivedIo.actionRestored': 'Working',
+    'emp.archivedIo.actionSkipped': 'Skipped',
     'emp.bulkUnarchive.button': 'Bulk unarchive',
     'emp.bulkUnarchive.title': 'Bulk unarchive',
     'emp.bulkUnarchive.hint':
