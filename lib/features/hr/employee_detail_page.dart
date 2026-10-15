@@ -15,6 +15,7 @@ import '../../core/utils/egyptian_national_id.dart';
 import '../../core/utils/iban.dart';
 import '../../core/utils/file_download.dart';
 import '../../core/utils/file_pick.dart';
+import '../../core/utils/insurance_wage.dart';
 import '../../core/utils/money_format.dart';
 import '../../core/layout/app_tab_bar_v2.dart';
 import '../../core/theme/app_colors.dart';
@@ -87,7 +88,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
   final _healthIssueDate = TextEditingController();
   final _healthExpiryDate = TextEditingController();
   final _insuranceNumber = TextEditingController();
-  final _insuranceSalary = TextEditingController();
+  final _employeeInsuranceShare = TextEditingController();
   final _medicalInsuranceSalary = TextEditingController();
   final _fawryPhone = TextEditingController();
   final _bankIban = TextEditingController();
@@ -128,6 +129,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     super.initState();
     _tabs = TabController(length: 4, vsync: this);
     _nationalIdConfirm.addListener(_onNationalIdChanged);
+    _employeeInsuranceShare.addListener(_onInsuranceShareChanged);
     _load();
   }
 
@@ -140,6 +142,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     _workEmailPassword.dispose();
     _phone.dispose();
     _nationalIdConfirm.removeListener(_onNationalIdChanged);
+    _employeeInsuranceShare.removeListener(_onInsuranceShareChanged);
     _nationalIdConfirm.dispose();
     _jobTitle.dispose();
     _address.dispose();
@@ -148,7 +151,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     _healthIssueDate.dispose();
     _healthExpiryDate.dispose();
     _insuranceNumber.dispose();
-    _insuranceSalary.dispose();
+    _employeeInsuranceShare.dispose();
     _medicalInsuranceSalary.dispose();
     _fawryPhone.dispose();
     _bankIban.dispose();
@@ -156,6 +159,10 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     _leaveStartingBalance.dispose();
     _personalPhotoCount.dispose();
     super.dispose();
+  }
+
+  void _onInsuranceShareChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onNationalIdChanged() {
@@ -194,7 +201,10 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
     _setText(_healthIssueDate, emp['healthCertificateIssueDate']);
     _setText(_healthExpiryDate, emp['healthCertificateExpiryDate']);
     _setText(_insuranceNumber, emp['insuranceNumber']);
-    _setMoney(_insuranceSalary, emp['insuranceSalary']);
+    _setMoney(
+      _employeeInsuranceShare,
+      emp['employeeInsuranceShare'] ?? emp['insuranceSalary'],
+    );
     _setMoney(_medicalInsuranceSalary, emp['medicalInsuranceSalary']);
     _setText(_fawryPhone, emp['fawryPhone']);
     _setText(_bankIban, emp['bankIban']);
@@ -335,7 +345,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
       'healthCertificateExpiryDate': emptyToNull(_healthExpiryDate.text),
       'insuranceNumber': _insuranceNumber.text.trim(),
       'insuranceCompanyId': _insuranceCompanyId,
-      'insuranceSalary': numOrNull(_insuranceSalary.text),
+      'employeeInsuranceShare': numOrNull(_employeeInsuranceShare.text),
       'medicalInsuranceCompanyId': _medicalInsuranceCompanyId,
       'medicalInsuranceSalary': numOrNull(_medicalInsuranceSalary.text),
       'mobileLine': _mobileLineProvided(),
@@ -1638,8 +1648,22 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
               ),
               const SizedBox(height: 12),
               EmployeeNumberField(
-                label: context.t('employees.field.insuranceSalary'),
-                controller: _insuranceSalary,
+                label: context.t('employees.field.employeeInsuranceShare'),
+                controller: _employeeInsuranceShare,
+              ),
+              const SizedBox(height: 12),
+              InputDecorator(
+                decoration: InputDecoration(
+                  labelText: context.t('employees.field.insuranceWage'),
+                ),
+                child: Text(
+                  formatMoneyField(
+                    insuranceWageFromShare(
+                      num.tryParse(_employeeInsuranceShare.text.trim()),
+                    ),
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -1662,7 +1686,7 @@ class _EmployeeDetailPageState extends State<EmployeeDetailPage>
               ),
               const SizedBox(height: 12),
               EmployeeNumberField(
-                label: context.t('employees.field.insuranceSalary'),
+                label: context.t('employees.field.medicalInsuranceSalary'),
                 controller: _medicalInsuranceSalary,
               ),
             ],

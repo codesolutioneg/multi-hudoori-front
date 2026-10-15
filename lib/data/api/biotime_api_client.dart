@@ -260,6 +260,81 @@ class BioTimeApiClient {
     );
   }
 
+  Future<List<Map<String, dynamic>>> insuranceEstablishmentsList({
+    bool activeOnly = false,
+  }) async {
+    final data = _unwrap(
+      await _call('/api/biotime/insurance-forms/establishments/list', {
+        'activeOnly': activeOnly,
+      }),
+    );
+    return _listFrom(data['items']);
+  }
+
+  Future<Map<String, dynamic>> insuranceEstablishmentSave(
+    Map<String, dynamic> body,
+  ) async {
+    final data = _unwrap(
+      await _call('/api/biotime/insurance-forms/establishments/save', body),
+    );
+    return Map<String, dynamic>.from(data['establishment'] as Map? ?? {});
+  }
+
+  Future<void> insuranceEstablishmentDelete(Object id) async {
+    _unwrap(
+      await _call('/api/biotime/insurance-forms/establishments/delete', {
+        'id': id,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> insuranceFormLookupEmployee(String query) async {
+    final data = _unwrap(
+      await _call('/api/biotime/insurance-forms/lookup-employee', {
+        'query': query,
+      }),
+    );
+    return Map<String, dynamic>.from(data['employee'] as Map? ?? {});
+  }
+
+  Future<Map<String, dynamic>> insuranceFormsList({
+    String? formType,
+    String? search,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return _unwrap(
+      await _call('/api/biotime/insurance-forms/list', {
+        if (formType != null) 'formType': formType,
+        if (search != null && search.isNotEmpty) 'search': search,
+        'limit': limit,
+        'offset': offset,
+      }),
+    );
+  }
+
+  Future<Map<String, dynamic>> insuranceFormGet(Object id) async {
+    final data = _unwrap(
+      await _call('/api/biotime/insurance-forms/get', {'id': id}),
+    );
+    return Map<String, dynamic>.from(data['form'] as Map? ?? {});
+  }
+
+  Future<Map<String, dynamic>> insuranceFormSave(
+    Map<String, dynamic> body,
+  ) async {
+    final data = _unwrap(
+      await _call('/api/biotime/insurance-forms/save', body),
+    );
+    return Map<String, dynamic>.from(data['form'] as Map? ?? {});
+  }
+
+  Future<Map<String, dynamic>> insuranceFormPdf(Object id) async {
+    return _unwrap(
+      await _call('/api/biotime/insurance-forms/pdf', {'id': id}),
+    );
+  }
+
   Future<Map<String, dynamic>> dashboardCharts() async {
     return _unwrap(await _call('/api/biotime/dashboard/charts', {}));
   }

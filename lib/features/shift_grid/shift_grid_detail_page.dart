@@ -12,6 +12,7 @@ import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/api_error_message.dart';
 import '../../core/utils/file_download.dart';
 import '../../core/utils/file_pick.dart';
+import '../../core/utils/money_format.dart';
 import '../../core/widgets/employee_search_field.dart';
 import '../../core/widgets/page_header.dart';
 import '../../core/widgets/sellix_card.dart';
@@ -520,6 +521,10 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
       final created =
           (result['createdEmployees'] as num?)?.toInt() ??
           ((result['createdCodes'] as List?)?.length ?? 0);
+      final archivedLongAdvanceWarnings =
+          ((result['archivedLongAdvanceWarnings'] as List?) ?? [])
+              .whereType<Map>()
+              .toList();
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -542,6 +547,35 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
                         height: 1.35,
                       ),
                     ),
+                  ],
+                  if (archivedLongAdvanceWarnings.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      context.t('grid.importArchivedLongAdvanceTitle'),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    for (final item in archivedLongAdvanceWarnings)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          context.t('grid.importArchivedLongAdvanceLine', {
+                            'name': item['employeeName']?.toString() ?? '',
+                            'code': item['employeeCode']?.toString() ?? '',
+                            'remaining': formatMoney(item['remainingAmount']),
+                            'installments':
+                                '${item['remainingInstallments'] ?? 0}',
+                          }),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.warning,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
                   ],
                   if (errors.isNotEmpty) ...[
                     const SizedBox(height: 12),
@@ -1243,7 +1277,10 @@ class _ShiftGridDetailPageState extends State<ShiftGridDetailPage> {
                     final title = g['name']?.toString() ?? id;
                     final loc = g['locationName']?.toString() ?? '';
                     final range =
-                        '${g['dateFrom'] ?? ''} → ${g['dateTo'] ?? ''}';
+                        formatDateRange(
+                          g['dateFrom']?.toString(),
+                          g['dateTo']?.toString(),
+                        );
                     return RadioListTile<String>(
                       value: id,
                       groupValue: selectedId,

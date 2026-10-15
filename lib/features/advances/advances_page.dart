@@ -1792,6 +1792,8 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
     final odooError = a['odooSyncError']?.toString().trim() ?? '';
     final odooMoveName = a['odooMoveName']?.toString().trim() ?? '';
     final employeeArchived = a['employeeActive'] == false;
+    final unpaidInstallments =
+        employeeArchived && longAdvanceRemainingAmount(a) > 0.01;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1850,6 +1852,13 @@ class _LongAdvanceListState extends State<_LongAdvanceList> {
                   StatusTag(
                     label: context.t('adv.employeeArchived'),
                     type: StatusTagType.warning,
+                  ),
+                ],
+                if (unpaidInstallments) ...[
+                  const SizedBox(width: 6),
+                  StatusTag(
+                    label: context.t('adv.unpaidInstallments'),
+                    type: StatusTagType.danger,
                   ),
                 ],
                 if (state != 'draft') ...[

@@ -50,6 +50,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
     'insuranceNumber': 'audit.field.insuranceNumber',
     'insuranceStatus': 'audit.field.insuranceStatus',
     'insuranceCompanyId': 'audit.field.insuranceCompanyId',
+    'employeeInsuranceShare': 'audit.field.employeeInsuranceShare',
     'insuranceSalary': 'audit.field.insuranceSalary',
     'medicalInsuranceStatus': 'audit.field.medicalInsuranceStatus',
     'medicalInsuranceCompanyId': 'audit.field.medicalInsuranceCompanyId',

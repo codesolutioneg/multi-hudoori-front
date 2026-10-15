@@ -5,6 +5,7 @@ import '../../core/di/injection.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme_v2.dart';
 import '../../l10n/l10n_extension.dart';
+import 'shift_grid_helpers.dart';
 
 /// Lists every shift grid (weekly + merged) that contains employees matching [query].
 class EmployeeGridsSearchDialog extends StatefulWidget {
@@ -126,7 +127,7 @@ class _EmployeeGridsSearchDialogState extends State<EmployeeGridsSearchDialog> {
     final mergedInto = g['mergedIntoName']?.toString();
     final lineCount = (g['lineCount'] as num?)?.toInt() ?? 0;
     final subtitleParts = <String>[
-      '${g['dateFrom']} → ${g['dateTo']}',
+      formatDateRange(g['dateFrom']?.toString(), g['dateTo']?.toString()),
       if ((g['locationName']?.toString() ?? '').isNotEmpty)
         g['locationName'].toString(),
       if (lineCount > 0)

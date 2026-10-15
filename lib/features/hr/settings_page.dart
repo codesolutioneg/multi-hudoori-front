@@ -1304,6 +1304,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final showPayroll = isFeatureEnabled(auth, 'payroll');
     final showIntegrations = isFeatureEnabled(auth, 'integrations');
     final showEmployeeApp = isFeatureEnabled(auth, 'employee_app');
+    final showInsuranceForms = isFeatureEnabled(auth, 'insurance_forms');
 
     final connected = _config['isConnected'] == true;
     final credentialsConfigured = _config['credentialsConfigured'] == true;
@@ -1414,7 +1415,10 @@ class _SettingsPageState extends State<SettingsPage> {
             title: context.t('set.title'),
             subtitle: context.t('setPg.settingsHint'),
             icon: Icons.tune_outlined,
-            child: const AppSettingsSection(embedded: true),
+            child: AppSettingsSection(
+              embedded: true,
+              showInsuranceEstablishments: showInsuranceForms,
+            ),
           ),
           const SizedBox(height: 10),
           SettingsAccordionSection(

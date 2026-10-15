@@ -16,6 +16,7 @@ import '../../features/hr/employees_page.dart';
 import '../../features/hr/hiring_appointment_create_page.dart';
 import '../../features/hr/hiring_appointments_page.dart';
 import '../../features/hr/health_certificates_page.dart';
+import '../../features/hr/insurance_forms_page.dart';
 import '../../features/attendance/my_schedule_page.dart';
 import '../../features/employee/location_punch_page.dart';
 import '../../features/hr/reports_page.dart';
@@ -100,6 +101,7 @@ abstract final class AppRoutes {
   static const hrSettings = '/hr/settings';
   static const hrPushNotifications = '/hr/push-notifications';
   static const hrHealthCertificates = '/hr/health-certificates';
+  static const hrInsuranceForms = '/hr/insurance-forms';
   static const hrReports = '/hr/reports';
   static const hrAudit = '/hr/audit';
   static const hrHiringAppointments = '/hr/hiring-appointments';
@@ -485,6 +487,11 @@ GoRouter createRouter(AuthCubit auth) {
             path: AppRoutes.hrHealthCertificates,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: HealthCertificatesPage()),
+          ),
+          GoRoute(
+            path: AppRoutes.hrInsuranceForms,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: InsuranceFormsPage()),
           ),
           GoRoute(
             path: AppRoutes.hrReports,

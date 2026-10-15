@@ -14,13 +14,10 @@ import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n_extension.dart';
 import '../auth/auth_cubit.dart';
 import '../auth/auth_state.dart';
+import 'widgets/dashboard_analytics_section.dart';
 import 'widgets/dashboard_auto_sync_panel.dart';
-import 'widgets/dashboard_chart_models.dart';
-import 'widgets/dashboard_donut_card_v2.dart';
-import 'widgets/dashboard_exceptions_chart_v2.dart';
 import 'widgets/dashboard_hero_header.dart';
 import 'widgets/dashboard_quick_actions.dart';
-import 'widgets/dashboard_realtime_panel_v2.dart';
 import 'widgets/dashboard_section_header.dart';
 import 'widgets/dashboard_stat_card_v2.dart';
 
@@ -271,21 +268,12 @@ class _DashboardPageV2State extends State<DashboardPageV2> {
                                 _buildStatsGrid(context, isHr, isBranch),
                                 if (showAnalytics) ...[
                                   const Gap(36),
-                                  DashboardSectionHeader(
-                                    title: context.t('dash.analytics'),
-                                    subtitle: context.t('dash.analyticsSub'),
+                                  DashboardAnalyticsSection(
+                                    charts: _charts,
+                                    onRefresh: () => _load(refresh: true),
+                                    showLiveActivity:
+                                        showHrEmployees || showRequests,
                                   ),
-                                  const Gap(14),
-                                  _buildChartsGrid(context),
-                                  if (showHrEmployees || showRequests) ...[
-                                    const Gap(36),
-                                    DashboardSectionHeader(
-                                      title: context.t('dash.liveActivity'),
-                                      subtitle: context.t('dash.liveActivitySub'),
-                                    ),
-                                    const Gap(14),
-                                    _buildBottomSection(),
-                                  ],
                                   if (isHrManager) ...[
                                     const Gap(32),
                                     const DashboardAutoSyncPanel(),
@@ -425,133 +413,6 @@ class _DashboardPageV2State extends State<DashboardPageV2> {
     );
   }
 
-  Widget _buildChartsGrid(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final approvals = slicesFromJson(_charts['approvals']);
-    final schedule = slicesFromJson(_charts['schedule']);
-    final deviceStatus = slicesFromJson(_charts['deviceStatus']);
-    final attendance = slicesFromJson(_charts['attendance']);
-
-    final charts = [
-      _ChartConfig(
-        title: 'Approvals',
-        titleAr: l10n.t('chart.approvals'),
-        slices: approvals,
-      ),
-      _ChartConfig(
-        title: 'Schedule',
-        titleAr: l10n.t('chart.schedule'),
-        slices: schedule,
-      ),
-      _ChartConfig(
-        title: 'Device Status',
-        titleAr: l10n.t('chart.deviceStatus'),
-        slices: deviceStatus,
-      ),
-      _ChartConfig(
-        title: 'Attendance',
-        titleAr: l10n.t('chart.attendance'),
-        slices: attendance,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossCount = constraints.maxWidth >= 1200
-            ? 4
-            : constraints.maxWidth >= 700
-            ? 2
-            : 1;
-
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossCount,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: crossCount == 1 ? 1.05 : 0.95,
-          ),
-          itemCount: charts.length,
-          itemBuilder: (context, index) {
-            final chart = charts[index];
-            return DashboardDonutCardV2(
-                  title: chart.title,
-                  titleAr: chart.titleAr,
-                  slices: chart.slices,
-                  onRefresh: () => _load(refresh: true),
-                )
-                .animate(delay: Duration(milliseconds: index * 80))
-                .fadeIn(duration: 450.ms)
-                .scaleXY(begin: 0.97, end: 1.0, duration: 450.ms);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildBottomSection() {
-    final trend = trendFromJson(_charts['exceptionsTrend']);
-    final punches =
-        (_charts['recentPunches'] as List?)
-            ?.whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList() ??
-        [];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const panelHeight = 380.0;
-
-        if (constraints.maxWidth >= 960) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: panelHeight,
-                  child: DashboardRealtimePanelV2(
-                    punches: punches,
-                    onRefresh: () => _load(refresh: true),
-                  ),
-                ),
-              ),
-              const Gap(14),
-              Expanded(
-                child: SizedBox(
-                  height: panelHeight,
-                  child: DashboardExceptionsChartV2(
-                    points: trend,
-                    onRefresh: () => _load(refresh: true),
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
-        return Column(
-          children: [
-            SizedBox(
-              height: panelHeight,
-              child: DashboardRealtimePanelV2(
-                punches: punches,
-                onRefresh: () => _load(refresh: true),
-              ),
-            ),
-            const Gap(14),
-            SizedBox(
-              height: panelHeight,
-              child: DashboardExceptionsChartV2(
-                points: trend,
-                onRefresh: () => _load(refresh: true),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildAlertBanner({
     required String message,
     required _AlertTone tone,
@@ -623,14 +484,3 @@ class _StatConfig {
   });
 }
 
-class _ChartConfig {
-  final String title;
-  final String titleAr;
-  final List<ChartSliceData> slices;
-
-  _ChartConfig({
-    required this.title,
-    required this.titleAr,
-    required this.slices,
-  });
-}

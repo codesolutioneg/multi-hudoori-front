@@ -1,7 +1,19 @@
 import 'package:flutter/material.dart';
+import '../../core/locale/locale_cubit.dart';
 import '../../l10n/l10n_extension.dart';
 
 import '../../core/utils/shift_calculations.dart';
+
+/// Date range arrow: mirrored in Arabic (RTL) so «من ← إلى» reads correctly.
+String dateRangeArrow() =>
+    LocaleCubit.activeLanguageCode == 'ar' ? '←' : '→';
+
+String formatDateRange(String? from, String? to) {
+  final f = from?.toString() ?? '';
+  final t = to?.toString() ?? '';
+  if (f.isEmpty && t.isEmpty) return tr('shiftGrid.noDate');
+  return '$f ${dateRangeArrow()} $t';
+}
 
 class WeekGroup {
   const WeekGroup({required this.label, required this.colspan});
@@ -166,7 +178,7 @@ List<MapEntry<String, List<Map<String, dynamic>>>> groupShiftGridsByPeriod(
   for (final item in items) {
     final from = item['dateFrom']?.toString() ?? '';
     final to = item['dateTo']?.toString() ?? '';
-    final key = (from.isEmpty && to.isEmpty) ? tr('shiftGrid.noDate') : '$from → $to';
+    final key = formatDateRange(from, to);
     buckets.putIfAbsent(key, () => []).add(item);
   }
 

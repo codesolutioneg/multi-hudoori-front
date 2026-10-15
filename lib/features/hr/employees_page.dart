@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
 import '../../core/layout/breakpoints.dart';
-import '../../core/layout/keyboard_stable_layout.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme_v2.dart';
@@ -748,69 +747,94 @@ class _EmployeesPageState extends State<EmployeesPage> {
   }
 
   Widget _filtersCard(BuildContext context) {
+    final searchField = TextField(
+      controller: _searchCtrl,
+      focusNode: _searchFocus,
+      autofillHints: const <String>[],
+      autocorrect: false,
+      enableSuggestions: false,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        labelText: context.t('emp.searchHint'),
+        prefixIcon: const Icon(Icons.search, size: 20),
+        suffixIcon: _searchCtrl.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  _reload(reset: true);
+                },
+              )
+            : null,
+      ),
+      onChanged: _onSearchChanged,
+      onSubmitted: (_) => _reload(reset: true),
+    );
+    final locationField = SearchableSelectField<String>(
+      label: context.t('employees.field.location'),
+      allLabel: context.t('employees.allLocations'),
+      value:
+          context.read<AuthCubit>().state.scopedLocationId ?? _locationFilter,
+      options: [
+        for (final l in _locations)
+          SearchableSelectOption(
+            value: EntityId.parse(l['id']) ?? '',
+            label: (l['actualName'] ?? l['name'])?.toString() ?? '',
+          ),
+      ],
+      onChanged: context.read<AuthCubit>().state.isLocationScoped
+          ? (_) {}
+          : (v) {
+              setState(() => _locationFilter = v);
+              _reload(reset: true);
+            },
+    );
+    final departmentField = SearchableSelectField<String>(
+      label: context.t('employees.department'),
+      allLabel: context.t('employees.allDepartments'),
+      value: _departmentFilter,
+      options: [
+        for (final d in _departments)
+          SearchableSelectOption(
+            value: d['id']?.toString() ?? '',
+            label: departmentDisplayName(d, isArabic: context.l10n.isAr),
+          ),
+      ],
+      onChanged: (v) {
+        setState(() => _departmentFilter = v);
+        _reload(reset: true);
+      },
+    );
+
     return SellixCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _searchCtrl,
-            focusNode: _searchFocus,
-            autofillHints: const <String>[],
-            autocorrect: false,
-            enableSuggestions: false,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              labelText: context.t('emp.searchHint'),
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: _searchCtrl.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () {
-                        _searchCtrl.clear();
-                        _reload(reset: true);
-                      },
-                    )
-                  : null,
-            ),
-            onChanged: _onSearchChanged,
-            onSubmitted: (_) => _reload(reset: true),
-          ),
-          const SizedBox(height: 12),
-          SearchableSelectField<String>(
-            label: context.t('employees.field.location'),
-            allLabel: context.t('employees.allLocations'),
-            value:
-                context.read<AuthCubit>().state.scopedLocationId ??
-                _locationFilter,
-            options: [
-              for (final l in _locations)
-                SearchableSelectOption(
-                  value: EntityId.parse(l['id']) ?? '',
-                  label: (l['actualName'] ?? l['name'])?.toString() ?? '',
-                ),
-            ],
-            onChanged: context.read<AuthCubit>().state.isLocationScoped
-                ? (_) {}
-                : (v) {
-                    setState(() => _locationFilter = v);
-                    _reload(reset: true);
-                  },
-          ),
-          const SizedBox(height: 12),
-          SearchableSelectField<String>(
-            label: context.t('employees.department'),
-            allLabel: context.t('employees.allDepartments'),
-            value: _departmentFilter,
-            options: [
-              for (final d in _departments)
-                SearchableSelectOption(
-                  value: d['id']?.toString() ?? '',
-                  label: departmentDisplayName(d, isArabic: context.l10n.isAr),
-                ),
-            ],
-            onChanged: (v) {
-              setState(() => _departmentFilter = v);
-              _reload(reset: true);
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final oneRow = constraints.maxWidth >= 780;
+              if (oneRow) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 3, child: searchField),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: locationField),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: departmentField),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  searchField,
+                  const SizedBox(height: 12),
+                  locationField,
+                  const SizedBox(height: 12),
+                  departmentField,
+                ],
+              );
             },
           ),
           const SizedBox(height: 8),
@@ -871,38 +895,17 @@ class _EmployeesPageState extends State<EmployeesPage> {
     );
   }
 
-  Widget _employeesList(BuildContext context) {
-    if (_loading) return const _EmployeesListSkeleton();
-    if (_items.isEmpty) {
-      return SellixCard(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Text(context.t('emp.noMatches')),
-          ),
-        ),
-      );
-    }
-    return SellixCard(
-      padding: EdgeInsets.zero,
-      child: ListView.separated(
-        controller: _scrollCtrl,
-        itemCount: _items.length + (_loadingMore ? _loadMoreSkeletonCount : 0),
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, i) {
-          if (i >= _items.length) return const _EmployeeTileSkeleton();
-          return _EmployeeTile(
-            employee: _items[i],
-            onTap: () async {
-              await context.push('${AppRoutes.hrEmployees}/${_items[i]['id']}');
-              if (mounted) _reload(reset: true);
-            },
-            onDelete: context.watch<AuthCubit>().state.canDeleteEmployee
-                ? () => _deleteEmployee(_items[i])
-                : null,
-          );
-        },
-      ),
+  Widget _employeeRow(BuildContext context, int i) {
+    if (i >= _items.length) return const _EmployeeTileSkeleton();
+    return _EmployeeTile(
+      employee: _items[i],
+      onTap: () async {
+        await context.push('${AppRoutes.hrEmployees}/${_items[i]['id']}');
+        if (mounted) _reload(reset: true);
+      },
+      onDelete: context.watch<AuthCubit>().state.canDeleteEmployee
+          ? () => _deleteEmployee(_items[i])
+          : null,
     );
   }
 
@@ -915,60 +918,37 @@ class _EmployeesPageState extends State<EmployeesPage> {
       compact ? 12 : 24,
       compact ? 16 : 24,
     );
+    final header = PageHeader(
+      title: context.t('employees.title'),
+      subtitle: _total > 0
+          ? context.t('employees.totalBioTime', {'n': _total})
+          : context.t('employees.emptyBioTime'),
+      icon: Icons.people_outline_rounded,
+      actions: _headerActions(context),
+    );
+    final filters = _filtersCard(context);
+    final quota = _quota;
+    final quotaBanner = quota != null && quota.employeesFull
+        ? _QuotaFullBanner(
+            message: context.t('quota.employeesFullBanner', {
+              'used': quota.employeesUsed,
+              'max': quota.employeesMax,
+            }),
+          )
+        : null;
+    final rowCount = _loading
+        ? 0
+        : _items.length + (_loadingMore ? _loadMoreSkeletonCount : 0);
 
     return Stack(
       children: [
-        Padding(
-          padding: pagePadding,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Short viewports: scroll the whole page so filters never push
-              // the list off-screen / into a zero-height Expanded. Android's
-              // keyboard temporarily removes its inset from maxHeight, so use
-              // the pre-keyboard height to avoid remounting the search field.
-              final shortViewport = useShortEmployeesViewport(
-                layoutHeight: constraints.maxHeight,
-                keyboardInset: MediaQuery.viewInsetsOf(context).bottom,
-              );
-              final header = PageHeader(
-                title: context.t('employees.title'),
-                subtitle: _total > 0
-                    ? context.t('employees.totalBioTime', {'n': _total})
-                    : context.t('employees.emptyBioTime'),
-                icon: Icons.people_outline_rounded,
-                actions: _headerActions(context),
-              );
-              final filters = _filtersCard(context);
-              final list = _employeesList(context);
-              final quota = _quota;
-              final quotaBanner = quota != null && quota.employeesFull
-                  ? _QuotaFullBanner(
-                      message: context.t('quota.employeesFullBanner', {
-                        'used': quota.employeesUsed,
-                        'max': quota.employeesMax,
-                      }),
-                    )
-                  : null;
-
-              if (shortViewport) {
-                return ListView(
-                  children: [
-                    header,
-                    if (quotaBanner != null) ...[
-                      const SizedBox(height: 12),
-                      quotaBanner,
-                    ],
-                    const SizedBox(height: 16),
-                    filters,
-                    const SizedBox(height: 16),
-                    SizedBox(height: 420, child: list),
-                  ],
-                );
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+        CustomScrollView(
+          controller: _scrollCtrl,
+          slivers: [
+            SliverPadding(
+              padding: pagePadding,
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
                   header,
                   if (quotaBanner != null) ...[
                     const SizedBox(height: 12),
@@ -977,11 +957,53 @@ class _EmployeesPageState extends State<EmployeesPage> {
                   const SizedBox(height: 16),
                   filters,
                   const SizedBox(height: 16),
-                  Expanded(child: list),
-                ],
-              );
-            },
-          ),
+                  if (_loading)
+                    const _EmployeesListSkeleton()
+                  else if (_items.isEmpty)
+                    SellixCard(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(context.t('emp.noMatches')),
+                        ),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+            if (!_loading && _items.isNotEmpty)
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  pagePadding.left,
+                  0,
+                  pagePadding.right,
+                  pagePadding.bottom,
+                ),
+                sliver: DecoratedSliver(
+                  decoration: BoxDecoration(
+                    color: AppThemeV2.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppThemeV2.border),
+                  ),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, i) {
+                        final child = _employeeRow(context, i);
+                        if (i >= rowCount - 1) return child;
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            child,
+                            const Divider(height: 1),
+                          ],
+                        );
+                      },
+                      childCount: rowCount,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
         if (_exportingExcel || _exportingTemplate || _importingExcel)
           Positioned.fill(

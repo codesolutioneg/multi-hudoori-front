@@ -10,6 +10,7 @@ import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/feature_entitlements.dart';
 import '../../core/widgets/page_header.dart';
 import '../../features/auth/auth_cubit.dart';
+import '../../features/dashboard/widgets/dashboard_analytics_section.dart';
 import '../../features/dashboard/widgets/dashboard_quick_actions.dart';
 import '../../features/dashboard/widgets/dashboard_stat_card_v2.dart';
 import '../../l10n/l10n_extension.dart';
@@ -23,6 +24,7 @@ class HrDashboardPage extends StatefulWidget {
 
 class _HrDashboardPageState extends State<HrDashboardPage> {
   Map<String, dynamic> _stats = {};
+  Map<String, dynamic> _charts = {};
   bool _loading = true;
 
   @override
@@ -31,15 +33,20 @@ class _HrDashboardPageState extends State<HrDashboardPage> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool refresh = false}) async {
     setState(() => _loading = true);
     try {
-      final stats = await api.dashboardStats();
-      if (mounted)
+      final pair = await Future.wait([
+        api.dashboardStats(),
+        api.dashboardCharts(),
+      ]);
+      if (mounted) {
         setState(() {
-          _stats = stats;
+          _stats = pair[0];
+          _charts = pair[1];
           _loading = false;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
@@ -89,6 +96,13 @@ class _HrDashboardPageState extends State<HrDashboardPage> {
         route: AppRoutes.hrPayroll,
       ),
     ].where((c) => isRouteEntitled(auth, c.route)).toList();
+
+    final showPayrollUi = isFeatureEnabled(auth, 'payroll');
+    final showHrEmployees = isFeatureEnabled(auth, 'hr_employees');
+    final showRequests = isFeatureEnabled(auth, 'hr_requests');
+    final showAnalytics = showPayrollUi ||
+        isFeatureEnabled(auth, 'attendance') ||
+        showHrEmployees;
 
     return AppPageScaffold(
       child: Column(
@@ -148,6 +162,14 @@ class _HrDashboardPageState extends State<HrDashboardPage> {
                   );
                 },
               ),
+            if (showAnalytics) ...[
+              const Gap(36),
+              DashboardAnalyticsSection(
+                charts: _charts,
+                onRefresh: () => _load(refresh: true),
+                showLiveActivity: showHrEmployees || showRequests,
+              ),
+            ],
             const Gap(28),
             Text(
               context.t('hrDash.shortcuts'),

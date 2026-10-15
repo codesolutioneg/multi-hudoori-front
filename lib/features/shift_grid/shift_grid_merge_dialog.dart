@@ -7,6 +7,7 @@ import '../../core/theme/app_theme_v2.dart';
 import '../../core/utils/payroll_month.dart';
 import '../../core/widgets/sellix_card.dart';
 import '../../l10n/l10n_extension.dart';
+import 'shift_grid_helpers.dart';
 
 /// Merges weekly grids into one monthly grid, or appends a later week into an
 /// existing monthly merge.
@@ -370,7 +371,10 @@ class _ShiftGridMergeDialogState extends State<ShiftGridMergeDialog> {
     final to = DateTime.tryParse('${grid['dateTo']}');
     final span =
         (from != null && to != null) ? to.difference(from).inDays + 1 : null;
-    final range = '${grid['dateFrom']} → ${grid['dateTo']}';
+    final range = formatDateRange(
+      grid['dateFrom']?.toString(),
+      grid['dateTo']?.toString(),
+    );
     return span != null
         ? '$range  ·  ${context.t('grid.mergeSpanDays', {'days': '$span'})}'
         : range;
@@ -435,7 +439,7 @@ class _ShiftGridMergeDialogState extends State<ShiftGridMergeDialog> {
           }),
           style: AppThemeV2.caption,
         ),
-        if (crossMode == 'last_week')
+        if (crossMode == 'employee_card')
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
@@ -779,7 +783,7 @@ class _ShiftGridMergeDialogState extends State<ShiftGridMergeDialog> {
               (t) => DropdownMenuItem<String?>(
                 value: t['id']?.toString(),
                 child: Text(
-                  '${t['locationName'] ?? t['name']} — ${t['name']} (${t['dateFrom']} → ${t['dateTo']})',
+                  '${t['locationName'] ?? t['name']} — ${t['name']} (${formatDateRange(t['dateFrom']?.toString(), t['dateTo']?.toString())})',
                 ),
               ),
             ),
@@ -837,8 +841,8 @@ class _ShiftGridMergeDialogState extends State<ShiftGridMergeDialog> {
                       value: p.from,
                       child: Text(
                         p.from == currentFrom
-                            ? '${p.from} → ${p.to} (${context.t('grid.mergeCurrentPeriod')})'
-                            : '${p.from} → ${p.to}',
+                            ? '${formatDateRange(p.from, p.to)} (${context.t('grid.mergeCurrentPeriod')})'
+                            : formatDateRange(p.from, p.to),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),

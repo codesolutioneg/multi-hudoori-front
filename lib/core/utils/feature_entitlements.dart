@@ -24,6 +24,7 @@ const Map<String, String> kRouteFeatureMap = {
   AppRoutes.hrHiringAppointments: 'hr_employees',
   AppRoutes.hrHiringAppointmentCreate: 'hr_employees',
   AppRoutes.hrHealthCertificates: 'hr_employees',
+  AppRoutes.hrInsuranceForms: 'insurance_forms',
   AppRoutes.orgChart: 'hr_employees',
   AppRoutes.hrReports: 'hr_reports',
   // Resolved in isRouteEntitled: HR inbox vs employee self-service.
@@ -35,6 +36,7 @@ const Map<String, String> kRouteFeatureMap = {
 const Map<String, String> kMenuFeatureMap = {
   'hiring_appointments': 'hr_employees',
   'employees': 'hr_employees',
+  'insurance_forms': 'insurance_forms',
   'org_chart': 'hr_employees',
   'shifts': 'attendance',
   'shift_grid': 'attendance',
@@ -58,6 +60,10 @@ const Map<String, String> kMenuFeatureMap = {
 const Map<String, ({String ar, String en})> kFeatureLabels = {
   'attendance': (ar: 'الحضور والشيفتات', en: 'Attendance & shifts'),
   'hr_employees': (ar: 'إدارة الموظفين', en: 'Employee management'),
+  'insurance_forms': (
+    ar: 'استمارات التأمينات (س1 / س6)',
+    en: 'Social insurance forms (S1 / S6)',
+  ),
   'hr_leaves': (ar: 'الإجازات', en: 'Leaves'),
   'hr_requests': (ar: 'الطلبات', en: 'HR requests'),
   'employee_app': (ar: 'تطبيق الموظف', en: 'Employee app'),
