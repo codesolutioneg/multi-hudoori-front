@@ -358,6 +358,8 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
 
   bool get _locked => _batch?['state']?.toString() == 'locked';
 
+  bool get _isManualBatch => _batch?['source']?.toString() == 'manual';
+
   String get _backLabel => widget.initialImportId == null
       ? (_locked
             ? context.t(_isTip ? 'loanImp.backTip' : 'loanImp.backLoan')
@@ -1262,6 +1264,53 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     }
   }
 
+  Future<void> _sendManualBatchToOdoo() async {
+    if (_busy || _lines.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.t('adv.sendManualBatchOdoo')),
+        content: Text(ctx.t('adv.sendManualBatchConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(ctx.t('adv.sendManualBatchOdoo')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      final result = await api.advanceLoanImportSendManualToOdoo();
+      final batch = (result['import'] as Map?)?.cast<String, dynamic>();
+      if (!mounted) return;
+      setState(() {
+        if (batch != null) _batch = batch;
+        _busy = false;
+      });
+      _snack(context.t('adv.sendManualBatchDone'));
+      final id = batch?['id']?.toString();
+      if (id != null && id.isNotEmpty) {
+        final fresh = await api.advanceLoanImportGet(id);
+        if (!mounted) return;
+        setState(() {
+          _batch = fresh;
+          _phase = _ImportPhase.review;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        _snack(e.toString());
+      }
+    }
+  }
+
   Future<void> _sendToOdooAccounts() async {
     if (_importId == null) return;
     if (_batch?['odooAccountsSendId'] != null) {
@@ -1846,37 +1895,39 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    if (!_isTip) ...[
+                    if (!_isManualBatch) ...[
+                      if (!_isTip) ...[
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : _exportEligibility,
+                          icon: const Icon(Icons.download_outlined, size: 18),
+                          label: Text(context.t('loanImp.exportEligSheet')),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: _busy ? null : _importEligibility,
+                          icon: const Icon(Icons.upload_file_outlined, size: 18),
+                          label: Text(context.t('loanImp.importEligSheet')),
+                        ),
+                      ],
                       OutlinedButton.icon(
-                        onPressed: _busy ? null : _exportEligibility,
-                        icon: const Icon(Icons.download_outlined, size: 18),
-                        label: Text(context.t('loanImp.exportEligSheet')),
-                      ),
-                      FilledButton.tonalIcon(
-                        onPressed: _busy ? null : _importEligibility,
-                        icon: const Icon(Icons.upload_file_outlined, size: 18),
-                        label: Text(context.t('loanImp.importEligSheet')),
-                      ),
-                    ],
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _reimportLoanSheet,
-                      icon: const Icon(Icons.upload_outlined, size: 18),
-                      label: Text(
-                        context.t(
-                          _isTip
-                              ? 'loanImp.reuploadTip'
-                              : 'loanImp.reuploadLoan',
+                        onPressed: _busy ? null : _reimportLoanSheet,
+                        icon: const Icon(Icons.upload_outlined, size: 18),
+                        label: Text(
+                          context.t(
+                            _isTip
+                                ? 'loanImp.reuploadTip'
+                                : 'loanImp.reuploadLoan',
+                          ),
                         ),
                       ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _addEmployeeManually,
-                      icon: const Icon(
-                        Icons.person_add_alt_1_outlined,
-                        size: 18,
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _addEmployeeManually,
+                        icon: const Icon(
+                          Icons.person_add_alt_1_outlined,
+                          size: 18,
+                        ),
+                        label: Text(context.t('loanImp.addEmployee')),
                       ),
-                      label: Text(context.t('loanImp.addEmployee')),
-                    ),
+                    ],
                     OutlinedButton.icon(
                       onPressed: _busy || _lines.isEmpty
                           ? null
@@ -1888,17 +1939,26 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                             : context.t('loanImp.downloadLoanSheet'),
                       ),
                     ),
-                    FilledButton.icon(
-                      onPressed: _busy || _lines.isEmpty ? null : _approve,
-                      icon: const Icon(Icons.check, size: 18),
-                      label: Text(
-                        context.t(
-                          _isTip
-                              ? 'loanImp.approveTip'
-                              : 'loanImp.approveCreateLoans',
+                    if (_isManualBatch)
+                      FilledButton.icon(
+                        onPressed: _busy || _lines.isEmpty
+                            ? null
+                            : _sendManualBatchToOdoo,
+                        icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                        label: Text(context.t('adv.sendManualBatchOdoo')),
+                      )
+                    else
+                      FilledButton.icon(
+                        onPressed: _busy || _lines.isEmpty ? null : _approve,
+                        icon: const Icon(Icons.check, size: 18),
+                        label: Text(
+                          context.t(
+                            _isTip
+                                ? 'loanImp.approveTip'
+                                : 'loanImp.approveCreateLoans',
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               if (_locked) ...[

@@ -1380,6 +1380,77 @@ class BioTimeApiClient {
     return Map<String, dynamic>.from(data);
   }
 
+  // ---- Field mission requests («طلب مأمورية») ----
+
+  /// Omit [employeeId] to request for yourself; managers pass it to file on
+  /// behalf of one of their staff. Details are free text (no lat/lng picker).
+  Future<Map<String, dynamic>> fieldMissionRequestCreate({
+    Object? employeeId,
+    required String details,
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    final data = _unwrap(
+      await _call('/api/biotime/field-mission-requests/create', {
+        if (employeeId != null) 'employeeId': employeeId,
+        'details': details,
+        'dateFrom': dateFrom,
+        'dateTo': dateTo,
+      }),
+    );
+    return Map<String, dynamic>.from(data);
+  }
+
+  Future<List<Map<String, dynamic>>> fieldMissionRequestMine() async {
+    final data = _unwrap(
+      await _call('/api/biotime/field-mission-requests/my', {}),
+    );
+    return _listFrom(data['requests']);
+  }
+
+  /// Branch-scoped queue. Pass `all` for [state] to include closed rows.
+  Future<List<Map<String, dynamic>>> fieldMissionRequestList({
+    String? state,
+    Object? locationId,
+  }) async {
+    final data = _unwrap(
+      await _call('/api/biotime/field-mission-requests/list', {
+        if (state != null && state.isNotEmpty) 'state': state,
+        if (locationId != null) 'locationId': locationId,
+      }),
+    );
+    return _listFrom(data['requests']);
+  }
+
+  Future<Map<String, dynamic>> fieldMissionRequestBranchApprove(Object id) async {
+    final data = _unwrap(
+      await _call('/api/biotime/field-mission-requests/branch-approve', {
+        'id': id,
+      }),
+    );
+    return Map<String, dynamic>.from(data);
+  }
+
+  Future<Map<String, dynamic>> fieldMissionRequestReject({
+    required Object id,
+    required String reason,
+  }) async {
+    final data = _unwrap(
+      await _call('/api/biotime/field-mission-requests/reject', {
+        'id': id,
+        'reason': reason,
+      }),
+    );
+    return Map<String, dynamic>.from(data);
+  }
+
+  Future<Map<String, dynamic>> fieldMissionRequestCancel(Object id) async {
+    final data = _unwrap(
+      await _call('/api/biotime/field-mission-requests/cancel', {'id': id}),
+    );
+    return Map<String, dynamic>.from(data);
+  }
+
   // ---- Branch managers («مدير الفرع») ----
 
   /// Every active branch with whoever signs off its advance requests — either the
@@ -3446,6 +3517,20 @@ class BioTimeApiClient {
       await _call('/api/biotime/advances/loan-import/send-to-odoo-accounts', {
         'importId': importId,
       }),
+    );
+  }
+
+  /// Open (or create) the draft batch of unsent manual short advances.
+  Future<Map<String, dynamic>> advanceLoanImportOpenManual() async {
+    return _unwrap(
+      await _call('/api/biotime/advances/loan-import/open-manual', {}),
+    );
+  }
+
+  /// Lock the open manual batch and send it to Odoo accounts.
+  Future<Map<String, dynamic>> advanceLoanImportSendManualToOdoo() async {
+    return _unwrap(
+      await _call('/api/biotime/advances/loan-import/send-manual-to-odoo', {}),
     );
   }
 

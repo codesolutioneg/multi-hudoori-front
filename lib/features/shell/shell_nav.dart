@@ -32,6 +32,7 @@ IconData menuIconFor(String icon) => switch (icon) {
       'pending_actions' => Icons.pending_actions_outlined,
       'my_location' => Icons.my_location_outlined,
       'policy' => Icons.policy_outlined,
+      'flight_takeoff' => Icons.flight_takeoff_outlined,
       _ => Icons.dashboard_outlined,
     };
 

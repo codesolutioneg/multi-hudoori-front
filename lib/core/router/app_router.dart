@@ -32,6 +32,8 @@ import '../../features/advances/advance_requests_queue_page.dart';
 import '../../features/advances/advances_page.dart';
 import '../../features/advances/my_advance_request_page.dart';
 import '../../features/advances/tips_page.dart';
+import '../../features/missions/field_mission_queue_page.dart';
+import '../../features/missions/my_field_mission_page.dart';
 import '../../features/deductions/deductions_page.dart';
 import '../../features/payroll/my_payroll_page.dart';
 import '../../features/payroll/payroll_detail_page.dart';
@@ -80,6 +82,7 @@ abstract final class AppRoutes {
   static const myAttendance = '/attendance/my';
   static const mySchedule = '/my/schedule';
   static const myAdvanceRequest = '/my/advance-request';
+  static const myFieldMission = '/my/field-mission';
   static const myLocationPunch = '/my/location-punch';
   static const requests = '/requests';
   static const myPayroll = '/payroll/my';
@@ -94,6 +97,7 @@ abstract final class AppRoutes {
   static const hrDeductions = '/hr/deductions';
   static const hrAdvances = '/hr/advances';
   static const hrAdvanceRequests = '/hr/advance-requests';
+  static const hrFieldMissionRequests = '/hr/field-mission-requests';
   static const hrAdvanceLoanImport = '/hr/advances/loan-import';
   static const hrTips = '/hr/tips';
   static const hrTipImport = '/hr/tips/import';
@@ -335,6 +339,11 @@ GoRouter createRouter(AuthCubit auth) {
                 const NoTransitionPage(child: MyAdvanceRequestPage()),
           ),
           GoRoute(
+            path: AppRoutes.myFieldMission,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: MyFieldMissionPage()),
+          ),
+          GoRoute(
             path: AppRoutes.myLocationPunch,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: LocationPunchPage()),
@@ -343,6 +352,11 @@ GoRouter createRouter(AuthCubit auth) {
             path: AppRoutes.hrAdvanceRequests,
             pageBuilder: (_, __) =>
                 const NoTransitionPage(child: AdvanceRequestsQueuePage()),
+          ),
+          GoRoute(
+            path: AppRoutes.hrFieldMissionRequests,
+            pageBuilder: (_, __) =>
+                const NoTransitionPage(child: FieldMissionQueuePage()),
           ),
           GoRoute(
             path: AppRoutes.orgChart,

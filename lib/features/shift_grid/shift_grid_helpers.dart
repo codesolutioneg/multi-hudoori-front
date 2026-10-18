@@ -151,6 +151,7 @@ void applyShiftGridCellUpdate(
     cell['is_work_absence'] = m['isWorkAbsence'] == true;
     cell['is_work_injury'] = m['isWorkInjury'] == true;
     cell['is_marriage_leave'] = m['isMarriageLeave'] == true;
+    cell['is_field_mission'] = m['isFieldMission'] == true;
 
     final shiftId = cell['shift_id'];
     if (shiftId != null && shiftId != false) {

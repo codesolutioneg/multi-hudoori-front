@@ -80,6 +80,14 @@ class ShiftGridCellStyle {
         fontWeight: FontWeight.bold,
       );
     }
+    // Field mission styling before present — soft teal/cyan.
+    if (cell['is_field_mission'] == true) {
+      return const ShiftGridCellStyle(
+        background: Color(0xFFB2EBF2),
+        foreground: Color(0xFF006064),
+        fontWeight: FontWeight.bold,
+      );
+    }
     if (cell['is_present'] == true && (cell['shift_code'] == null || cell['shift_code'] == '')) {
       return const ShiftGridCellStyle(
         background: Color(0xFFD1E7DD),
@@ -120,6 +128,7 @@ class ShiftGridCellStyle {
     if (cell['is_work_absence'] == true) return tr('shiftGrid.cell.absence');
     if (cell['is_work_injury'] == true) return tr('shiftGrid.cell.injury');
     if (cell['is_marriage_leave'] == true) return tr('shiftGrid.cell.marriage');
+    if (cell['is_field_mission'] == true) return tr('shiftGrid.cell.mission');
     if (cell['is_present'] == true && (cell['shift_code'] == null || cell['shift_code'] == '')) return tr('shiftGrid.cell.present');
     final code = cell['shift_code']?.toString() ?? '';
     if (code.isNotEmpty) return cell['is_bus_delay'] == true ? '$code 🚌' : code;

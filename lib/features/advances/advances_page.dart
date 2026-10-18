@@ -53,6 +53,10 @@ class _AdvancesPageState extends State<AdvancesPage>
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
+      // Attach orphan manual shorts into the open Odoo batch before listing.
+      try {
+        await api.advanceLoanImportOpenManual();
+      } catch (_) {}
       final short = await api.advancesShortList();
       final long = await api.advancesLongList();
       final locked = await api.advanceLoanImportListPayload(state: 'locked');
@@ -71,6 +75,57 @@ class _AdvancesPageState extends State<AdvancesPage>
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _openManualBatch(String? importId) async {
+    try {
+      var id = importId?.trim() ?? '';
+      if (id.isEmpty) {
+        final open = await api.advanceLoanImportOpenManual();
+        id = open['importId']?.toString() ??
+            (open['batch'] as Map?)?['id']?.toString() ??
+            '';
+      }
+      if (id.isEmpty) {
+        _snack(context.t('adv.noOpenManualBatch'));
+        return;
+      }
+      if (!mounted) return;
+      await context.push('${AppRoutes.hrAdvanceLoanImport}?importId=$id');
+      await _load();
+    } catch (e) {
+      if (mounted) _snack(e.toString());
+    }
+  }
+
+  Future<void> _sendManualBatchToOdoo() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.t('adv.sendManualBatchOdoo')),
+        content: Text(ctx.t('adv.sendManualBatchConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(ctx.t('adv.sendManualBatchOdoo')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await api.advanceLoanImportSendManualToOdoo();
+      if (!mounted) return;
+      _snack(context.t('adv.sendManualBatchDone'));
+      await _load();
+      if (mounted) _tabs.animateTo(2);
+    } catch (e) {
+      if (mounted) _snack(e.toString());
     }
   }
 
@@ -174,6 +229,8 @@ class _AdvancesPageState extends State<AdvancesPage>
                         payrollMonthStartDay: _payrollMonthStartDay,
                         onRefresh: _load,
                         onExportPeriod: _exportPeriodSheets,
+                        onOpenManualBatch: _openManualBatch,
+                        onSendManualBatch: _sendManualBatchToOdoo,
                       ),
                       _LongAdvanceList(
                         items: _long,
@@ -851,6 +908,8 @@ class _ShortAdvanceGroupedList extends StatefulWidget {
     required this.payrollMonthStartDay,
     required this.onRefresh,
     required this.onExportPeriod,
+    required this.onOpenManualBatch,
+    required this.onSendManualBatch,
   });
 
   final List<Map<String, dynamic>> items;
@@ -858,6 +917,8 @@ class _ShortAdvanceGroupedList extends StatefulWidget {
   final int payrollMonthStartDay;
   final VoidCallback onRefresh;
   final Future<void> Function(DateTime from, DateTime to) onExportPeriod;
+  final Future<void> Function(String? importId) onOpenManualBatch;
+  final Future<void> Function() onSendManualBatch;
 
   @override
   State<_ShortAdvanceGroupedList> createState() =>
@@ -981,15 +1042,36 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
     }).toList();
   }
 
+  /// Unsent manual shorts (open Odoo batch + orphans) share one UI bucket.
+  /// Cancelled lines dropped from the batch still list with that same card —
+  /// never a second "سلف يدوية" split by location or orphan status.
+  static bool _isOpenManualBucketItem(Map<String, dynamic> item) {
+    final importId = item['importId']?.toString();
+    if (importId == null || importId.isEmpty) return true;
+    return item['importSource']?.toString() == 'manual' &&
+        item['importState']?.toString() == 'draft' &&
+        item['importOdooAccountsSendId'] == null;
+  }
+
   Map<String, List<Map<String, dynamic>>> _groups(
     List<Map<String, dynamic>> items,
   ) {
+    String openManualKey = '__manual__';
+    for (final item in items) {
+      if (!_isOpenManualBucketItem(item)) continue;
+      final id = item['importId']?.toString();
+      if (id != null && id.isNotEmpty) {
+        openManualKey = id;
+        break;
+      }
+    }
+
     final groups = <String, List<Map<String, dynamic>>>{};
     for (final item in items) {
       final importId = item['importId']?.toString();
-      final key = (importId == null || importId.isEmpty)
-          ? '__manual__'
-          : importId;
+      final key = _isOpenManualBucketItem(item)
+          ? openManualKey
+          : ((importId == null || importId.isEmpty) ? '__manual__' : importId);
       groups.putIfAbsent(key, () => []).add(item);
     }
     return groups;
@@ -1194,6 +1276,19 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                         _groupByPayrollPeriod<
                           MapEntry<String, List<Map<String, dynamic>>>
                         >(groups.entries.toList(), (entry) {
+                          // Open manual batch: pin to batch importDate so
+                          // orphans/cancelled with older dates don't split months.
+                          final openManual = entry.value.any(
+                            _isOpenManualBucketItem,
+                          );
+                          if (openManual) {
+                            for (final item in entry.value) {
+                              final batchDate = parseIsoDate(
+                                item['importDate']?.toString(),
+                              );
+                              if (batchDate != null) return batchDate;
+                            }
+                          }
                           final first = entry.value.first;
                           return parseIsoDate(
                                 first['importDate']?.toString(),
@@ -1298,8 +1393,20 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                           child: Builder(
                                             builder: (context) {
                                               final first = entry.value.first;
-                                              final manual =
-                                                  entry.key == '__manual__';
+                                              final openManual =
+                                                  entry.key == '__manual__' ||
+                                                  entry.value.any(
+                                                    (item) =>
+                                                        item['importSource']
+                                                                ?.toString() ==
+                                                            'manual' &&
+                                                        item['importState']
+                                                                ?.toString() ==
+                                                            'draft' &&
+                                                        item['importOdooAccountsSendId'] ==
+                                                            null,
+                                                  );
+                                              final manual = openManual;
                                               final meta = _sheetMeta(
                                                 entry.key,
                                                 entry.value,
@@ -1432,6 +1539,60 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                                     ),
                                                   ),
                                                   children: [
+                                                    if (openManual)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets.fromLTRB(
+                                                              12,
+                                                              8,
+                                                              12,
+                                                              8,
+                                                            ),
+                                                        child: Wrap(
+                                                          spacing: 8,
+                                                          runSpacing: 8,
+                                                          children: [
+                                                            OutlinedButton.icon(
+                                                              onPressed: () {
+                                                                final id =
+                                                                    entry.key ==
+                                                                        '__manual__'
+                                                                    ? null
+                                                                    : entry
+                                                                        .key;
+                                                                widget
+                                                                    .onOpenManualBatch(
+                                                                      id,
+                                                                    );
+                                                              },
+                                                              icon: const Icon(
+                                                                Icons
+                                                                    .open_in_new,
+                                                                size: 18,
+                                                              ),
+                                                              label: Text(
+                                                                context.t(
+                                                                  'adv.openManualBatch',
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            FilledButton.icon(
+                                                              onPressed: widget
+                                                                  .onSendManualBatch,
+                                                              icon: const Icon(
+                                                                Icons
+                                                                    .cloud_upload_outlined,
+                                                                size: 18,
+                                                              ),
+                                                              label: Text(
+                                                                context.t(
+                                                                  'adv.sendManualBatchOdoo',
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
                                                     Padding(
                                                       padding:
                                                           const EdgeInsets.fromLTRB(
