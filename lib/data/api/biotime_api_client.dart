@@ -725,6 +725,10 @@ class BioTimeApiClient {
     return Map<String, dynamic>.from(data['device'] as Map? ?? {});
   }
 
+  Future<void> deviceDelete(Object id) async {
+    _unwrap(await _call('/api/biotime/devices/delete', {'deviceId': id}));
+  }
+
   Future<List<Map<String, dynamic>>> departmentsList({
     bool activeOnly = true,
   }) async {
@@ -3501,11 +3505,14 @@ class BioTimeApiClient {
   Future<Map<String, dynamic>> advanceLoanImportApprove(
     Object importId, {
     bool approveConflicts = false,
+    String? deductionStartDate,
   }) async {
     return _unwrap(
       await _call('/api/biotime/advances/loan-import/approve', {
         'importId': importId,
         if (approveConflicts) 'approveConflicts': true,
+        if (deductionStartDate != null && deductionStartDate.trim().isNotEmpty)
+          'deductionStartDate': deductionStartDate.trim(),
       }),
     );
   }
@@ -3603,6 +3610,7 @@ class BioTimeApiClient {
   Future<Map<String, dynamic>> advancesExportImportTemplate({
     String? locationId,
     List<String>? locationIds,
+    List<String>? employeeCodes,
     bool blank = false,
     String kind = 'loan',
     String? dateFrom,
@@ -3613,6 +3621,20 @@ class BioTimeApiClient {
         await _call('/api/biotime/advances/export/import-template', {
           'blank': true,
           'template': 'multiple',
+          'kind': kind,
+          if (dateFrom != null) 'dateFrom': dateFrom,
+          if (dateTo != null) 'dateTo': dateTo,
+        }),
+      );
+    }
+    final codes = <String>[
+      if (employeeCodes != null)
+        ...employeeCodes.map((e) => e.trim()).where((e) => e.isNotEmpty),
+    ];
+    if (codes.isNotEmpty) {
+      return _unwrap(
+        await _call('/api/biotime/advances/export/import-template', {
+          'employeeCodes': codes.toSet().toList(),
           'kind': kind,
           if (dateFrom != null) 'dateFrom': dateFrom,
           if (dateTo != null) 'dateTo': dateTo,

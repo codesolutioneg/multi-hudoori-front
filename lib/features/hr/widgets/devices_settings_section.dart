@@ -19,6 +19,7 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
   List<Map<String, dynamic>> _devices = [];
   List<Map<String, dynamic>> _locations = [];
   bool _loading = true;
+  final Set<String> _busyIds = {};
 
   @override
   void initState() {
@@ -51,12 +52,56 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
   }
 
   Future<void> _setLocation(Map<String, dynamic> device, String? locationId) async {
+    final id = device['id']?.toString() ?? '';
+    if (id.isEmpty) return;
     try {
-      await api.deviceUpdate(device['id'], locationId: locationId);
+      setState(() => _busyIds.add(id));
+      await api.deviceUpdate(id, locationId: locationId);
       _snack(context.t('set.deviceLocationUpdated'));
-      _load();
+      await _load();
     } catch (e) {
       _snack(e.toString());
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(id));
+    }
+  }
+
+  Future<void> _deleteDevice(Map<String, dynamic> device) async {
+    final id = device['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+    final label = (device['alias']?.toString().trim().isNotEmpty == true)
+        ? device['alias'].toString()
+        : (device['name']?.toString() ?? id);
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ctx.t('set.deviceDeleteTitle')),
+        content: Text(ctx.t('set.deviceDeleteBody', {'name': label})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(ctx.t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            child: Text(ctx.t('set.deviceDeleteConfirm')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    try {
+      setState(() => _busyIds.add(id));
+      await api.deviceDelete(id);
+      _snack(context.t('set.deviceDeleted'));
+      await _load();
+    } catch (e) {
+      _snack(e.toString());
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(id));
     }
   }
 
@@ -91,7 +136,9 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
           )
         else
           ..._devices.map((d) {
+            final id = d['id']?.toString() ?? '';
             final locId = d['locationId']?.toString();
+            final busy = _busyIds.contains(id);
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: SellixCard(
@@ -123,8 +170,20 @@ class _DevicesSettingsSectionState extends State<DevicesSettingsSection> {
                               child: Text(loc['name']?.toString() ?? ''),
                             ),
                         ],
-                        onChanged: (v) => _setLocation(d, v),
+                        onChanged: busy ? null : (v) => _setLocation(d, v),
                       ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: context.t('set.deviceDelete'),
+                      onPressed: busy ? null : () => _deleteDevice(d),
+                      icon: busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline, color: AppColors.danger),
                     ),
                   ],
                 ),

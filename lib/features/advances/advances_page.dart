@@ -155,14 +155,6 @@ class _AdvancesPageState extends State<AdvancesPage>
   void _snack(String m) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
-  Future<void> _openCreateShort() async {
-    final ok = await showShortAdvanceCreateDialog(context);
-    if (ok == true) {
-      _snack(context.t('adv.shortCreated'));
-      await _load();
-    }
-  }
-
   Future<void> _openCreateLong() async {
     final ok = await showLongAdvanceCreateDialog(
       context,
@@ -187,11 +179,6 @@ class _AdvancesPageState extends State<AdvancesPage>
             subtitle: context.t('advances.subtitle'),
             icon: Icons.account_balance_wallet_outlined,
             actions: [
-              OutlinedButton.icon(
-                onPressed: _openCreateShort,
-                icon: const Icon(Icons.payments_outlined, size: 18),
-                label: Text(context.t('adv.shortBtn')),
-              ),
               OutlinedButton.icon(
                 onPressed: () => context.push(AppRoutes.hrAdvanceLoanImport),
                 icon: const Icon(Icons.upload_file_outlined, size: 18),
@@ -239,6 +226,7 @@ class _AdvancesPageState extends State<AdvancesPage>
                       ),
                       _ApprovedLoanImportList(
                         items: _approvedImports,
+                        shortAdvances: _short,
                         payrollMonthStartDay: _payrollMonthStartDay,
                         onRefresh: _load,
                         onExportPeriod: _exportPeriodSheets,
@@ -558,15 +546,126 @@ void _showPeriodDuplicateEmployees(
   );
 }
 
+List<Map<String, dynamic>> _approvedPeriodDuplicateRows(
+  List<Map<String, dynamic>> sheets,
+) {
+  final byCode = <String, Map<String, dynamic>>{};
+  for (final sheet in sheets) {
+    final sheetLabel = _sheetHeadline(
+      sheet['reference']?.toString() ?? sheet['id']?.toString() ?? '',
+      primary: sheet['primaryLocationName']?.toString() ??
+          sheet['locationName']?.toString() ??
+          '',
+      locationCount: _locationCountOf(sheet),
+    );
+    final employees = (sheet['employees'] as List? ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e));
+    for (final emp in employees) {
+      final code = (emp['code']?.toString() ?? '')
+          .trim()
+          .replaceAll(RegExp(r'\.0$'), '');
+      if (code.isEmpty) continue;
+      final row = byCode.putIfAbsent(code, () {
+        return {
+          'employeeCode': code,
+          'employeeName': emp['name']?.toString() ?? code,
+          'jobTitle': emp['jobTitle']?.toString() ?? '',
+          'sheets': <String>{},
+          'totalAmount': 0.0,
+        };
+      });
+      final name = emp['name']?.toString().trim() ?? '';
+      if (name.isNotEmpty &&
+          (row['employeeName'] == null ||
+              row['employeeName'].toString().isEmpty ||
+              row['employeeName'] == code)) {
+        row['employeeName'] = name;
+      }
+      (row['sheets'] as Set<String>).add(sheetLabel);
+      row['totalAmount'] =
+          ((row['totalAmount'] as num?)?.toDouble() ?? 0) +
+          ((emp['amount'] as num?)?.toDouble() ?? 0);
+    }
+  }
+  final rows = byCode.values
+      .where((row) => (row['sheets'] as Set<String>).length > 1)
+      .map((row) {
+        final sheets = (row['sheets'] as Set<String>).toList()..sort();
+        return {
+          ...row,
+          'sheets': sheets,
+          'totalAmount': _roundMoney(
+            (row['totalAmount'] as num?)?.toDouble() ?? 0,
+          ),
+        };
+      })
+      .toList();
+  rows.sort((a, b) {
+    final ac = a['employeeCode']?.toString() ?? '';
+    final bc = b['employeeCode']?.toString() ?? '';
+    return ac.compareTo(bc);
+  });
+  return rows;
+}
+
+void _showApprovedPeriodDuplicates(
+  BuildContext context, {
+  required List<Map<String, dynamic>> rows,
+  required String periodLabel,
+}) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(ctx.t('adv.duplicatesPopupTitle', {'period': periodLabel})),
+      content: SizedBox(
+        width: 720,
+        height: 460,
+        child: rows.isEmpty
+            ? Center(child: Text(ctx.t('adv.noDuplicatesInPeriod')))
+            : ListView.separated(
+                itemCount: rows.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (_, index) {
+                  final row = rows[index];
+                  final sheets = ((row['sheets'] as List?) ?? const [])
+                      .map((e) => e.toString())
+                      .where((e) => e.isNotEmpty)
+                      .toList();
+                  return ListTile(
+                    title: Text(
+                      '${row['employeeName'] ?? ''} • ${row['employeeCode'] ?? ''}',
+                    ),
+                    subtitle: Text(
+                      sheets.join(ctx.t('common.listSeparator')),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: Text(_money(row['totalAmount'] as num?)),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: Text(ctx.t('common.close')),
+        ),
+      ],
+    ),
+  );
+}
+
 class _ApprovedLoanImportList extends StatelessWidget {
   const _ApprovedLoanImportList({
     required this.items,
+    required this.shortAdvances,
     required this.payrollMonthStartDay,
     required this.onRefresh,
     required this.onExportPeriod,
   });
 
   final List<Map<String, dynamic>> items;
+  final List<Map<String, dynamic>> shortAdvances;
   final int payrollMonthStartDay;
   final VoidCallback onRefresh;
   final Future<void> Function(DateTime from, DateTime to) onExportPeriod;
@@ -600,51 +699,87 @@ class _ApprovedLoanImportList extends StatelessWidget {
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 for (final entry in periods.entries) ...[
-                  _PayrollPeriodBlock(
-                    periodKey: entry.key,
-                    sheetCount: entry.value.length,
-                    children: [
-                      for (final item in entry.value)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _LoanImportSummaryTile(
-                            item: item,
-                            onOpen: () async {
-                              final id = item['id']?.toString() ?? '';
-                              if (id.isEmpty) return;
-                              await context.push(
-                                '${AppRoutes.hrAdvanceLoanImport}'
-                                '?importId=${Uri.encodeQueryComponent(id)}',
-                              );
-                              onRefresh();
-                            },
-                          ),
+                  Builder(
+                    builder: (context) {
+                      final dupRows = _approvedPeriodDuplicateRows(entry.value);
+                      final parts = entry.key.split('|');
+                      final from = parseIsoDate(parts.first) ?? DateTime.now();
+                      final to = parseIsoDate(
+                            parts.length > 1 ? parts[1] : parts.first,
+                          ) ??
+                          from;
+                      return _PayrollPeriodBlock(
+                        periodKey: entry.key,
+                        sheetCount: entry.value.length,
+                        duplicateCount: dupRows.length,
+                        onShowDuplicates: dupRows.isEmpty
+                            ? null
+                            : () => _showApprovedPeriodDuplicates(
+                                  context,
+                                  rows: dupRows,
+                                  periodLabel: context.t('adv.monthCycle', {
+                                    'month': payrollCycleMonthName(
+                                      to,
+                                      Localizations.localeOf(
+                                        context,
+                                      ).languageCode,
+                                    ),
+                                  }),
+                                ),
+                        children: [
+                          for (final item in entry.value)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _LoanImportSummaryTile(
+                                item: item,
+                                advances: shortAdvances
+                                    .where(
+                                      (a) =>
+                                          a['importId']?.toString() ==
+                                          item['id']?.toString(),
+                                    )
+                                    .toList(),
+                                onRefresh: onRefresh,
+                                onOpen: () async {
+                                  final id = item['id']?.toString() ?? '';
+                                  if (id.isEmpty) return;
+                                  await context.push(
+                                    '${AppRoutes.hrAdvanceLoanImport}'
+                                    '?importId=${Uri.encodeQueryComponent(id)}',
+                                  );
+                                  onRefresh();
+                                },
+                              ),
+                            ),
+                        ],
+                        cash: entry.value.fold<double>(
+                          0,
+                          (s, i) =>
+                              s + ((i['cashAmount'] as num?)?.toDouble() ?? 0),
                         ),
-                    ],
-                    cash: entry.value.fold<double>(
-                      0,
-                      (s, i) =>
-                          s + ((i['cashAmount'] as num?)?.toDouble() ?? 0),
-                    ),
-                    fawryApproved: entry.value.fold<double>(
-                      0,
-                      (s, i) =>
-                          s +
-                          ((i['fawryApprovedAmount'] as num?)?.toDouble() ?? 0),
-                    ),
-                    fawryCommission: entry.value.fold<double>(
-                      0,
-                      (s, i) =>
-                          s +
-                          ((i['fawryCommissionAmount'] as num?)?.toDouble() ??
-                              0),
-                    ),
-                    total: entry.value.fold<double>(
-                      0,
-                      (s, i) =>
-                          s + ((i['totalAmount'] as num?)?.toDouble() ?? 0),
-                    ),
-                    onExportPeriod: onExportPeriod,
+                        fawryApproved: entry.value.fold<double>(
+                          0,
+                          (s, i) =>
+                              s +
+                              ((i['fawryApprovedAmount'] as num?)?.toDouble() ??
+                                  0),
+                        ),
+                        fawryCommission: entry.value.fold<double>(
+                          0,
+                          (s, i) =>
+                              s +
+                              ((i['fawryCommissionAmount'] as num?)
+                                      ?.toDouble() ??
+                                  0),
+                        ),
+                        total: entry.value.fold<double>(
+                          0,
+                          (s, i) =>
+                              s + ((i['totalAmount'] as num?)?.toDouble() ?? 0),
+                        ),
+                        onExportPeriod: onExportPeriod,
+                      );
+                    },
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -780,16 +915,68 @@ class _PayrollPeriodBlock extends StatelessWidget {
   }
 }
 
-class _LoanImportSummaryTile extends StatelessWidget {
-  const _LoanImportSummaryTile({required this.item, this.onOpen});
+class _LoanImportSummaryTile extends StatefulWidget {
+  const _LoanImportSummaryTile({
+    required this.item,
+    this.advances = const [],
+    this.onRefresh,
+    this.onOpen,
+  });
 
   final Map<String, dynamic> item;
+  final List<Map<String, dynamic>> advances;
+  final VoidCallback? onRefresh;
   final VoidCallback? onOpen;
 
   @override
+  State<_LoanImportSummaryTile> createState() => _LoanImportSummaryTileState();
+}
+
+class _LoanImportSummaryTileState extends State<_LoanImportSummaryTile> {
+  bool _downloading = false;
+
+  Future<void> _downloadSheet() async {
+    final id = widget.item['id']?.toString() ?? '';
+    if (id.isEmpty || _downloading) return;
+    setState(() => _downloading = true);
+    try {
+      final r = await api.advanceLoanImportExportAccountsSheet(id);
+      final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
+      final filename = r['filename']?.toString() ?? 'loan_sheet.xlsx';
+      if (base64.isEmpty) throw Exception(context.t('adv.emptyFile'));
+      downloadBase64File(
+        base64,
+        filename,
+        r['mimeType']?.toString() ??
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.t('loanImp.downloaded', {'name': filename}))),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final onOpen = widget.onOpen;
+    final advances = widget.advances;
     final sent = item['odooAccountsSendId'] != null;
     final outsiders = (item['outsiderLines'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final employees = (item['employees'] as List? ?? [])
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
@@ -805,16 +992,18 @@ class _LoanImportSummaryTile extends StatelessWidget {
       primary: primary,
       locationCount: _locationCountOf(item),
     );
+    final lineCount = item['lineCount'] ??
+        (advances.isNotEmpty ? advances.length : employees.length);
     final metaBits = [
       context.t('adv.primaryLocation', {'name': primary}),
-      '${context.t('adv.employeeCount', {'count': item['lineCount'] ?? 0})}'
+      '${context.t('adv.employeeCount', {'count': lineCount})}'
           '${item['date'] != null && item['date'].toString().isNotEmpty ? ' • ${item['date']}' : ''}',
     ];
 
     return SellixCard(
       padding: EdgeInsets.zero,
-      child: ListTile(
-        onTap: onOpen,
+      child: ExpansionTile(
+        initiallyExpanded: false,
         leading: const Icon(
           Icons.fact_check_outlined,
           color: AppColors.primary,
@@ -855,47 +1044,112 @@ class _LoanImportSummaryTile extends StatelessWidget {
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: _moneyBreakdownText(
-            context,
-            cash: cash,
-            fawryApproved: fawry.approved,
-            fawryCommission: fawry.commission,
-            fawryTotal: fawry.total,
-            total: total,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _moneyBreakdownText(
+                context,
+                cash: cash,
+                fawryApproved: fawry.approved,
+                fawryCommission: fawry.commission,
+                fawryTotal: fawry.total,
+                total: total,
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (sent)
+                    StatusTag(
+                      label: context.t('adv.sentToOdoo'),
+                      type: StatusTagType.success,
+                    )
+                  else
+                    StatusTag(
+                      label: context.t('adv.approved'),
+                      type: StatusTagType.success,
+                    ),
+                ],
+              ),
+            ],
           ),
         ),
-        isThreeLine: true,
-        trailing: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            if (sent)
-              StatusTag(
-                label: context.t('adv.sentToOdoo'),
-                type: StatusTagType.success,
-              )
-            else
-              StatusTag(
-                label: context.t('adv.approved'),
-                type: StatusTagType.success,
-              ),
-            OutlinedButton(
-              onPressed: () =>
-                  _showOutsiderEmployees(context, outsiders, primary),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: Text(context.t('adv.openSheet')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _downloading ? null : _downloadSheet,
+                  icon: _downloading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.table_view_outlined, size: 18),
+                  label: Text(context.t('loanImp.downloadLoanSheet')),
+                ),
+                OutlinedButton(
+                  onPressed: () =>
+                      _showOutsiderEmployees(context, outsiders, primary),
+                  child: Text(
+                    context.t('adv.outsideBranchEmployees', {
+                      'count': item['outsiderCount'] ?? outsiders.length,
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (advances.isNotEmpty)
+            _AdvanceList(
+              items: advances,
+              isLong: false,
+              onRefresh: widget.onRefresh ?? () {},
+              embedded: true,
+            )
+          else if (employees.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Text(
-                context.t('adv.outsideBranch', {
-                  'count': item['outsiderCount'] ?? outsiders.length,
-                }),
+                context.t('adv.noEmployeesInSheet'),
+                style: const TextStyle(color: AppColors.textSecondary),
               ),
-            ),
-            FilledButton.icon(
-              onPressed: onOpen,
-              icon: const Icon(Icons.open_in_new, size: 18),
-              label: Text(context.t('adv.openSheet')),
-            ),
-          ],
-        ),
+            )
+          else
+            ...employees.map((emp) {
+              final code = emp['code']?.toString() ?? '';
+              final name = emp['name']?.toString() ?? '';
+              final job = emp['jobTitle']?.toString() ?? '';
+              final amount = (emp['amount'] as num?)?.toDouble() ?? 0;
+              return ListTile(
+                dense: true,
+                title: Text(
+                  name.isEmpty ? code : '$name • $code',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: job.isEmpty
+                    ? null
+                    : Text(job, style: const TextStyle(fontSize: 12)),
+                trailing: Text(
+                  _money(amount),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              );
+            }),
+          const SizedBox(height: 4),
+        ],
       ),
     );
   }

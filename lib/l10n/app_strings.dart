@@ -62,6 +62,7 @@ abstract final class AppStrings {
     'audit.module.deductions': 'الاستقطاعات',
     'audit.module.advances': 'السلف',
     'audit.module.payroll': 'الرواتب',
+    'audit.module.settings': 'الإعدادات',
     'audit.fullDetails': 'التفاصيل الكاملة',
     'audit.noRowsWithSummary':
         'لا توجد صفوف تغيير — راجع الملخص والإحصاءات أعلاه.',
@@ -1252,9 +1253,15 @@ abstract final class AppStrings {
     'set.title': 'الإعدادات',
     'set.branchesAndLocations': 'الفروع والمواقع',
     'set.devices': 'أجهزة البصمة',
-    'set.devicesHint': 'اربط كل جهاز بصمة بالفرع أو الموقع الذي يخدمه.',
+    'set.devicesHint': 'اربط كل جهاز بصمة بالفرع أو الموقع الذي يخدمه. الحذف يخفيه من القائمة ويُسجَّل في سجل التدقيق (لا يُعاد تفعيله تلقائيًا عند الـ pull).',
     'set.devicesNone': 'لا توجد أجهزة — ستظهر بعد مزامنة BioTime',
     'set.deviceLocationUpdated': 'تم تحديث موقع الجهاز',
+    'set.deviceDelete': 'حذف الجهاز',
+    'set.deviceDeleteTitle': 'حذف جهاز البصمة؟',
+    'set.deviceDeleteBody':
+        'سيتم إخفاء الجهاز «{name}» من الإعدادات. الإجراء يُسجَّل في سجل التدقيق.',
+    'set.deviceDeleteConfirm': 'حذف',
+    'set.deviceDeleted': 'تم حذف الجهاز',
     'set.location': 'الموقع',
     'set.noLocation': '— بدون موقع —',
     'logo.uploaded': 'تم رفع شعار الشركة',
@@ -2564,6 +2571,7 @@ abstract final class AppStrings {
     'adv.approved': 'معتمد',
     'adv.outsideBranch': 'خارج الفرع ({count})',
     'adv.outsideBranchEmployees': 'الموظفون خارج الفرع ({count})',
+    'adv.noEmployeesInSheet': 'لا يوجد موظفون في هذا الكشف',
     'adv.openSheet': 'فتح الشيت',
     'adv.all': 'الكل',
     'adv.noShortAdvances':
@@ -2574,6 +2582,7 @@ abstract final class AppStrings {
     'adv.importSheet': 'كشف الاستيراد',
     'adv.duplicatesOnly': 'المكررون ({count})',
     'adv.duplicatesPopupTitle': 'المكررون في {period}',
+    'adv.noDuplicatesInPeriod': 'لا يوجد موظفون مكررون في هذه الدورة',
     'adv.noDuplicatesInCycle': 'لا يوجد موظفون مكررون داخل هذه الدورة',
     'adv.duplicateInSheets': 'مكرر في: {sheets}',
     'adv.sheetAppearances': 'عدد الكشوف: {count}',
@@ -2678,6 +2687,7 @@ abstract final class AppStrings {
     'loanImp.backLoan': 'العودة إلى السلف',
     'loanImp.backDrafts': 'العودة إلى المسودات',
     'loanImp.deleteDraft': 'حذف المسودة',
+    'loanImp.openDraft': 'فتح المسودة',
     'loanImp.deleteConfirm': 'حذف {name} نهائيًا؟',
     'loanImp.theDraft': 'المسودة',
     'loanImp.deleteLine': 'حذف السطر',
@@ -2704,7 +2714,25 @@ abstract final class AppStrings {
     'loanImp.selectedCount': 'محدد {count}',
     'loanImp.apply': 'تطبيق',
     'loanImp.blankTemplate': 'تنزيل قالب فارغ (multiple)',
+    'loanImp.specificEmployees': 'موظفون محددون',
+    'loanImp.specificEmployeesHint':
+        'اكتب كود الموظف ثم Enter لإضافته للقائمة، ثم نزّل الكشف لهؤلاء فقط.',
+    'loanImp.employeeCode': 'كود الموظف',
+    'loanImp.employeeCodeHint': 'مثال: 8002 ثم Enter',
+    'loanImp.employeeCodeValidationHint':
+        'يُقبل فقط كود موظف نشط موجود في النظام',
+    'loanImp.noEmployeeCodesYet': 'لم تُضف أكواد بعد',
+    'loanImp.needEmployeeCodes': 'أضف كود موظف واحد على الأقل ثم نزّل القالب',
+    'loanImp.invalidEmployeeCode': 'الكود «{code}» غير موجود أو الموظف غير نشط',
+    'loanImp.employeeCodeAlreadyAdded': 'الكود «{code}» مضاف بالفعل',
+    'loanImp.addCode': 'إضافة',
     'loanImp.downloadTemplate': 'تنزيل القالب',
+    'loanImp.deductionDate': 'تاريخ خصم السلفة',
+    'loanImp.deductionDateHint': 'يُستخدم عند اعتماد السلف على الرواتب',
+    'loanImp.needDeductionDate': 'حدد تاريخ خصم السلفة قبل الاعتماد',
+    'loanImp.approveBodyLoanWithDeduction':
+        'سيجري إنشاء سلف قصيرة معلّقة للسطور المحددة بتاريخ خصم {date}. متابعة؟',
+    'loanImp.missingCodes': 'أكواد غير موجودة: {codes}',
     'loanImp.needPeriod': 'حدد فترة أيام العمل من وإلى قبل تنزيل القالب',
     'loanImp.needBranch':
         'اختر فرعًا واحدًا على الأقل من «الفروع» قبل تنزيل القالب',
@@ -2730,6 +2758,8 @@ abstract final class AppStrings {
     'loanImp.eligSheetExported': 'تم تصدير شيت الاستحقاق',
     'loanImp.loanSheetDownloaded':
         'تم تنزيل شيت السلف — كاش {cash} / فوري {fawry}',
+    'loanImp.tipSheetDownloaded':
+        'تم تنزيل شيت العمولة — كاش {cash} / فوري {fawry}',
     'loanImp.eligUpdated': 'تم تحديث الاستحقاق من الشيت',
     'loanImp.reuploadTip': 'إعادة رفع شيت العمولة',
     'loanImp.reuploadLoan': 'إعادة رفع شيت السلف',
@@ -3105,9 +3135,9 @@ abstract final class AppStrings {
         'افتح https://hr.hudoori.code-solution.org من الكمبيوتر لإدارة الشركات والباقات.',
     'errors.selectCompanyFirst': 'اختر شركة من القائمة أعلى الصفحة أولاً.',
     'errors.backHome': 'العودة للرئيسية',
-    'errors.employeeQuota': 'وصلت الشركة للحد الأقصى للموظفين في الاشتراك. الأرشفة لا تحرّر مقعداً — راجع مدير المنصة.',
+    'errors.employeeQuota': 'وصلت الشركة للحد الأقصى للموظفين النشطين في الاشتراك. الأرشفة تحرّر مقعداً، والاستعادة تتطلب مقعداً متاحاً — راجع مدير المنصة.',
     'errors.userQuota': 'وصلت الشركة للحد الأقصى لمستخدمي لوحة HR في الاشتراك — راجع مدير المنصة.',
-    'quota.employeesFullBanner': 'وصلت الشركة للحد الأقصى للموظفين ({used} / {max}). لا يمكن إضافة موظفين جدد — راجع مدير المنصة.',
+    'quota.employeesFullBanner': 'وصلت الشركة للحد الأقصى للموظفين النشطين ({used} / {max}). لا يمكن إضافة أو استعادة موظفين — راجع مدير المنصة.',
     'errors.server': 'حدث خطأ في الخادم. حاول لاحقاً.',
     'errors.generic': 'حدث خطأ غير متوقع. حاول مرة أخرى.',
     'errors.http': 'فشل الطلب (رمز {code}).',
@@ -3192,6 +3222,7 @@ abstract final class AppStrings {
     'audit.module.deductions': 'Deductions',
     'audit.module.advances': 'Advances',
     'audit.module.payroll': 'Payroll',
+    'audit.module.settings': 'Settings',
     'audit.fullDetails': 'Full details',
     'audit.noRowsWithSummary':
         'No change rows — see the summary and stats above.',
@@ -4413,9 +4444,15 @@ abstract final class AppStrings {
     'set.branchesAndLocations': 'Branches and locations',
     'set.devices': 'Fingerprint devices',
     'set.devicesHint':
-        'Link each fingerprint device to the branch or location it serves.',
+        'Link each fingerprint device to the branch or location it serves. Deleting hides it from the list and is written to the audit log (pull does not reactivate it).',
     'set.devicesNone': 'No devices — they appear after the BioTime sync',
     'set.deviceLocationUpdated': 'Device location updated',
+    'set.deviceDelete': 'Delete device',
+    'set.deviceDeleteTitle': 'Delete fingerprint device?',
+    'set.deviceDeleteBody':
+        'Device «{name}» will be hidden from settings. The action is recorded in the audit log.',
+    'set.deviceDeleteConfirm': 'Delete',
+    'set.deviceDeleted': 'Device deleted',
     'set.location': 'Location',
     'set.noLocation': '— no location —',
     'logo.uploaded': 'Company logo uploaded',
@@ -5755,6 +5792,7 @@ abstract final class AppStrings {
     'adv.approved': 'Approved',
     'adv.outsideBranch': 'Outside the branch ({count})',
     'adv.outsideBranchEmployees': 'Employees outside the branch ({count})',
+    'adv.noEmployeesInSheet': 'No employees in this sheet',
     'adv.openSheet': 'Open sheet',
     'adv.all': 'All',
     'adv.noShortAdvances':
@@ -5765,6 +5803,7 @@ abstract final class AppStrings {
     'adv.importSheet': 'Import sheet',
     'adv.duplicatesOnly': 'Duplicates ({count})',
     'adv.duplicatesPopupTitle': 'Duplicates in {period}',
+    'adv.noDuplicatesInPeriod': 'No duplicate employees in this cycle',
     'adv.noDuplicatesInCycle': 'No duplicated employees in this cycle',
     'adv.duplicateInSheets': 'Also on: {sheets}',
     'adv.sheetAppearances': 'Sheets: {count}',
@@ -5870,6 +5909,7 @@ abstract final class AppStrings {
     'loanImp.backLoan': 'Back to advances',
     'loanImp.backDrafts': 'Back to drafts',
     'loanImp.deleteDraft': 'Delete draft',
+    'loanImp.openDraft': 'Open draft',
     'loanImp.deleteConfirm': 'Delete {name} permanently?',
     'loanImp.theDraft': 'the draft',
     'loanImp.deleteLine': 'Delete row',
@@ -5896,7 +5936,27 @@ abstract final class AppStrings {
     'loanImp.selectedCount': '{count} selected',
     'loanImp.apply': 'Apply',
     'loanImp.blankTemplate': 'Download a blank template (multiple)',
+    'loanImp.specificEmployees': 'Specific employees',
+    'loanImp.specificEmployeesHint':
+        'Type an employee code and press Enter to add it, then download the sheet for those employees only.',
+    'loanImp.employeeCode': 'Employee code',
+    'loanImp.employeeCodeHint': 'e.g. 8002 then Enter',
+    'loanImp.employeeCodeValidationHint':
+        'Only an active employee code that exists in the system is accepted',
+    'loanImp.noEmployeeCodesYet': 'No codes added yet',
+    'loanImp.needEmployeeCodes':
+        'Add at least one employee code, then download the template',
+    'loanImp.invalidEmployeeCode':
+        'Code «{code}» was not found or the employee is inactive',
+    'loanImp.employeeCodeAlreadyAdded': 'Code «{code}» is already added',
+    'loanImp.addCode': 'Add',
     'loanImp.downloadTemplate': 'Download template',
+    'loanImp.deductionDate': 'Advance deduction date',
+    'loanImp.deductionDateHint': 'Used when advances are approved onto payroll',
+    'loanImp.needDeductionDate': 'Set the advance deduction date before approving',
+    'loanImp.approveBodyLoanWithDeduction':
+        'Pending short advances will be created for the selected rows with deduction date {date}. Continue?',
+    'loanImp.missingCodes': 'Unknown codes: {codes}',
     'loanImp.needPeriod':
         'Set the working-day period from and to before downloading the template',
     'loanImp.needBranch':
@@ -5926,6 +5986,8 @@ abstract final class AppStrings {
     'loanImp.eligSheetExported': 'Entitlement sheet exported',
     'loanImp.loanSheetDownloaded':
         'Advance sheet downloaded — cash {cash} / Fawry {fawry}',
+    'loanImp.tipSheetDownloaded':
+        'Commission sheet downloaded — cash {cash} / Fawry {fawry}',
     'loanImp.eligUpdated': 'Entitlement updated from the sheet',
     'loanImp.reuploadTip': 'Re-upload the Commission sheet',
     'loanImp.reuploadLoan': 'Re-upload the advance sheet',
@@ -6310,9 +6372,9 @@ abstract final class AppStrings {
         'Open https://hr.hudoori.code-solution.org on a computer to manage companies and plans.',
     'errors.selectCompanyFirst': 'Select a company from the top bar first.',
     'errors.backHome': 'Back to home',
-    'errors.employeeQuota': 'The company reached its employee limit. Archiving does not free a seat — contact the platform admin.',
+    'errors.employeeQuota': 'The company reached its active employee limit. Archiving frees a seat; restoring requires an available seat — contact the platform admin.',
     'errors.userQuota': 'The company reached its HR dashboard user limit — contact the platform admin.',
-    'quota.employeesFullBanner': 'Employee limit reached ({used} / {max}). New employees cannot be added — contact the platform admin.',
+    'quota.employeesFullBanner': 'Active employee limit reached ({used} / {max}). Cannot add or restore employees — contact the platform admin.',
     'errors.server': 'A server error occurred. Please try again later.',
     'errors.generic': 'Something went wrong. Please try again.',
     'errors.http': 'Request failed (code {code}).',

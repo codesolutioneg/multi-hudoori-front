@@ -126,6 +126,9 @@ String? _locationIdFromDevice(Map<String, dynamic> d) {
 
 enum _ImportPhase { drafts, setup, review }
 
+/// Sentinel for the location picker: download/import for typed employee codes.
+const _kSpecificEmployees = '_specific_employees_';
+
 class AdvanceLoanImportPage extends StatefulWidget {
   const AdvanceLoanImportPage({
     super.key,
@@ -150,7 +153,13 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
   bool _busy = false;
   String? _deviceId;
   final Set<String> _tipLocationIds = {};
+  final List<String> _specificEmployeeCodes = [];
+  /// Display label per code (e.g. `1553 — أحمد`).
+  final Map<String, String> _specificEmployeeLabels = {};
+  final _specificCodeCtrl = TextEditingController();
+  bool _validatingCode = false;
   final _dateCtrl = TextEditingController(text: _fmtDate(DateTime.now()));
+  late final TextEditingController _deductionDateCtrl;
   final _reasonCtrl = TextEditingController(
     text: tr('loanImp.eligibilityReason'),
   );
@@ -159,6 +168,8 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
   final _tipsToCtrl = TextEditingController();
   final _reviewTableHScroll = ScrollController();
   final _reviewTableVScroll = ScrollController();
+
+  bool get _isSpecificEmployees => _deviceId == _kSpecificEmployees;
   String _statusFilter = '';
   String _approveFilter = '';
   String _jobFilter = '';
@@ -170,9 +181,17 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
   _ImportPhase _phase = _ImportPhase.drafts;
   bool _odooIntegrationEnabled = false;
 
+  DateTime _defaultDeductionDate([DateTime? from]) {
+    final base = from ?? DateTime.now();
+    return DateTime.utc(base.year, base.month + 1, 1);
+  }
+
   @override
   void initState() {
     super.initState();
+    _deductionDateCtrl = TextEditingController(
+      text: _fmtDate(_defaultDeductionDate()),
+    );
     if (widget.kind == 'tip') {
       _reasonCtrl.text = 'tips';
     }
@@ -182,13 +201,101 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
   @override
   void dispose() {
     _dateCtrl.dispose();
+    _deductionDateCtrl.dispose();
     _reasonCtrl.dispose();
     _searchCtrl.dispose();
     _tipsFromCtrl.dispose();
     _tipsToCtrl.dispose();
+    _specificCodeCtrl.dispose();
     _reviewTableHScroll.dispose();
     _reviewTableVScroll.dispose();
     super.dispose();
+  }
+
+  /// Resolves [code] to an active employee; returns canonical code + label, or null.
+  Future<({String code, String label})?> _resolveEmployeeCode(String code) async {
+    final page = await api.employeesList(
+      search: code,
+      active: true,
+      limit: 20,
+      offset: 0,
+    );
+    final needle = code.toLowerCase();
+    for (final emp in page.items) {
+      final candidates = [
+        emp['code']?.toString(),
+        emp['barcode']?.toString(),
+        emp['identificationId']?.toString(),
+      ];
+      for (final c in candidates) {
+        if (c == null || c.trim().isEmpty) continue;
+        if (c.trim().toLowerCase() != needle) continue;
+        final canonical = (emp['code']?.toString().trim().isNotEmpty == true)
+            ? emp['code'].toString().trim()
+            : c.trim();
+        final name = emp['name']?.toString().trim() ??
+            emp['displayName']?.toString().trim() ??
+            '';
+        final label = name.isEmpty ? canonical : '$canonical — $name';
+        return (code: canonical, label: label);
+      }
+    }
+    return null;
+  }
+
+  Future<void> _addSpecificEmployeeCode(String raw) async {
+    if (_locked || _busy || _validatingCode) return;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    if (_specificEmployeeCodes.any(
+      (c) => c.toLowerCase() == code.toLowerCase(),
+    )) {
+      _specificCodeCtrl.clear();
+      _snack(context.t('loanImp.employeeCodeAlreadyAdded', {'code': code}));
+      return;
+    }
+    setState(() => _validatingCode = true);
+    try {
+      final resolved = await _resolveEmployeeCode(code);
+      if (!mounted) return;
+      if (resolved == null) {
+        _snack(context.t('loanImp.invalidEmployeeCode', {'code': code}));
+        return;
+      }
+      if (_specificEmployeeCodes.any(
+        (c) => c.toLowerCase() == resolved.code.toLowerCase(),
+      )) {
+        _specificCodeCtrl.clear();
+        _snack(
+          context.t('loanImp.employeeCodeAlreadyAdded', {'code': resolved.code}),
+        );
+        return;
+      }
+      setState(() {
+        _specificEmployeeCodes.add(resolved.code);
+        _specificEmployeeLabels[resolved.code] = resolved.label;
+        _specificCodeCtrl.clear();
+      });
+    } catch (e) {
+      if (mounted) _snack(e.toString());
+    } finally {
+      if (mounted) setState(() => _validatingCode = false);
+    }
+  }
+
+  Future<void> _pickDeductionDate() async {
+    if (_locked || _busy) return;
+    final initial =
+        DateTime.tryParse(_deductionDateCtrl.text.trim()) ??
+        _defaultDeductionDate();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _deductionDateCtrl.text = _fmtDate(picked));
   }
 
   Future<void> _init() async {
@@ -644,6 +751,15 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                       label: Text(ctx.t('loanImp.blankTemplate')),
                     ),
                     const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(
+                        ctx,
+                        <String>['_specific_employees_'],
+                      ),
+                      icon: const Icon(Icons.badge_outlined),
+                      label: Text(ctx.t('loanImp.specificEmployees')),
+                    ),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         TextButton(
@@ -731,7 +847,7 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
   }
 
   String? _selectedSetupLocationId() {
-    if (_deviceId == null) return null;
+    if (_deviceId == null || _isSpecificEmployees) return null;
     for (final device in _devices) {
       if (device['id']?.toString() == _deviceId) {
         return _locationIdFromDevice(device);
@@ -740,9 +856,177 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
     return null;
   }
 
+  Future<List<String>?> _pickSpecificEmployeeCodes() async {
+    final codes = <String>[];
+    final labels = <String, String>{};
+    final inputCtrl = TextEditingController();
+    var validating = false;
+    String? errorText;
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            Future<void> addCode(String raw) async {
+              if (validating) return;
+              final code = raw.trim();
+              if (code.isEmpty) return;
+              if (codes.any((c) => c.toLowerCase() == code.toLowerCase())) {
+                inputCtrl.clear();
+                setLocal(() {
+                  errorText = ctx.t('loanImp.employeeCodeAlreadyAdded', {
+                    'code': code,
+                  });
+                });
+                return;
+              }
+              setLocal(() {
+                validating = true;
+                errorText = null;
+              });
+              try {
+                final resolved = await _resolveEmployeeCode(code);
+                if (!ctx.mounted) return;
+                if (resolved == null) {
+                  setLocal(() {
+                    validating = false;
+                    errorText = ctx.t('loanImp.invalidEmployeeCode', {
+                      'code': code,
+                    });
+                  });
+                  return;
+                }
+                if (codes.any(
+                  (c) => c.toLowerCase() == resolved.code.toLowerCase(),
+                )) {
+                  inputCtrl.clear();
+                  setLocal(() {
+                    validating = false;
+                    errorText = ctx.t('loanImp.employeeCodeAlreadyAdded', {
+                      'code': resolved.code,
+                    });
+                  });
+                  return;
+                }
+                setLocal(() {
+                  codes.add(resolved.code);
+                  labels[resolved.code] = resolved.label;
+                  inputCtrl.clear();
+                  validating = false;
+                  errorText = null;
+                });
+              } catch (e) {
+                if (!ctx.mounted) return;
+                setLocal(() {
+                  validating = false;
+                  errorText = e.toString();
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: Text(ctx.t('loanImp.specificEmployees')),
+              content: SizedBox(
+                width: 440,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      ctx.t('loanImp.specificEmployeesHint'),
+                      style: const TextStyle(fontSize: 13, height: 1.35),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: inputCtrl,
+                      autofocus: true,
+                      enabled: !validating,
+                      textInputAction: TextInputAction.done,
+                      decoration: InputDecoration(
+                        labelText: ctx.t('loanImp.employeeCode'),
+                        hintText: ctx.t('loanImp.employeeCodeHint'),
+                        errorText: errorText,
+                        suffixIcon: validating
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : IconButton(
+                                tooltip: ctx.t('loanImp.addCode'),
+                                onPressed: () => addCode(inputCtrl.text),
+                                icon: const Icon(Icons.add_circle_outline),
+                              ),
+                      ),
+                      onSubmitted: addCode,
+                    ),
+                    const SizedBox(height: 8),
+                    if (codes.isEmpty)
+                      Text(
+                        ctx.t('loanImp.noEmployeeCodesYet'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                        ),
+                      )
+                    else
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: SingleChildScrollView(
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (var i = 0; i < codes.length; i++)
+                                InputChip(
+                                  label: Text(
+                                    labels[codes[i]] ?? codes[i],
+                                  ),
+                                  onDeleted: validating
+                                      ? null
+                                      : () => setLocal(() {
+                                          labels.remove(codes[i]);
+                                          codes.removeAt(i);
+                                        }),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: validating ? null : () => Navigator.pop(ctx),
+                  child: Text(ctx.t('common.cancel')),
+                ),
+                FilledButton.icon(
+                  onPressed: validating || codes.isEmpty
+                      ? null
+                      : () => Navigator.pop(ctx, List<String>.from(codes)),
+                  icon: const Icon(Icons.download_outlined, size: 18),
+                  label: Text(ctx.t('loanImp.downloadTemplate')),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    inputCtrl.dispose();
+    return result;
+  }
+
   Future<void> _downloadLoanTemplate() async {
     try {
       List<String>? selected;
+      List<String>? employeeCodes;
       if (_isTip) {
         if (_tipsFromIso == null || _tipsToIso == null) {
           _snack(context.t('loanImp.needPeriod'));
@@ -753,18 +1037,36 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
           _snack(context.t('loanImp.needBranch'));
           return;
         }
+      } else if (_isSpecificEmployees) {
+        if (_specificEmployeeCodes.isEmpty) {
+          _snack(context.t('loanImp.needEmployeeCodes'));
+          return;
+        }
+        employeeCodes = List<String>.from(_specificEmployeeCodes);
       } else {
         final setupLocationId = _selectedSetupLocationId();
         selected = setupLocationId == null
             ? await _pickLoanTemplateLocations()
             : [setupLocationId];
+        if (selected != null &&
+            selected.length == 1 &&
+            selected.first == _kSpecificEmployees) {
+          employeeCodes = await _pickSpecificEmployeeCodes();
+          if (employeeCodes == null || employeeCodes.isEmpty) return;
+          selected = null;
+        }
       }
-      if (selected == null || selected.isEmpty) return;
+      if (employeeCodes == null && (selected == null || selected.isEmpty)) {
+        return;
+      }
 
       final blank =
-          selected.length == 1 && selected.first == '_blank_multiple_';
+          selected != null &&
+          selected.length == 1 &&
+          selected.first == '_blank_multiple_';
       final r = await api.advancesExportImportTemplate(
-        locationIds: blank ? null : selected,
+        locationIds: blank || employeeCodes != null ? null : selected,
+        employeeCodes: employeeCodes,
         blank: blank,
         kind: widget.kind,
         dateFrom: _tipsFromIso,
@@ -814,6 +1116,17 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
             .join(context.t('common.listSeparator'));
         msg += context.t('loanImp.skippedBranches', {'count': skipN});
         if (names.isNotEmpty) msg += ' ($names${skipN > 3 ? '…' : ''})';
+      }
+      final missing = r['missingCodes'];
+      if (missing is List && missing.isNotEmpty) {
+        final codes = missing
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty)
+            .take(8)
+            .join(context.t('common.listSeparator'));
+        final suffix = missing.length > 8 ? '…' : '';
+        msg +=
+            ' — ${context.t('loanImp.missingCodes', {'codes': '$codes$suffix'})}';
       }
       _snack(msg);
     } catch (e) {
@@ -897,7 +1210,7 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
             );
 
       final batch = await api.advanceLoanImportCreate({
-        if (_deviceId != null) 'deviceId': _deviceId,
+        if (_deviceId != null && !_isSpecificEmployees) 'deviceId': _deviceId,
         'date': _dateCtrl.text.trim(),
         'defaultReason': _reasonCtrl.text.trim(),
         'kind': widget.kind,
@@ -976,10 +1289,12 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       final fawry = r['fawryAmount'] ?? 0;
       await _downloadFileFromResult(
         r,
-        okMsg: context.t('loanImp.loanSheetDownloaded', {
-          'cash': cash,
-          'fawry': fawry,
-        }),
+        okMsg: context.t(
+          _isTip
+              ? 'loanImp.tipSheetDownloaded'
+              : 'loanImp.loanSheetDownloaded',
+          {'cash': cash, 'fawry': fawry},
+        ),
       );
     } catch (e) {
       _snack(e.toString());
@@ -1172,6 +1487,13 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
 
   Future<void> _approve() async {
     if (_importId == null) return;
+    if (!_isTip) {
+      final ded = _deductionDateCtrl.text.trim();
+      if (ded.isEmpty || DateTime.tryParse(ded) == null) {
+        _snack(context.t('loanImp.needDeductionDate'));
+        return;
+      }
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1181,7 +1503,9 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
         content: Text(
           _isTip
               ? ctx.t('loanImp.approveBodyTip')
-              : ctx.t('loanImp.approveBodyLoan'),
+              : ctx.t('loanImp.approveBodyLoanWithDeduction', {
+                  'date': _deductionDateCtrl.text.trim(),
+                }),
         ),
         actions: [
           TextButton(
@@ -1207,6 +1531,7 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
       final result = await api.advanceLoanImportApprove(
         _importId!,
         approveConflicts: approveConflicts,
+        deductionStartDate: _isTip ? null : _deductionDateCtrl.text.trim(),
       );
       final batch =
           result['import'] as Map<String, dynamic>? ??
@@ -1438,9 +1763,11 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                 ),
               ),
             ),
-            if (_drafts.isNotEmpty && duplicateRows.isNotEmpty)
+            if (_drafts.isNotEmpty)
               OutlinedButton.icon(
-                onPressed: () => _showDraftDuplicateEmployees(duplicateRows),
+                onPressed: duplicateRows.isEmpty
+                    ? null
+                    : () => _showDraftDuplicateEmployees(duplicateRows),
                 icon: const Icon(Icons.copy_all_outlined, size: 18),
                 label: Text(
                   context.t('loanImp.duplicatesOnly', {
@@ -1465,39 +1792,31 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
             child: Column(
               children: [
                 for (var i = 0; i < _drafts.length; i++) ...[
-                  ListTile(
-                    leading: const Icon(Icons.description_outlined),
-                    title: Text(
-                      _sheetHeadlineFromBatch(
+                  _DraftImportExpandTile(
+                    draft: _drafts[i],
+                    headline: _sheetHeadlineFromBatch(
+                          _drafts[i],
+                          preferPrimaryLocation: _isTip,
+                        ).isNotEmpty
+                        ? _sheetHeadlineFromBatch(
                             _drafts[i],
                             preferPrimaryLocation: _isTip,
-                          ).isNotEmpty
-                          ? _sheetHeadlineFromBatch(
-                              _drafts[i],
-                              preferPrimaryLocation: _isTip,
-                            )
-                          : (_drafts[i]['reference']?.toString() ??
-                                context.t(
-                                  _isTip
-                                      ? 'loanImp.draftTip'
-                                      : 'loanImp.draftLoan',
-                                )),
-                    ),
-                    subtitle: Text(
-                      '${_drafts[i]['locationName'] ?? context.t('loanImp.noBranch')}'
-                      ' • ${context.t('loanImp.employeeCount', {'count': _drafts[i]['lineCount'] ?? 0})}'
-                      ' • ${_drafts[i]['date'] ?? ''}'
-                      '${_draftDuplicateCountLabel(_drafts[i], duplicateCodes)}',
-                    ),
-                    onTap: _busy ? null : () => _openDraft(_drafts[i]),
-                    trailing: IconButton(
-                      tooltip: context.t('loanImp.deleteDraft'),
-                      onPressed: _busy ? null : () => _deleteDraft(_drafts[i]),
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        color: AppColors.danger,
-                      ),
-                    ),
+                          )
+                        : (_drafts[i]['reference']?.toString() ??
+                              context.t(
+                                _isTip
+                                    ? 'loanImp.draftTip'
+                                    : 'loanImp.draftLoan',
+                              )),
+                    subtitle:
+                        '${_drafts[i]['locationName'] ?? context.t('loanImp.noBranch')}'
+                        ' • ${context.t('loanImp.employeeCount', {'count': _drafts[i]['lineCount'] ?? 0})}'
+                        ' • ${_drafts[i]['date'] ?? ''}'
+                        '${_draftDuplicateCountLabel(_drafts[i], duplicateCodes)}',
+                    employees: _draftEmployees(_drafts[i]),
+                    busy: _busy,
+                    onOpen: () => _openDraft(_drafts[i]),
+                    onDelete: () => _deleteDraft(_drafts[i]),
                   ),
                   if (i < _drafts.length - 1) const Divider(height: 1),
                 ],
@@ -1709,18 +2028,124 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                 ],
               ),
             ),
-          ] else if (_devices.isNotEmpty)
+          ] else ...[
             ListPickerField<String>(
               label: context.t('loanImp.location'),
               value: _deviceId ?? '',
               options: [
                 (value: '', label: context.t('loanImp.allLocations')),
+                (
+                  value: _kSpecificEmployees,
+                  label: context.t('loanImp.specificEmployees'),
+                ),
                 for (final d in _devices)
                   (value: d['id']?.toString() ?? '', label: _locationLabel(d)),
               ],
-              onChanged: (v) =>
-                  setState(() => _deviceId = v.isEmpty ? null : v),
+              onChanged: (v) => setState(() {
+                _deviceId = v.isEmpty ? null : v;
+                if (v != _kSpecificEmployees) {
+                  _specificEmployeeCodes.clear();
+                  _specificEmployeeLabels.clear();
+                  _specificCodeCtrl.clear();
+                }
+              }),
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilterChip(
+                avatar: Icon(
+                  Icons.badge_outlined,
+                  size: 18,
+                  color: _isSpecificEmployees
+                      ? Theme.of(context).colorScheme.onSecondaryContainer
+                      : null,
+                ),
+                label: Text(context.t('loanImp.specificEmployees')),
+                selected: _isSpecificEmployees,
+                onSelected: _locked || _busy
+                    ? null
+                    : (selected) => setState(() {
+                          if (selected) {
+                            _deviceId = _kSpecificEmployees;
+                          } else if (_isSpecificEmployees) {
+                            _deviceId = null;
+                            _specificEmployeeCodes.clear();
+                            _specificEmployeeLabels.clear();
+                            _specificCodeCtrl.clear();
+                          }
+                        }),
+              ),
+            ),
+            if (_isSpecificEmployees) ...[
+              const SizedBox(height: 8),
+              Text(
+                context.t('loanImp.specificEmployeesHint'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _specificCodeCtrl,
+                enabled: !_locked && !_busy && !_validatingCode,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  labelText: context.t('loanImp.employeeCode'),
+                  hintText: context.t('loanImp.employeeCodeHint'),
+                  border: const OutlineInputBorder(),
+                  helperText: context.t('loanImp.employeeCodeValidationHint'),
+                  suffixIcon: _validatingCode
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : IconButton(
+                          tooltip: context.t('loanImp.addCode'),
+                          onPressed: _locked || _busy
+                              ? null
+                              : () => _addSpecificEmployeeCode(
+                                    _specificCodeCtrl.text,
+                                  ),
+                          icon: const Icon(Icons.add_circle_outline),
+                        ),
+                ),
+                onSubmitted: _locked || _busy || _validatingCode
+                    ? null
+                    : _addSpecificEmployeeCode,
+              ),
+              if (_specificEmployeeCodes.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (var i = 0; i < _specificEmployeeCodes.length; i++)
+                      InputChip(
+                        label: Text(
+                          _specificEmployeeLabels[_specificEmployeeCodes[i]] ??
+                              _specificEmployeeCodes[i],
+                        ),
+                        onDeleted: _locked || _busy || _validatingCode
+                            ? null
+                            : () => setState(() {
+                                  _specificEmployeeLabels.remove(
+                                    _specificEmployeeCodes[i],
+                                  );
+                                  _specificEmployeeCodes.removeAt(i);
+                                }),
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ],
           const SizedBox(height: 8),
           TextField(
             controller: _dateCtrl,
@@ -1732,6 +2157,20 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
               ),
             ),
           ),
+          if (!_isTip) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _deductionDateCtrl,
+              readOnly: true,
+              enabled: !_locked,
+              onTap: _pickDeductionDate,
+              decoration: InputDecoration(
+                labelText: context.t('loanImp.deductionDate'),
+                hintText: context.t('loanImp.deductionDateHint'),
+                suffixIcon: const Icon(Icons.event_outlined),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           TextField(
             controller: _reasonCtrl,
@@ -1887,6 +2326,19 @@ class _AdvanceLoanImportPageState extends State<AdvanceLoanImportPage> {
                       ),
                     ),
                   ],
+                ),
+              ] else ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _deductionDateCtrl,
+                  readOnly: true,
+                  enabled: !_locked,
+                  onTap: _locked ? null : _pickDeductionDate,
+                  decoration: InputDecoration(
+                    labelText: context.t('loanImp.deductionDate'),
+                    hintText: context.t('loanImp.deductionDateHint'),
+                    suffixIcon: const Icon(Icons.event_outlined),
+                  ),
                 ),
               ],
               const SizedBox(height: 12),
@@ -2768,6 +3220,89 @@ class _ApprovedAmountFieldState extends State<_ApprovedAmountField> {
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         onSubmitted: (_) => _save(),
       ),
+    );
+  }
+}
+
+class _DraftImportExpandTile extends StatelessWidget {
+  const _DraftImportExpandTile({
+    required this.draft,
+    required this.headline,
+    required this.subtitle,
+    required this.employees,
+    required this.busy,
+    required this.onOpen,
+    required this.onDelete,
+  });
+
+  final Map<String, dynamic> draft;
+  final String headline;
+  final String subtitle;
+  final List<Map<String, dynamic>> employees;
+  final bool busy;
+  final VoidCallback onOpen;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      initiallyExpanded: false,
+      leading: const Icon(Icons.description_outlined),
+      title: Text(headline, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: Text(subtitle),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: busy ? null : onOpen,
+                icon: const Icon(Icons.open_in_new, size: 18),
+                label: Text(context.t('loanImp.openDraft')),
+              ),
+              OutlinedButton.icon(
+                onPressed: busy ? null : onDelete,
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: Text(context.t('loanImp.deleteDraft')),
+                style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        if (employees.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              context.t('adv.noEmployeesInSheet'),
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          )
+        else
+          ...employees.map((emp) {
+            final code = emp['code']?.toString() ?? '';
+            final name = emp['name']?.toString() ?? '';
+            final job = emp['jobTitle']?.toString() ?? '';
+            final amount = (emp['amount'] as num?)?.toDouble() ?? 0;
+            return ListTile(
+              dense: true,
+              title: Text(
+                name.isEmpty ? code : '$name • $code',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: job.isEmpty
+                  ? null
+                  : Text(job, style: const TextStyle(fontSize: 12)),
+              trailing: Text(
+                _money(amount),
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            );
+          }),
+        const SizedBox(height: 4),
+      ],
     );
   }
 }

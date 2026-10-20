@@ -28,6 +28,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
     ('deductions', 'audit.module.deductions'),
     ('advances', 'audit.module.advances'),
     ('payroll', 'audit.module.payroll'),
+    ('settings', 'audit.module.settings'),
   ];
 
   static const _fieldLabels = <String, String>{
@@ -113,6 +114,8 @@ class _AuditLogPageState extends State<AuditLogPage> {
         return tr('audit.module.advances');
       case 'payroll':
         return tr('audit.module.payroll');
+      case 'settings':
+        return tr('audit.module.settings');
       default:
         return m ?? '—';
     }
