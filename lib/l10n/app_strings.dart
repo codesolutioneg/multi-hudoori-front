@@ -1204,6 +1204,23 @@ abstract final class AppStrings {
     'setPg.shiftGridFirst': 'جدول الشيفت أولًا',
     'setPg.enableCapOnCreate': 'تفعيل الحد الأقصى عند الإنشاء',
     'setPg.saveAdv': 'حفظ إعدادات السلف',
+    'setPg.leaveSettings': 'إعدادات الإجازة السنوية',
+    'setPg.leaveSettingsHint':
+        'تفعيل رصيد الإجازة والترحيل أو الصرف في نهاية السنة',
+    'setPg.leaveBalanceEnable': 'تفعيل إدارة رصيد الإجازة السنوية',
+    'setPg.leaveBalanceEnableHint':
+        'عند التفعيل يُدار الرصيد افتراضيًا حسب أيام الشركة ويمكن تخصيصه لكل موظف لاحقًا',
+    'setPg.leaveDefaultDays': 'الرصيد الافتراضي (أيام / سنة)',
+    'setPg.leaveCarryOver': 'ترحيل الرصيد المتبقي للسنة التالية',
+    'setPg.leaveCarryOverHint':
+        'عند إغلاق السنة يُرحَّل المتبقي إلى رصيد السنة الجديدة',
+    'setPg.leavePayout': 'صرف الرصيد المتبقي كمستحقات',
+    'setPg.leavePayoutHint':
+        'يسمح بصرف أيام الإجازة المتبقية كمستحقات على كشف الرواتب',
+    'setPg.leaveBothOrderHint':
+        'عند تفعيل الترحيل والصرف معًا: يُصرف أولًا ثم يُرحَّل الباقي (إن وُجد).',
+    'setPg.saveLeave': 'حفظ إعدادات الإجازة',
+    'setPg.leaveSaved': 'تم حفظ إعدادات الإجازة السنوية',
     'setPg.commSettings': 'إعدادات العمولة',
     'setPg.commSettingsHint': 'الوظائف المسموح لها بالظهور في شيت العمولة',
     'setPg.commHint':
@@ -4392,6 +4409,23 @@ abstract final class AppStrings {
     'setPg.shiftGridFirst': 'Shift grid first',
     'setPg.enableCapOnCreate': 'Apply the cap when creating',
     'setPg.saveAdv': 'Save advance settings',
+    'setPg.leaveSettings': 'Annual leave settings',
+    'setPg.leaveSettingsHint':
+        'Enable leave balances and year-end carry-over or payout',
+    'setPg.leaveBalanceEnable': 'Manage annual leave balances',
+    'setPg.leaveBalanceEnableHint':
+        'When on, balances default to the company days and can be overridden per employee later',
+    'setPg.leaveDefaultDays': 'Default balance (days / year)',
+    'setPg.leaveCarryOver': 'Carry remaining balance to next year',
+    'setPg.leaveCarryOverHint':
+        'On year close, unused days move into the next year’s balance',
+    'setPg.leavePayout': 'Pay out remaining balance as dues',
+    'setPg.leavePayoutHint':
+        'Allows paying unused leave days as dues on payroll',
+    'setPg.leaveBothOrderHint':
+        'When both carry-over and payout are on: pay out first, then carry any remainder.',
+    'setPg.saveLeave': 'Save leave settings',
+    'setPg.leaveSaved': 'Annual leave settings saved',
     'setPg.commSettings': 'Commission settings',
     'setPg.commSettingsHint':
         'The job titles allowed to appear in the Commission sheet',

@@ -66,6 +66,10 @@ class _SettingsPageState extends State<SettingsPage> {
   Map<String, dynamic> _odooStatus = {};
   bool _advanceEnforceLimit = true;
   String _advanceEligibilitySource = 'punch_report';
+  bool _annualLeaveBalanceEnabled = false;
+  final _annualLeaveDefaultDaysCtrl = TextEditingController(text: '21');
+  bool _annualLeaveCarryOverEnabled = false;
+  bool _annualLeavePayoutEnabled = false;
   final _lateGraceCtrl = TextEditingController(text: '20');
   final _lateQuarterMaxCtrl = TextEditingController(text: '30');
   final _lateHalfMaxCtrl = TextEditingController(text: '60');
@@ -108,6 +112,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _odooPassword.dispose();
     _advancePercentCtrl.dispose();
     _advanceMinDaysCtrl.dispose();
+    _annualLeaveDefaultDaysCtrl.dispose();
     _lateGraceCtrl.dispose();
     _lateQuarterMaxCtrl.dispose();
     _lateHalfMaxCtrl.dispose();
@@ -195,6 +200,14 @@ class _SettingsPageState extends State<SettingsPage> {
               config['advanceEligibilitySource']?.toString() == 'shift_grid'
               ? 'shift_grid'
               : 'punch_report';
+          _annualLeaveBalanceEnabled =
+              config['annualLeaveBalanceEnabled'] == true;
+          _annualLeaveDefaultDaysCtrl.text =
+              '${(config['annualLeaveDefaultDays'] as num?)?.toDouble() ?? 21}';
+          _annualLeaveCarryOverEnabled =
+              config['annualLeaveCarryOverEnabled'] == true;
+          _annualLeavePayoutEnabled =
+              config['annualLeavePayoutEnabled'] == true;
           _lateGraceCtrl.text =
               '${(config['lateGraceMinutes'] as num?)?.toInt() ?? 20}';
           _lateQuarterMaxCtrl.text =
@@ -495,6 +508,35 @@ class _SettingsPageState extends State<SettingsPage> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(context.t('setPg.advSaved'))));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  Future<void> _saveAnnualLeaveSettings() async {
+    setState(() => _busy = true);
+    try {
+      final config = await api.configUpdate({
+        'annualLeaveBalanceEnabled': _annualLeaveBalanceEnabled,
+        'annualLeaveDefaultDays':
+            double.tryParse(_annualLeaveDefaultDaysCtrl.text.trim()) ?? 21,
+        'annualLeaveCarryOverEnabled': _annualLeaveCarryOverEnabled,
+        'annualLeavePayoutEnabled': _annualLeavePayoutEnabled,
+      });
+      if (mounted) {
+        setState(() {
+          _config = config;
+          _busy = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.t('setPg.leaveSaved'))),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1301,6 +1343,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final auth = context.watch<AuthCubit>().state;
     final showEmployees = isFeatureEnabled(auth, 'hr_employees');
     final showAdvances = isFeatureEnabled(auth, 'advances');
+    final showLeaves = isFeatureEnabled(auth, 'hr_leaves');
     final showPayroll = isFeatureEnabled(auth, 'payroll');
     final showIntegrations = isFeatureEnabled(auth, 'integrations');
     final showEmployeeApp = isFeatureEnabled(auth, 'employee_app');
@@ -1577,6 +1620,74 @@ class _SettingsPageState extends State<SettingsPage> {
                 FilledButton(
                   onPressed: _busy ? null : _saveAdvanceSettings,
                   child: Text(context.t('setPg.saveAdv')),
+                ),
+              ],
+            ),
+          ),
+          ],
+          if (showLeaves) ...[
+          const SizedBox(height: 10),
+          SettingsAccordionSection(
+            title: context.t('setPg.leaveSettings'),
+            subtitle: context.t('setPg.leaveSettingsHint'),
+            icon: Icons.beach_access_outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(context.t('setPg.leaveBalanceEnable')),
+                  subtitle: Text(context.t('setPg.leaveBalanceEnableHint')),
+                  value: _annualLeaveBalanceEnabled,
+                  onChanged: (v) =>
+                      setState(() => _annualLeaveBalanceEnabled = v),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  enabled: _annualLeaveBalanceEnabled,
+                  decoration: InputDecoration(
+                    labelText: context.t('setPg.leaveDefaultDays'),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  controller: _annualLeaveDefaultDaysCtrl,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(context.t('setPg.leaveCarryOver')),
+                  subtitle: Text(context.t('setPg.leaveCarryOverHint')),
+                  value: _annualLeaveCarryOverEnabled,
+                  onChanged: _annualLeaveBalanceEnabled
+                      ? (v) =>
+                          setState(() => _annualLeaveCarryOverEnabled = v)
+                      : null,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(context.t('setPg.leavePayout')),
+                  subtitle: Text(context.t('setPg.leavePayoutHint')),
+                  value: _annualLeavePayoutEnabled,
+                  onChanged: _annualLeaveBalanceEnabled
+                      ? (v) => setState(() => _annualLeavePayoutEnabled = v)
+                      : null,
+                ),
+                if (_annualLeaveBalanceEnabled &&
+                    _annualLeaveCarryOverEnabled &&
+                    _annualLeavePayoutEnabled) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    context.t('setPg.leaveBothOrderHint'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: _busy ? null : _saveAnnualLeaveSettings,
+                  child: Text(context.t('setPg.saveLeave')),
                 ),
               ],
             ),

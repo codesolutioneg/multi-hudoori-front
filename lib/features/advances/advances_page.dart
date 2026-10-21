@@ -40,7 +40,7 @@ class _AdvancesPageState extends State<AdvancesPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
     _load();
   }
 
@@ -123,7 +123,7 @@ class _AdvancesPageState extends State<AdvancesPage>
       if (!mounted) return;
       _snack(context.t('adv.sendManualBatchDone'));
       await _load();
-      if (mounted) _tabs.animateTo(2);
+      if (mounted) _tabs.animateTo(0);
     } catch (e) {
       if (mounted) _snack(e.toString());
     }
@@ -195,9 +195,10 @@ class _AdvancesPageState extends State<AdvancesPage>
           AppTabBarV2(
             controller: _tabs,
             tabs: [
+              // Short ops + locked sheets live together (filters, manual batch,
+              // open/download sheet, Odoo status, duplicates).
               Tab(text: context.t('advances.tab.short')),
               Tab(text: context.t('advances.tab.long')),
-              Tab(text: context.t('adv.tabApprovedImports')),
               // Requests the branches have vouched for. Granting one here is what
               // creates the advance, so it sits with the sheet it lands on.
               Tab(text: context.t('advances.tab.requests')),
@@ -223,13 +224,6 @@ class _AdvancesPageState extends State<AdvancesPage>
                         items: _long,
                         onRefresh: _load,
                         onCreateLong: _openCreateLong,
-                      ),
-                      _ApprovedLoanImportList(
-                        items: _approvedImports,
-                        shortAdvances: _short,
-                        payrollMonthStartDay: _payrollMonthStartDay,
-                        onRefresh: _load,
-                        onExportPeriod: _exportPeriodSheets,
                       ),
                       // Approving here creates a short advance, so reload the
                       // sheet behind this tab once one goes through.
@@ -546,252 +540,6 @@ void _showPeriodDuplicateEmployees(
   );
 }
 
-List<Map<String, dynamic>> _approvedPeriodDuplicateRows(
-  List<Map<String, dynamic>> sheets,
-) {
-  final byCode = <String, Map<String, dynamic>>{};
-  for (final sheet in sheets) {
-    final sheetLabel = _sheetHeadline(
-      sheet['reference']?.toString() ?? sheet['id']?.toString() ?? '',
-      primary: sheet['primaryLocationName']?.toString() ??
-          sheet['locationName']?.toString() ??
-          '',
-      locationCount: _locationCountOf(sheet),
-    );
-    final employees = (sheet['employees'] as List? ?? const [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e));
-    for (final emp in employees) {
-      final code = (emp['code']?.toString() ?? '')
-          .trim()
-          .replaceAll(RegExp(r'\.0$'), '');
-      if (code.isEmpty) continue;
-      final row = byCode.putIfAbsent(code, () {
-        return {
-          'employeeCode': code,
-          'employeeName': emp['name']?.toString() ?? code,
-          'jobTitle': emp['jobTitle']?.toString() ?? '',
-          'sheets': <String>{},
-          'totalAmount': 0.0,
-        };
-      });
-      final name = emp['name']?.toString().trim() ?? '';
-      if (name.isNotEmpty &&
-          (row['employeeName'] == null ||
-              row['employeeName'].toString().isEmpty ||
-              row['employeeName'] == code)) {
-        row['employeeName'] = name;
-      }
-      (row['sheets'] as Set<String>).add(sheetLabel);
-      row['totalAmount'] =
-          ((row['totalAmount'] as num?)?.toDouble() ?? 0) +
-          ((emp['amount'] as num?)?.toDouble() ?? 0);
-    }
-  }
-  final rows = byCode.values
-      .where((row) => (row['sheets'] as Set<String>).length > 1)
-      .map((row) {
-        final sheets = (row['sheets'] as Set<String>).toList()..sort();
-        return {
-          ...row,
-          'sheets': sheets,
-          'totalAmount': _roundMoney(
-            (row['totalAmount'] as num?)?.toDouble() ?? 0,
-          ),
-        };
-      })
-      .toList();
-  rows.sort((a, b) {
-    final ac = a['employeeCode']?.toString() ?? '';
-    final bc = b['employeeCode']?.toString() ?? '';
-    return ac.compareTo(bc);
-  });
-  return rows;
-}
-
-void _showApprovedPeriodDuplicates(
-  BuildContext context, {
-  required List<Map<String, dynamic>> rows,
-  required String periodLabel,
-}) {
-  showDialog<void>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(ctx.t('adv.duplicatesPopupTitle', {'period': periodLabel})),
-      content: SizedBox(
-        width: 720,
-        height: 460,
-        child: rows.isEmpty
-            ? Center(child: Text(ctx.t('adv.noDuplicatesInPeriod')))
-            : ListView.separated(
-                itemCount: rows.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (_, index) {
-                  final row = rows[index];
-                  final sheets = ((row['sheets'] as List?) ?? const [])
-                      .map((e) => e.toString())
-                      .where((e) => e.isNotEmpty)
-                      .toList();
-                  return ListTile(
-                    title: Text(
-                      '${row['employeeName'] ?? ''} • ${row['employeeCode'] ?? ''}',
-                    ),
-                    subtitle: Text(
-                      sheets.join(ctx.t('common.listSeparator')),
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    trailing: Text(_money(row['totalAmount'] as num?)),
-                  );
-                },
-              ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(ctx.t('common.close')),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ApprovedLoanImportList extends StatelessWidget {
-  const _ApprovedLoanImportList({
-    required this.items,
-    required this.shortAdvances,
-    required this.payrollMonthStartDay,
-    required this.onRefresh,
-    required this.onExportPeriod,
-  });
-
-  final List<Map<String, dynamic>> items;
-  final List<Map<String, dynamic>> shortAdvances;
-  final int payrollMonthStartDay;
-  final VoidCallback onRefresh;
-  final Future<void> Function(DateTime from, DateTime to) onExportPeriod;
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return SellixCard(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Text(context.t('adv.noApprovedImports')),
-          ),
-        ),
-      );
-    }
-
-    final periods = _groupByPayrollPeriod<Map<String, dynamic>>(
-      items,
-      (item) => parseIsoDate(item['date']?.toString()),
-      payrollMonthStartDay,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () async => onRefresh(),
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                for (final entry in periods.entries) ...[
-                  Builder(
-                    builder: (context) {
-                      final dupRows = _approvedPeriodDuplicateRows(entry.value);
-                      final parts = entry.key.split('|');
-                      final from = parseIsoDate(parts.first) ?? DateTime.now();
-                      final to = parseIsoDate(
-                            parts.length > 1 ? parts[1] : parts.first,
-                          ) ??
-                          from;
-                      return _PayrollPeriodBlock(
-                        periodKey: entry.key,
-                        sheetCount: entry.value.length,
-                        duplicateCount: dupRows.length,
-                        onShowDuplicates: dupRows.isEmpty
-                            ? null
-                            : () => _showApprovedPeriodDuplicates(
-                                  context,
-                                  rows: dupRows,
-                                  periodLabel: context.t('adv.monthCycle', {
-                                    'month': payrollCycleMonthName(
-                                      to,
-                                      Localizations.localeOf(
-                                        context,
-                                      ).languageCode,
-                                    ),
-                                  }),
-                                ),
-                        children: [
-                          for (final item in entry.value)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _LoanImportSummaryTile(
-                                item: item,
-                                advances: shortAdvances
-                                    .where(
-                                      (a) =>
-                                          a['importId']?.toString() ==
-                                          item['id']?.toString(),
-                                    )
-                                    .toList(),
-                                onRefresh: onRefresh,
-                                onOpen: () async {
-                                  final id = item['id']?.toString() ?? '';
-                                  if (id.isEmpty) return;
-                                  await context.push(
-                                    '${AppRoutes.hrAdvanceLoanImport}'
-                                    '?importId=${Uri.encodeQueryComponent(id)}',
-                                  );
-                                  onRefresh();
-                                },
-                              ),
-                            ),
-                        ],
-                        cash: entry.value.fold<double>(
-                          0,
-                          (s, i) =>
-                              s + ((i['cashAmount'] as num?)?.toDouble() ?? 0),
-                        ),
-                        fawryApproved: entry.value.fold<double>(
-                          0,
-                          (s, i) =>
-                              s +
-                              ((i['fawryApprovedAmount'] as num?)?.toDouble() ??
-                                  0),
-                        ),
-                        fawryCommission: entry.value.fold<double>(
-                          0,
-                          (s, i) =>
-                              s +
-                              ((i['fawryCommissionAmount'] as num?)
-                                      ?.toDouble() ??
-                                  0),
-                        ),
-                        total: entry.value.fold<double>(
-                          0,
-                          (s, i) =>
-                              s + ((i['totalAmount'] as num?)?.toDouble() ?? 0),
-                        ),
-                        onExportPeriod: onExportPeriod,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _PayrollPeriodBlock extends StatelessWidget {
   const _PayrollPeriodBlock({
     required this.periodKey,
@@ -915,246 +663,6 @@ class _PayrollPeriodBlock extends StatelessWidget {
   }
 }
 
-class _LoanImportSummaryTile extends StatefulWidget {
-  const _LoanImportSummaryTile({
-    required this.item,
-    this.advances = const [],
-    this.onRefresh,
-    this.onOpen,
-  });
-
-  final Map<String, dynamic> item;
-  final List<Map<String, dynamic>> advances;
-  final VoidCallback? onRefresh;
-  final VoidCallback? onOpen;
-
-  @override
-  State<_LoanImportSummaryTile> createState() => _LoanImportSummaryTileState();
-}
-
-class _LoanImportSummaryTileState extends State<_LoanImportSummaryTile> {
-  bool _downloading = false;
-
-  Future<void> _downloadSheet() async {
-    final id = widget.item['id']?.toString() ?? '';
-    if (id.isEmpty || _downloading) return;
-    setState(() => _downloading = true);
-    try {
-      final r = await api.advanceLoanImportExportAccountsSheet(id);
-      final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
-      final filename = r['filename']?.toString() ?? 'loan_sheet.xlsx';
-      if (base64.isEmpty) throw Exception(context.t('adv.emptyFile'));
-      downloadBase64File(
-        base64,
-        filename,
-        r['mimeType']?.toString() ??
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.t('loanImp.downloaded', {'name': filename}))),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _downloading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final item = widget.item;
-    final onOpen = widget.onOpen;
-    final advances = widget.advances;
-    final sent = item['odooAccountsSendId'] != null;
-    final outsiders = (item['outsiderLines'] as List? ?? [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-    final employees = (item['employees'] as List? ?? [])
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-    final primary =
-        item['primaryLocationName']?.toString() ??
-        item['locationName']?.toString() ??
-        context.t('adv.noBranch');
-    final fawry = _fawryTotalsFromMeta(item);
-    final cash = (item['cashAmount'] as num?)?.toDouble() ?? 0;
-    final total = (item['totalAmount'] as num?)?.toDouble() ?? 0;
-    final headline = _sheetHeadline(
-      item['reference']?.toString() ?? item['id']?.toString() ?? '',
-      primary: primary,
-      locationCount: _locationCountOf(item),
-    );
-    final lineCount = item['lineCount'] ??
-        (advances.isNotEmpty ? advances.length : employees.length);
-    final metaBits = [
-      context.t('adv.primaryLocation', {'name': primary}),
-      '${context.t('adv.employeeCount', {'count': lineCount})}'
-          '${item['date'] != null && item['date'].toString().isNotEmpty ? ' • ${item['date']}' : ''}',
-    ];
-
-    return SellixCard(
-      padding: EdgeInsets.zero,
-      child: ExpansionTile(
-        initiallyExpanded: false,
-        leading: const Icon(
-          Icons.fact_check_outlined,
-          color: AppColors.primary,
-        ),
-        title: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: headline,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14.5,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              for (final bit in metaBits) ...[
-                const TextSpan(
-                  text: '  ·  ',
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12.5,
-                  ),
-                ),
-                TextSpan(
-                  text: bit,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12.5,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _moneyBreakdownText(
-                context,
-                cash: cash,
-                fawryApproved: fawry.approved,
-                fawryCommission: fawry.commission,
-                fawryTotal: fawry.total,
-                total: total,
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (sent)
-                    StatusTag(
-                      label: context.t('adv.sentToOdoo'),
-                      type: StatusTagType.success,
-                    )
-                  else
-                    StatusTag(
-                      label: context.t('adv.approved'),
-                      type: StatusTagType.success,
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label: Text(context.t('adv.openSheet')),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _downloading ? null : _downloadSheet,
-                  icon: _downloading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.table_view_outlined, size: 18),
-                  label: Text(context.t('loanImp.downloadLoanSheet')),
-                ),
-                OutlinedButton(
-                  onPressed: () =>
-                      _showOutsiderEmployees(context, outsiders, primary),
-                  child: Text(
-                    context.t('adv.outsideBranchEmployees', {
-                      'count': item['outsiderCount'] ?? outsiders.length,
-                    }),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          if (advances.isNotEmpty)
-            _AdvanceList(
-              items: advances,
-              isLong: false,
-              onRefresh: widget.onRefresh ?? () {},
-              embedded: true,
-            )
-          else if (employees.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                context.t('adv.noEmployeesInSheet'),
-                style: const TextStyle(color: AppColors.textSecondary),
-              ),
-            )
-          else
-            ...employees.map((emp) {
-              final code = emp['code']?.toString() ?? '';
-              final name = emp['name']?.toString() ?? '';
-              final job = emp['jobTitle']?.toString() ?? '';
-              final amount = (emp['amount'] as num?)?.toDouble() ?? 0;
-              return ListTile(
-                dense: true,
-                title: Text(
-                  name.isEmpty ? code : '$name • $code',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: job.isEmpty
-                    ? null
-                    : Text(job, style: const TextStyle(fontSize: 12)),
-                trailing: Text(
-                  _money(amount),
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              );
-            }),
-          const SizedBox(height: 4),
-        ],
-      ),
-    );
-  }
-}
-
 class _ShortAdvanceGroupedList extends StatefulWidget {
   const _ShortAdvanceGroupedList({
     required this.items,
@@ -1184,11 +692,53 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
   String? _locationFilter;
   String? _stateFilter;
   String? _importFilter;
+  String? _downloadingImportId;
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _downloadImportSheet(String importId) async {
+    if (importId.isEmpty || _downloadingImportId != null) return;
+    setState(() => _downloadingImportId = importId);
+    try {
+      final r = await api.advanceLoanImportExportAccountsSheet(importId);
+      final base64 = r['base64']?.toString() ?? r['file']?.toString() ?? '';
+      final filename = r['filename']?.toString() ?? 'loan_sheet.xlsx';
+      if (base64.isEmpty) throw Exception(context.t('adv.emptyFile'));
+      downloadBase64File(
+        base64,
+        filename,
+        r['mimeType']?.toString() ??
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t('loanImp.downloaded', {'name': filename})),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _downloadingImportId = null);
+    }
+  }
+
+  Future<void> _openImportSheet(String importId) async {
+    if (importId.isEmpty) return;
+    await context.push(
+      '${AppRoutes.hrAdvanceLoanImport}'
+      '?importId=${Uri.encodeQueryComponent(importId)}',
+    );
+    widget.onRefresh();
   }
 
   static String _employeeKey(Map<String, dynamic> item) {
@@ -1328,6 +878,20 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
           : ((importId == null || importId.isEmpty) ? '__manual__' : importId);
       groups.putIfAbsent(key, () => []).add(item);
     }
+    // Keep locked sheets visible even when no short rows matched filters
+    // (except when searching/filtering by employee/branch/state).
+    final hasRowFilters =
+        _searchController.text.trim().isNotEmpty ||
+        _locationFilter != null ||
+        _stateFilter != null;
+    if (!hasRowFilters) {
+      for (final summary in widget.importSummaries) {
+        final id = summary['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        if (_importFilter != null && id != _importFilter) continue;
+        groups.putIfAbsent(id, () => []);
+      }
+    }
     return groups;
   }
 
@@ -1427,7 +991,7 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.items.isEmpty) {
+    if (widget.items.isEmpty && widget.importSummaries.isEmpty) {
       return HrEmptyListCard(message: context.t('adv.noShortAdvances'));
     }
 
@@ -1543,20 +1107,28 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                               if (batchDate != null) return batchDate;
                             }
                           }
-                          final first = entry.value.first;
+                          if (entry.value.isNotEmpty) {
+                            final first = entry.value.first;
+                            return parseIsoDate(
+                                  first['importDate']?.toString(),
+                                ) ??
+                                parseIsoDate(first['date']?.toString()) ??
+                                parseIsoDate(
+                                  first['deductionStartDate']?.toString(),
+                                );
+                          }
                           return parseIsoDate(
-                                first['importDate']?.toString(),
-                              ) ??
-                              parseIsoDate(first['date']?.toString()) ??
-                              parseIsoDate(
-                                first['deductionStartDate']?.toString(),
-                              );
+                            _importsById[entry.key]?['date']?.toString(),
+                          );
                         }, widget.payrollMonthStartDay);
                     return Column(
                       children: [
                         Expanded(
-                          child: ListView(
-                            children: [
+                          child: RefreshIndicator(
+                            onRefresh: () async => widget.onRefresh(),
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
                               for (final period in periodBuckets.entries)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
@@ -1646,7 +1218,10 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                           ),
                                           child: Builder(
                                             builder: (context) {
-                                              final first = entry.value.first;
+                                              final first =
+                                                  entry.value.isNotEmpty
+                                                  ? entry.value.first
+                                                  : <String, dynamic>{};
                                               final openManual =
                                                   entry.key == '__manual__' ||
                                                   entry.value.any(
@@ -1669,16 +1244,18 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                                   meta['primaryLocationName']
                                                       ?.toString() ??
                                                   context.t('adv.noBranch');
+                                              final importRef =
+                                                  first['importReference']
+                                                      ?.toString() ??
+                                                  _importsById[entry.key]?['reference']
+                                                      ?.toString() ??
+                                                  context.t('adv.advanceSheet');
                                               final title = manual
                                                   ? context.t(
                                                       'adv.manualAdvances',
                                                     )
                                                   : _sheetHeadline(
-                                                      first['importReference']
-                                                              ?.toString() ??
-                                                          context.t(
-                                                            'adv.advanceSheet',
-                                                          ),
+                                                      importRef,
                                                       primary: primary,
                                                       locationCount:
                                                           _locationCountOf(
@@ -1700,6 +1277,30 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                                       .toList();
                                               final fawry =
                                                   _fawryTotalsFromMeta(meta);
+                                              final importMeta =
+                                                  (!manual &&
+                                                      entry.key != '__manual__')
+                                                  ? _importsById[entry.key]
+                                                  : null;
+                                              final sentToOdoo =
+                                                  importMeta?[
+                                                          'odooAccountsSendId'] !=
+                                                      null;
+                                              final lockedImport =
+                                                  importMeta != null;
+                                              final sheetDate =
+                                                  importMeta?['date']
+                                                      ?.toString() ??
+                                                  first['importDate']
+                                                      ?.toString() ??
+                                                  '';
+                                              final employeeCount =
+                                                  entry.value.isNotEmpty
+                                                  ? entry.value.length
+                                                  : (importMeta?['lineCount']
+                                                            as num?)
+                                                        ?.toInt() ??
+                                                        0;
                                               return SellixCard(
                                                 padding: EdgeInsets.zero,
                                                 child: ExpansionTile(
@@ -1752,8 +1353,8 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                                         ),
                                                         TextSpan(
                                                           text:
-                                                              '${context.t('adv.employeeCount', {'count': entry.value.length})}'
-                                                              '${manual ? '' : ' • ${first['importDate'] ?? ''}'}',
+                                                              '${context.t('adv.employeeCount', {'count': employeeCount})}'
+                                                              '${manual || sheetDate.isEmpty ? '' : ' • $sheetDate'}',
                                                           style: const TextStyle(
                                                             fontWeight:
                                                                 FontWeight.w500,
@@ -1773,39 +1374,69 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                                         const EdgeInsets.only(
                                                           top: 4,
                                                         ),
-                                                    child: _moneyBreakdownText(
-                                                      context,
-                                                      cash:
-                                                          (meta['cashAmount']
-                                                                  as num?)
-                                                              ?.toDouble() ??
-                                                          0,
-                                                      fawryApproved:
-                                                          fawry.approved,
-                                                      fawryCommission:
-                                                          fawry.commission,
-                                                      fawryTotal: fawry.total,
-                                                      total:
-                                                          (meta['totalAmount']
-                                                                  as num?)
-                                                              ?.toDouble() ??
-                                                          0,
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .stretch,
+                                                      children: [
+                                                        _moneyBreakdownText(
+                                                          context,
+                                                          cash:
+                                                              (meta['cashAmount']
+                                                                      as num?)
+                                                                  ?.toDouble() ??
+                                                              0,
+                                                          fawryApproved:
+                                                              fawry.approved,
+                                                          fawryCommission:
+                                                              fawry
+                                                                  .commission,
+                                                          fawryTotal:
+                                                              fawry.total,
+                                                          total:
+                                                              (meta['totalAmount']
+                                                                      as num?)
+                                                                  ?.toDouble() ??
+                                                              0,
+                                                        ),
+                                                        if (lockedImport) ...[
+                                                          const SizedBox(
+                                                            height: 6,
+                                                          ),
+                                                          Wrap(
+                                                            spacing: 8,
+                                                            runSpacing: 6,
+                                                            children: [
+                                                              StatusTag(
+                                                                label: context.t(
+                                                                  sentToOdoo
+                                                                      ? 'adv.sentToOdoo'
+                                                                      : 'adv.approved',
+                                                                ),
+                                                                type:
+                                                                    StatusTagType
+                                                                        .success,
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ],
+                                                      ],
                                                     ),
                                                   ),
                                                   children: [
-                                                    if (openManual)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets.fromLTRB(
-                                                              12,
-                                                              8,
-                                                              12,
-                                                              8,
-                                                            ),
-                                                        child: Wrap(
-                                                          spacing: 8,
-                                                          runSpacing: 8,
-                                                          children: [
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.fromLTRB(
+                                                            12,
+                                                            8,
+                                                            12,
+                                                            8,
+                                                          ),
+                                                      child: Wrap(
+                                                        spacing: 8,
+                                                        runSpacing: 8,
+                                                        children: [
+                                                          if (openManual) ...[
                                                             OutlinedButton.icon(
                                                               onPressed: () {
                                                                 final id =
@@ -1844,64 +1475,122 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                                                 ),
                                                               ),
                                                             ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.fromLTRB(
-                                                            12,
-                                                            0,
-                                                            12,
-                                                            8,
-                                                          ),
-                                                      child: Align(
-                                                        alignment: Alignment
-                                                            .centerRight,
-                                                        child: OutlinedButton(
-                                                          onPressed: () =>
-                                                              _showOutsiderEmployees(
-                                                                context,
-                                                                outsiders,
-                                                                primary,
+                                                          ] else if (entry
+                                                                  .key !=
+                                                              '__manual__') ...[
+                                                            FilledButton.icon(
+                                                              onPressed: () =>
+                                                                  _openImportSheet(
+                                                                    entry.key,
+                                                                  ),
+                                                              icon: const Icon(
+                                                                Icons
+                                                                    .open_in_new,
+                                                                size: 18,
                                                               ),
-                                                          child: Text(
-                                                            context.t(
-                                                              'adv.outsideBranchEmployees',
-                                                              {
-                                                                'count':
-                                                                    meta['outsiderCount'] ??
-                                                                    outsiders
-                                                                        .length,
-                                                              },
+                                                              label: Text(
+                                                                context.t(
+                                                                  'adv.openSheet',
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            OutlinedButton.icon(
+                                                              onPressed:
+                                                                  _downloadingImportId ==
+                                                                      entry.key
+                                                                  ? null
+                                                                  : () =>
+                                                                      _downloadImportSheet(
+                                                                        entry
+                                                                            .key,
+                                                                      ),
+                                                              icon:
+                                                                  _downloadingImportId ==
+                                                                      entry.key
+                                                                  ? const SizedBox(
+                                                                      width: 16,
+                                                                      height:
+                                                                          16,
+                                                                      child:
+                                                                          CircularProgressIndicator(
+                                                                            strokeWidth:
+                                                                                2,
+                                                                          ),
+                                                                    )
+                                                                  : const Icon(
+                                                                      Icons
+                                                                          .table_view_outlined,
+                                                                      size: 18,
+                                                                    ),
+                                                              label: Text(
+                                                                context.t(
+                                                                  'loanImp.downloadLoanSheet',
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                          OutlinedButton(
+                                                            onPressed: () =>
+                                                                _showOutsiderEmployees(
+                                                                  context,
+                                                                  outsiders,
+                                                                  primary,
+                                                                ),
+                                                            child: Text(
+                                                              context.t(
+                                                                'adv.outsideBranchEmployees',
+                                                                {
+                                                                  'count':
+                                                                      meta['outsiderCount'] ??
+                                                                      outsiders
+                                                                          .length,
+                                                                },
+                                                              ),
                                                             ),
                                                           ),
-                                                        ),
+                                                        ],
                                                       ),
                                                     ),
                                                     const Divider(height: 1),
-                                                    _AdvanceList(
-                                                      items: entry.value,
-                                                      isLong: false,
-                                                      onRefresh:
-                                                          widget.onRefresh,
-                                                      embedded: true,
-                                                      duplicateEmployees:
-                                                          _periodDuplicateRows(
-                                                                period.value,
-                                                              )
-                                                              .map(
-                                                                (row) =>
-                                                                    row['employeeKey']
-                                                                        ?.toString() ??
-                                                                    '',
-                                                              )
-                                                              .where(
-                                                                (key) => key
-                                                                    .isNotEmpty,
-                                                              )
-                                                              .toSet(),
-                                                    ),
+                                                    if (entry.value.isEmpty)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets.all(
+                                                              16,
+                                                            ),
+                                                        child: Text(
+                                                          context.t(
+                                                            'adv.noEmployeesInSheet',
+                                                          ),
+                                                          style: const TextStyle(
+                                                            color: AppColors
+                                                                .textSecondary,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    else
+                                                      _AdvanceList(
+                                                        items: entry.value,
+                                                        isLong: false,
+                                                        onRefresh:
+                                                            widget.onRefresh,
+                                                        embedded: true,
+                                                        duplicateEmployees:
+                                                            _periodDuplicateRows(
+                                                                  period.value,
+                                                                )
+                                                                .map(
+                                                                  (row) =>
+                                                                      row['employeeKey']
+                                                                          ?.toString() ??
+                                                                      '',
+                                                                )
+                                                                .where(
+                                                                  (key) => key
+                                                                      .isNotEmpty,
+                                                                )
+                                                                .toSet(),
+                                                      ),
                                                   ],
                                                 ),
                                               );
@@ -1912,6 +1601,7 @@ class _ShortAdvanceGroupedListState extends State<_ShortAdvanceGroupedList> {
                                   ),
                                 ),
                             ],
+                            ),
                           ),
                         ),
                       ],
